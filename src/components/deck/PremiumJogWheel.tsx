@@ -51,9 +51,11 @@ const BASS_RINGS_END = 7;     // rings 0-6 = bass
 const MID_RINGS_END = 13;     // rings 7-12 = mid
                                // rings 13-17 = high
 
-// LED ring config — round dots (strokeLinecap round + dash 0)
-const LED_DOT_GAP = 7.2;
-const LED_DASH = `0.01 ${LED_DOT_GAP}`;
+// LED ring: 72 dots (÷4 = perfect 90° symmetry)
+// Circumference = 2π × 82 ≈ 515.22; each segment = 515.22/72 ≈ 7.156
+const LED_DOT_COUNT = 72;
+const LED_SEGMENT = (2 * Math.PI * R_LED) / LED_DOT_COUNT;
+const LED_DASH = `0.01 ${(LED_SEGMENT - 0.01).toFixed(4)}`;
 const LED_WIDTH = 3.5;
 const LED_WIDTH_CORE = 2;
 
@@ -252,7 +254,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
 
           {/* Corona blur */}
           <filter id={coronaId} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" />
           </filter>
 
           {/* Bezel — 3D bevel gradient */}
