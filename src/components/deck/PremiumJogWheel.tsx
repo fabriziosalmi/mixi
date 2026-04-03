@@ -374,7 +374,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
                   key={`groove-${i}`}
                   cx={CX} cy={CY} r={r}
                   fill="none"
-                  stroke="rgba(255,255,255,0.04)"
+                  stroke="rgba(255,255,255,0.025)"
                   strokeWidth="0.5"
                 />
               );
@@ -402,7 +402,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
                 <circle
                   key={`bass-${i}`}
                   cx={CX} cy={CY} r={GROOVE_R_MIN + i * GROOVE_SPACING}
-                  fill="none" stroke={color} strokeWidth="1.2"
+                  fill="none" stroke={color} strokeWidth="1.5"
                 />
               ))}
             </g>
@@ -412,7 +412,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
                 <circle
                   key={`mid-${i}`}
                   cx={CX} cy={CY} r={GROOVE_R_MIN + (BASS_RINGS_END + i) * GROOVE_SPACING}
-                  fill="none" stroke={color} strokeWidth="1.0"
+                  fill="none" stroke={color} strokeWidth="1.2"
                 />
               ))}
             </g>
@@ -422,7 +422,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
                 <circle
                   key={`high-${i}`}
                   cx={CX} cy={CY} r={GROOVE_R_MIN + (MID_RINGS_END + i) * GROOVE_SPACING}
-                  fill="none" stroke="#fff" strokeWidth="0.7"
+                  fill="none" stroke="#fff" strokeWidth="0.9"
                 />
               ))}
             </g>
