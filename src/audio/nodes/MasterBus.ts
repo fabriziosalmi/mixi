@@ -36,7 +36,7 @@ import { smoothParam } from '../utils/paramSmooth';
 const DIST_CROSSOVER = 300;
 
 function makeDistortionCurve(amount: number, samples = 2048): Float32Array<ArrayBuffer> {
-  const curve = new Float32Array(new ArrayBuffer(samples * 4));
+  const curve = new Float32Array(samples) as Float32Array<ArrayBuffer>;
   const drive = amount * amount;
   const k = drive * 80 + 1;
   const norm = Math.tanh(k);
@@ -299,6 +299,11 @@ export class MasterBus {
     smoothParam(this.dryGain.gain, 1 - amount, ctx);
     smoothParam(this.wetGain.gain, amount, ctx);
     smoothParam(this.bassMonoGain.gain, amount * 0.5, ctx);
+
+    // Toggle oversampling: '4x' when active, 'none' when off.
+    // Saves CPU by avoiding 4x upsampling on a silent wet path.
+    this.distortion.oversample = amount > 0.001 ? '4x' : 'none';
+
     // Only regenerate the waveshaper curve when the amount changes
     // by a meaningful delta — avoids 2048-sample Float32Array alloc
     // + Math.tanh per frame during knob drags.

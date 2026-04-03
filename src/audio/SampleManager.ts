@@ -53,7 +53,7 @@ export class SampleManager {
    */
   public async boot(): Promise<void> {
     if (!this.audioCtx) {
-      log.warn('SampleManager booted without AudioContext. Decoding will fail.', 'SampleManager');
+      log.warn('SampleManager', 'Booted without AudioContext — decoding will fail');
       return;
     }
     
