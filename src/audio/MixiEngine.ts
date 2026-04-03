@@ -295,9 +295,14 @@ export class MixiEngine {
     // Edge-case #20: Catch corrupt / undecodable files.
     let buffer: AudioBuffer;
     try {
-      buffer = await this.ctx.decodeAudioData(arrayBuffer);
-    } catch (_err) {
-      throw new Error('File could not be decoded. It may be corrupt or in an unsupported format.');
+      buffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0));
+    } catch (err) {
+      const detail = err instanceof Error ? ` (${err.message})` : '';
+      throw new Error(
+        `File could not be decoded${detail}. ` +
+        'Supported formats: MP3, WAV, FLAC, OGG, AAC/M4A. ' +
+        'AIFF-C (compressed) is not supported in most browsers.'
+      );
     }
 
     // BUG-21: If another load or eject happened while we were decoding, bail.
