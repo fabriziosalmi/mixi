@@ -140,9 +140,21 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         analyser.getByteTimeDomainData(bufRef.current as Uint8Array<ArrayBuffer>);
         const waveData = bufRef.current;
 
-        const oscR = jog.r + 4; // tight to wheel edge
+        const oscR = jog.r + 2; // snug to wheel edge
+        const bandWidth = 18; // black band width
         const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
 
+        // Black band behind oscilloscope
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(jog.cx, jog.cy, oscR + bandWidth / 2, 0, Math.PI * 2);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = bandWidth;
+        ctx.stroke();
+        ctx.restore();
+
+        // Oscilloscope waveform
         ctx.save();
         ctx.globalAlpha = 0.6 + beat * 0.3;
         ctx.strokeStyle = deckColor;
@@ -155,7 +167,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         for (let i = 0; i < len; i++) {
           const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
           const amplitude = (waveData[i] - 128) / 128;
-          const r = oscR + amplitude * 12;
+          const r = oscR + amplitude * 9;
           const x = jog.cx + Math.cos(angle) * r;
           const y = jog.cy + Math.sin(angle) * r;
           if (i === 0) ctx.moveTo(x, y);
