@@ -26,8 +26,6 @@ import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import type { DeckId } from '../types';
 
-const GRID_LINES = 12;
-
 interface JogPos { cx: number; cy: number; r: number }
 
 export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
@@ -121,35 +119,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       ctx.fillRect(0, 0, w, h);
     }
 
-    // ── 2. Neon grid ─────────────────────────────────────────
-    const gridY = h * 0.68;
-    const vanishX = w / 2;
-    const vanishY = h * 0.38;
-    ctx.save();
-    ctx.globalAlpha = 0.1 + beat * 0.12;
-    ctx.strokeStyle = `hsla(${hue + 180}, 100%, 60%, 0.5)`;
-    ctx.lineWidth = 0.5;
-
-    for (let i = 0; i < GRID_LINES; i++) {
-      const t = i / GRID_LINES;
-      const y = gridY + (h - gridY) * t;
-      const spread = 1 + t * 2;
-      ctx.beginPath();
-      ctx.moveTo(vanishX - w * spread * 0.6, y);
-      ctx.lineTo(vanishX + w * spread * 0.6, y);
-      ctx.stroke();
-    }
-
-    for (let i = -6; i <= 6; i++) {
-      const xOff = i * (w / 12);
-      ctx.beginPath();
-      ctx.moveTo(vanishX, vanishY);
-      ctx.lineTo(vanishX + xOff * 3, h);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // ── 3. Circular oscilloscopes around jog wheels ──────────
+    // ── 2. Circular oscilloscopes around jog wheels ──────────
     // Update cached positions every 60 frames (~1s)
     if (frame % 60 === 0) updateJogPositions();
     const jogPositions = jogCacheRef.current;
@@ -170,7 +140,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         analyser.getByteTimeDomainData(bufRef.current as Uint8Array<ArrayBuffer>);
         const waveData = bufRef.current;
 
-        const oscR = jog.r + 12;
+        const oscR = jog.r + 4; // tight to wheel edge
         const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
 
         ctx.save();
@@ -185,7 +155,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         for (let i = 0; i < len; i++) {
           const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
           const amplitude = (waveData[i] - 128) / 128;
-          const r = oscR + amplitude * 18;
+          const r = oscR + amplitude * 12;
           const x = jog.cx + Math.cos(angle) * r;
           const y = jog.cy + Math.sin(angle) * r;
           if (i === 0) ctx.moveTo(x, y);
@@ -198,7 +168,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       });
     }
 
-    // ── 4. Scanlines ─────────────────────────────────────────
+    // ── 3. Scanlines ─────────────────────────────────────────
     ctx.save();
     ctx.globalAlpha = 0.025;
     ctx.fillStyle = '#000';
@@ -207,7 +177,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
     ctx.restore();
 
-    // ── 5. Vignette ──────────────────────────────────────────
+    // ── 4. Vignette ──────────────────────────────────────────
     const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
     vignette.addColorStop(0, 'transparent');
     vignette.addColorStop(1, 'rgba(0,0,0,0.35)');
