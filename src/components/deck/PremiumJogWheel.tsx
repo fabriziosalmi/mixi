@@ -401,45 +401,59 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
 
           {/* ── Reactive groove zones ───────────────────────── */}
           <g mask={`url(#${deckId}-spiral-mask)`}>
-            {/* Bass zone (inner rings) */}
+            {/* Bass zone (inner rings) — gradient: inner bright, edge dim */}
             <g ref={grooveBassRef} opacity="0">
-              {Array.from({ length: BASS_RINGS_END }, (_, i) => (
-                <circle
-                  key={`bass-${i}`}
-                  cx={CX} cy={CY} r={GROOVE_R_MIN + i * GROOVE_SPACING}
-                  fill="none" stroke={color} strokeWidth="1.5"
-                />
-              ))}
+              {Array.from({ length: BASS_RINGS_END }, (_, i) => {
+                const fade = 1 - (i / BASS_RINGS_END) * 0.5; // 1.0→0.5
+                return (
+                  <circle
+                    key={`bass-${i}`}
+                    cx={CX} cy={CY} r={GROOVE_R_MIN + i * GROOVE_SPACING}
+                    fill="none" stroke={color} strokeWidth="1.5"
+                    opacity={fade}
+                  />
+                );
+              })}
             </g>
             {/* Mid zone (middle rings) */}
             <g ref={grooveMidRef} opacity="0">
-              {Array.from({ length: MID_RINGS_END - BASS_RINGS_END }, (_, i) => (
-                <circle
-                  key={`mid-${i}`}
-                  cx={CX} cy={CY} r={GROOVE_R_MIN + (BASS_RINGS_END + i) * GROOVE_SPACING}
-                  fill="none" stroke={color} strokeWidth="1.2"
-                />
-              ))}
+              {Array.from({ length: MID_RINGS_END - BASS_RINGS_END }, (_, i) => {
+                const count = MID_RINGS_END - BASS_RINGS_END;
+                const fade = 1 - (i / count) * 0.4;
+                return (
+                  <circle
+                    key={`mid-${i}`}
+                    cx={CX} cy={CY} r={GROOVE_R_MIN + (BASS_RINGS_END + i) * GROOVE_SPACING}
+                    fill="none" stroke={color} strokeWidth="1.2"
+                    opacity={fade}
+                  />
+                );
+              })}
             </g>
             {/* High zone (outer rings) */}
             <g ref={grooveHighRef} opacity="0">
-              {Array.from({ length: GROOVE_COUNT - MID_RINGS_END }, (_, i) => (
-                <circle
-                  key={`high-${i}`}
-                  cx={CX} cy={CY} r={GROOVE_R_MIN + (MID_RINGS_END + i) * GROOVE_SPACING}
-                  fill="none" stroke="#fff" strokeWidth="0.9"
-                />
-              ))}
+              {Array.from({ length: GROOVE_COUNT - MID_RINGS_END }, (_, i) => {
+                const count = GROOVE_COUNT - MID_RINGS_END;
+                const fade = 1 - (i / count) * 0.35;
+                return (
+                  <circle
+                    key={`high-${i}`}
+                    cx={CX} cy={CY} r={GROOVE_R_MIN + (MID_RINGS_END + i) * GROOVE_SPACING}
+                    fill="none" stroke="#fff" strokeWidth="0.9"
+                    opacity={fade}
+                  />
+                );
+              })}
             </g>
           </g>
 
           {/* ── Hourglass reflection (simulates record spin) ──── */}
-          <g opacity="0.07" style={{ filter: 'blur(2px)' }}>
+          <g opacity="0.08" style={{ filter: 'blur(2px)' }}>
             <path
               d={`M${CX},${CY - GROOVE_R_MAX}
-                  L${CX + 12},${CY}
+                  L${CX + 20},${CY}
                   L${CX},${CY + GROOVE_R_MAX}
-                  L${CX - 12},${CY}
+                  L${CX - 20},${CY}
                   Z`}
               fill="rgba(255,255,255,0.5)"
             />
