@@ -95,6 +95,7 @@ export class MixiBridge {
   private destroyed = false;
   private pushPending = false;
   private pushTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
 
   /** True when the WebSocket is open and ready. */
   get isConnected(): boolean {
@@ -107,12 +108,15 @@ export class MixiBridge {
     if (this.destroyed) return;
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
 
-    log.info('Bridge', `Connecting to ${WS_URL}…`);
+    if (this.reconnectAttempts === 0) {
+      log.info('Bridge', `Connecting to ${WS_URL}…`);
+    }
     this.ws = new WebSocket(WS_URL);
 
     this.ws.onopen = () => {
       log.success('Bridge', 'Connected to MCP backend');
       this.reconnectDelay = RECONNECT_BASE;
+      this.reconnectAttempts = 0;
 
       // Send initial state snapshot.
       this.pushState();
@@ -134,7 +138,9 @@ export class MixiBridge {
     };
 
     this.ws.onclose = () => {
-      log.warn('Bridge', 'WebSocket closed — will reconnect');
+      if (this.reconnectAttempts === 0) {
+        log.warn('Bridge', 'Backend not available — will retry silently');
+      }
       this.cleanup();
       this.scheduleReconnect();
     };
@@ -284,6 +290,7 @@ export class MixiBridge {
 
   private scheduleReconnect(): void {
     if (this.destroyed) return;
+    this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.connect();
     }, this.reconnectDelay);

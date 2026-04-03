@@ -42,7 +42,7 @@ export const useMidiStore = create<MidiState>()(
           const filtered = state.mappings.filter(
             (m) => !(m.action.type === mapping.action.type && (m.action as any).deck === (mapping.action as any).deck)
           );
-          return { mappings: [...filtered, mapping], learningAction: null, activePreset: 'Custom' };
+          return { mappings: [...filtered, mapping], learningAction: null, isLearning: false, activePreset: 'Custom' };
         }),
 
       removeMapping: (actionType, deck) =>

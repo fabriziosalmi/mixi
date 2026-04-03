@@ -180,16 +180,74 @@ const AudioTab: FC = () => {
 
 // ── Tab: MIDI ───────────────────────────────────────────────
 
+import type { MidiAction } from '../../midi/MidiManager';
+
 const MIDI_PRESETS = [
   { id: 'manual', label: 'Manual (MIDI Learn)' },
   { id: 'akai-midimix', label: 'Akai MIDI Mix' },
 ] as const;
+
+/** All learnable parameters, organized by section. */
+const MIDI_PARAMS: { section: string; params: { label: string; action: MidiAction }[] }[] = [
+  {
+    section: 'Deck A',
+    params: [
+      { label: 'EQ High', action: { type: 'DECK_EQ_HIGH', deck: 'A' } },
+      { label: 'EQ Mid', action: { type: 'DECK_EQ_MID', deck: 'A' } },
+      { label: 'EQ Low', action: { type: 'DECK_EQ_LOW', deck: 'A' } },
+      { label: 'Gain', action: { type: 'DECK_GAIN', deck: 'A' } },
+      { label: 'Volume', action: { type: 'DECK_VOL', deck: 'A' } },
+      { label: 'Filter', action: { type: 'DECK_FILTER', deck: 'A' } },
+      { label: 'Pitch', action: { type: 'DECK_PITCH', deck: 'A' } },
+      { label: 'Play', action: { type: 'DECK_PLAY', deck: 'A' } },
+      { label: 'Cue', action: { type: 'DECK_CUE', deck: 'A' } },
+      { label: 'Sync', action: { type: 'DECK_SYNC', deck: 'A' } },
+    ],
+  },
+  {
+    section: 'Deck B',
+    params: [
+      { label: 'EQ High', action: { type: 'DECK_EQ_HIGH', deck: 'B' } },
+      { label: 'EQ Mid', action: { type: 'DECK_EQ_MID', deck: 'B' } },
+      { label: 'EQ Low', action: { type: 'DECK_EQ_LOW', deck: 'B' } },
+      { label: 'Gain', action: { type: 'DECK_GAIN', deck: 'B' } },
+      { label: 'Volume', action: { type: 'DECK_VOL', deck: 'B' } },
+      { label: 'Filter', action: { type: 'DECK_FILTER', deck: 'B' } },
+      { label: 'Pitch', action: { type: 'DECK_PITCH', deck: 'B' } },
+      { label: 'Play', action: { type: 'DECK_PLAY', deck: 'B' } },
+      { label: 'Cue', action: { type: 'DECK_CUE', deck: 'B' } },
+      { label: 'Sync', action: { type: 'DECK_SYNC', deck: 'B' } },
+    ],
+  },
+  {
+    section: 'Master',
+    params: [
+      { label: 'Crossfader', action: { type: 'CROSSFADER' } },
+      { label: 'Master Vol', action: { type: 'MASTER_VOL' } },
+      { label: 'HP Mix', action: { type: 'HEADPHONE_MIX' } },
+      { label: 'HP Level', action: { type: 'HEADPHONE_LEVEL' } },
+    ],
+  },
+];
+
+/** Match a MidiAction to an existing mapping. */
+function findMapping(mappings: any[], action: MidiAction) {
+  return mappings.find((m: any) =>
+    m.action.type === action.type &&
+    ('deck' in action ? (m.action as any).deck === (action as any).deck : true)
+  );
+}
 
 const MidiTab: FC = () => {
   const mappings = useMidiStore((s) => s.mappings);
   const activePreset = useMidiStore((s) => s.activePreset);
   const loadPreset = useMidiStore((s) => s.loadPreset);
   const clearMappings = useMidiStore((s) => s.clearMappings);
+  const isLearning = useMidiStore((s) => s.isLearning);
+  const learningAction = useMidiStore((s) => s.learningAction);
+  const setLearning = useMidiStore((s) => s.setLearning);
+  const setLearningAction = useMidiStore((s) => s.setLearningAction);
+  const removeMapping = useMidiStore((s) => s.removeMapping);
 
   const handlePreset = (presetId: string) => {
     if (presetId === 'akai-midimix') {
@@ -199,9 +257,25 @@ const MidiTab: FC = () => {
     }
   };
 
+  const startLearn = (action: MidiAction) => {
+    setLearning(true);
+    setLearningAction(action);
+  };
+
+  const cancelLearn = () => {
+    setLearning(false);
+    setLearningAction(null);
+  };
+
+  const isWaiting = (action: MidiAction) =>
+    isLearning &&
+    learningAction?.type === action.type &&
+    ('deck' in action ? (learningAction as any)?.deck === (action as any).deck : true);
+
   return (
-    <>
-      <SettingRow label="Controller Preset" description="Load a factory mapping for your controller">
+    <div className="space-y-2">
+      {/* Preset selector */}
+      <div className="flex justify-between items-center">
         <select
           value={activePreset === 'Akai MIDI Mix' ? 'akai-midimix' : 'manual'}
           onChange={(e) => handlePreset(e.target.value)}
@@ -211,45 +285,71 @@ const MidiTab: FC = () => {
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
         </select>
-      </SettingRow>
-
-      <Divider />
-
-      <div className="space-y-1.5">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            Mappings ({mappings.length})
-          </span>
+        <div className="flex gap-2">
+          {isLearning && (
+            <button type="button" onClick={cancelLearn}
+              className="text-[9px] text-amber-400 hover:text-amber-300 font-mono uppercase animate-pulse">
+              Cancel
+            </button>
+          )}
           {mappings.length > 0 && (
-            <button
-              type="button"
-              onClick={clearMappings}
-              className="text-[9px] text-red-400 hover:text-red-300 font-mono uppercase"
-            >
+            <button type="button" onClick={clearMappings}
+              className="text-[9px] text-red-400 hover:text-red-300 font-mono uppercase">
               Clear All
             </button>
           )}
         </div>
-        {mappings.length === 0 ? (
-          <div className="text-[10px] text-zinc-600 py-2">
-            No mappings. Use MIDI Learn or load a preset.
-          </div>
-        ) : (
-          <div className="max-h-[120px] overflow-auto space-y-0.5">
-            {mappings.map((m, i) => (
-              <div key={i} className="flex justify-between text-[9px] font-mono py-0.5 border-b border-zinc-800/30">
-                <span className="text-zinc-400">
-                  {m.action.type}{'deck' in m.action ? ` ${(m.action as any).deck}` : ''}
-                </span>
-                <span className="text-zinc-600">
-                  {m.type.toUpperCase()} Ch{m.channel + 1} #{m.control}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
-    </>
+
+      {/* Parameter mapping table */}
+      <div className="max-h-[280px] overflow-auto space-y-2 pr-1">
+        {MIDI_PARAMS.map(({ section, params }) => (
+          <div key={section}>
+            <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-600 mb-0.5 sticky top-0 bg-zinc-950 py-0.5">
+              {section}
+            </div>
+            {params.map(({ label, action }) => {
+              const mapping = findMapping(mappings, action);
+              const waiting = isWaiting(action);
+              return (
+                <div key={`${action.type}-${'deck' in action ? (action as any).deck : 'M'}`}
+                  className="flex items-center justify-between py-0.5 border-b border-zinc-800/20">
+                  <span className="text-[10px] text-zinc-400 w-[70px]">{label}</span>
+                  <span className="text-[9px] font-mono text-zinc-600 flex-1 text-center">
+                    {waiting ? (
+                      <span className="text-amber-400 animate-pulse">⏳ Move control…</span>
+                    ) : mapping ? (
+                      `${mapping.type.toUpperCase()} Ch${mapping.channel + 1} #${mapping.control}`
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                  <div className="flex gap-1">
+                    <button type="button"
+                      onClick={() => startLearn(action)}
+                      className="text-[8px] font-mono uppercase px-1.5 py-0.5 rounded transition-all"
+                      style={{
+                        background: waiting ? 'var(--status-warn)' : 'transparent',
+                        color: waiting ? '#000' : 'var(--txt-muted)',
+                        border: `1px solid ${waiting ? 'var(--status-warn)' : 'rgba(255,255,255,0.08)'}`,
+                      }}>
+                      {waiting ? '…' : 'Learn'}
+                    </button>
+                    {mapping && (
+                      <button type="button"
+                        onClick={() => removeMapping(action.type, 'deck' in action ? (action as any).deck : undefined)}
+                        className="text-[8px] text-zinc-600 hover:text-red-400 px-1">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 

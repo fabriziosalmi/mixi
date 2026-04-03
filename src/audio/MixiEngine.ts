@@ -269,7 +269,9 @@ export class MixiEngine {
     this.master.destroy();
     this.headphones.destroy();
 
-    await this.ctx.close();
+    if (this.ctx.state !== 'closed') {
+      await this.ctx.close();
+    }
     this.initialized = false;
     MixiEngine.instance = null;
   }
