@@ -2,7 +2,7 @@
   <img src="screenshot.png" alt="MIXI — Browser-native DJ workstation" width="100%" />
 </p>
 
-<h1 align="center">MIXI</h1>
+<h1 align="center"><a href="https://www.mixidaw.com/app/">MIXI</a></h1>
 
 <p align="center">
   Deterministic audio workstation. Browser-native. Zero install.<br>
