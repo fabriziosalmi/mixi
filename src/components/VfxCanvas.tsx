@@ -3,157 +3,112 @@
  *
  * This file is part of MIXI.
  * MIXI is licensed under the PolyForm Noncommercial License 1.0.0.
- * You may not use this file for commercial purposes without explicit permission.
- * For commercial licensing, contact: fabrizio.salmi@gmail.com
  */
 
 // ─────────────────────────────────────────────────────────────
 // Mixi – VFX Visual Engine
 //
-// Audio-reactive visual layer rendered on a fullscreen <canvas>.
-// Sits on top of the DJ UI as a transparent overlay.
+// Audio-reactive visual layer. When VFX is active:
+//   1. Beat flash — screen-wide glow on kick hits
+//   2. Neon grid — Tron-style perspective floor
+//   3. Scanlines — retro CRT aesthetic
+//   4. Circular oscilloscopes around each jog wheel
 //
-// Effects:
-//   1. Particle field — stars that pulse with the beat
-//   2. Beat flash — screen-wide glow on kick hits
-//   3. Waveform ring — circular oscilloscope
-//   4. Scanlines — retro CRT aesthetic
-//   5. Neon grid — Tron-style perspective floor
-//
-// Performance: requestAnimationFrame, GPU-composited canvas,
-// pointer-events:none. No impact on audio thread.
+// Performance:
+//   - requestAnimationFrame at display refresh
+//   - Jog positions cached (updated every 60 frames)
+//   - Audio buffers reused (zero GC pressure)
+//   - pointer-events:none, mix-blend-mode:screen
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useCallback, type FC } from 'react';
 import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
+import type { DeckId } from '../types';
 
-// ── Particle type ────────────────────────────────────────────
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  hue: number;
-  alpha: number;
-  life: number;
-  maxLife: number;
-}
-
-// ── Constants ────────────────────────────────────────────────
-
-const MAX_PARTICLES = 200;
-const SPAWN_RATE = 3; // per frame
 const GRID_LINES = 12;
 
-// ── Component ────────────────────────────────────────────────
+interface JogPos { cx: number; cy: number; r: number }
 
 export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number>(0);
-  const timeRef = useRef(0);
   const beatEnergyRef = useRef(0);
   const prevLevelRef = useRef(0);
   const hueRef = useRef(0);
+  const frameRef = useRef(0);
 
-  // ── Audio analysis (read from engine analyser) ─────────────
+  // Reusable buffers — allocated once
+  const freqBufRef = useRef<Uint8Array | null>(null);
+  const waveBufA = useRef<Uint8Array | null>(null);
+  const waveBufB = useRef<Uint8Array | null>(null);
 
-  const getAudioLevel = useCallback(() => {
-    const engine = MixiEngine.getInstance();
-    if (!engine.isInitialized) return { level: 0, isBeat: false };
+  // Cached jog positions — updated every 60 frames
+  const jogCacheRef = useRef<JogPos[]>([]);
 
-    // Try to read from master analyser
-    const state = useMixiStore.getState();
-    const deckA = state.decks.A;
-    const deckB = state.decks.B;
-
-    // Use the playing deck's channel analyser
-    let analyser: AnalyserNode | null = null;
-    if (deckA.isPlaying) {
-      analyser = engine.channels.A.analyser;
-    } else if (deckB.isPlaying) {
-      analyser = engine.channels.B.analyser;
-    }
-
-    if (!analyser) return { level: 0, isBeat: false };
-
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(data);
-
-    // RMS level (low frequencies for beat detection)
-    let sum = 0;
-    const bassEnd = Math.floor(data.length * 0.15); // bottom 15% = bass
-    for (let i = 0; i < bassEnd; i++) {
-      sum += data[i] * data[i];
-    }
-    const rms = Math.sqrt(sum / bassEnd) / 255;
-
-    // Full spectrum level
-    let fullSum = 0;
-    for (let i = 0; i < data.length; i++) {
-      fullSum += data[i];
-    }
-    const level = fullSum / (data.length * 255);
-
-    // Onset detection: sharp rise in bass energy = beat
-    const prev = prevLevelRef.current;
-    const isBeat = rms > 0.4 && rms - prev > 0.15;
-    prevLevelRef.current = rms;
-
-    return { level, isBeat };
-  }, []);
-
-  // ── Particle management ────────────────────────────────────
-
-  const spawnParticle = useCallback((w: number, h: number, energy: number) => {
-    const particles = particlesRef.current;
-    if (particles.length >= MAX_PARTICLES) return;
-
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 0.3 + energy * 2 + Math.random() * 1.5;
-    const maxLife = 80 + Math.random() * 120;
-
-    particles.push({
-      x: w / 2 + (Math.random() - 0.5) * w * 0.3,
-      y: h / 2 + (Math.random() - 0.5) * h * 0.3,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      size: 1 + Math.random() * 2.5 + energy * 2,
-      hue: hueRef.current + Math.random() * 60,
-      alpha: 0.6 + Math.random() * 0.4,
-      life: 0,
-      maxLife,
+  const updateJogPositions = useCallback(() => {
+    const positions: JogPos[] = [];
+    const wheels = document.querySelectorAll('.mixi-chassis svg[viewBox]');
+    wheels.forEach((svg) => {
+      const rect = svg.getBoundingClientRect();
+      if (rect.width > 150) {
+        positions.push({
+          cx: rect.left + rect.width / 2,
+          cy: rect.top + rect.height / 2,
+          r: rect.width / 2,
+        });
+      }
     });
+    jogCacheRef.current = positions;
   }, []);
-
-  // ── Main render loop ───────────────────────────────────────
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const w = canvas.width;
-    const h = canvas.height;
-    timeRef.current++;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    const frame = frameRef.current++;
 
-    // Audio analysis
-    const { level, isBeat } = getAudioLevel();
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Beat energy (decays smoothly)
-    if (isBeat) {
-      beatEnergyRef.current = 1;
-    } else {
-      beatEnergyRef.current *= 0.92;
+    // ── Audio analysis (reused buffer) ───────────────────────
+    const engine = MixiEngine.getInstance();
+    let level = 0;
+    let isBeat = false;
+
+    if (engine.isInitialized) {
+      const state = useMixiStore.getState();
+      let analyser: AnalyserNode | null = null;
+      if (state.decks.A.isPlaying) analyser = engine.channels.A.analyser;
+      else if (state.decks.B.isPlaying) analyser = engine.channels.B.analyser;
+
+      if (analyser) {
+        if (!freqBufRef.current || freqBufRef.current.length !== analyser.frequencyBinCount) {
+          freqBufRef.current = new Uint8Array(analyser.frequencyBinCount);
+        }
+        analyser.getByteFrequencyData(freqBufRef.current as Uint8Array<ArrayBuffer>);
+        const data = freqBufRef.current;
+        const bassEnd = Math.floor(data.length * 0.15);
+        let sum = 0;
+        for (let i = 0; i < bassEnd; i++) sum += data[i] * data[i];
+        const rms = Math.sqrt(sum / bassEnd) / 255;
+        let fullSum = 0;
+        for (let i = 0; i < data.length; i++) fullSum += data[i];
+        level = fullSum / (data.length * 255);
+        isBeat = rms > 0.4 && rms - prevLevelRef.current > 0.15;
+        prevLevelRef.current = rms;
+      }
     }
+
+    if (isBeat) beatEnergyRef.current = 1;
+    else beatEnergyRef.current *= 0.92;
     const beat = beatEnergyRef.current;
 
-    // Hue rotation
     hueRef.current = (hueRef.current + 0.5 + level * 2) % 360;
     const hue = hueRef.current;
 
@@ -162,32 +117,29 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
     // ── 1. Beat flash ────────────────────────────────────────
     if (beat > 0.1) {
-      const flashAlpha = beat * 0.08;
-      ctx.fillStyle = `hsla(${hue}, 100%, 80%, ${flashAlpha})`;
+      ctx.fillStyle = `hsla(${hue}, 100%, 80%, ${beat * 0.06})`;
       ctx.fillRect(0, 0, w, h);
     }
 
-    // ── 2. Neon grid (perspective floor) ──────────────────────
-    const gridY = h * 0.65;
+    // ── 2. Neon grid ─────────────────────────────────────────
+    const gridY = h * 0.68;
     const vanishX = w / 2;
-    const vanishY = h * 0.35;
+    const vanishY = h * 0.38;
     ctx.save();
-    ctx.globalAlpha = 0.12 + beat * 0.15;
-    ctx.strokeStyle = `hsla(${hue + 180}, 100%, 60%, 0.6)`;
+    ctx.globalAlpha = 0.1 + beat * 0.12;
+    ctx.strokeStyle = `hsla(${hue + 180}, 100%, 60%, 0.5)`;
     ctx.lineWidth = 0.5;
 
-    // Horizontal grid lines
     for (let i = 0; i < GRID_LINES; i++) {
-      const t2 = i / GRID_LINES;
-      const y = gridY + (h - gridY) * t2;
-      const spread = 1 + t2 * 2;
+      const t = i / GRID_LINES;
+      const y = gridY + (h - gridY) * t;
+      const spread = 1 + t * 2;
       ctx.beginPath();
       ctx.moveTo(vanishX - w * spread * 0.6, y);
       ctx.lineTo(vanishX + w * spread * 0.6, y);
       ctx.stroke();
     }
 
-    // Vertical perspective lines
     for (let i = -6; i <= 6; i++) {
       const xOff = i * (w / 12);
       ctx.beginPath();
@@ -197,35 +149,45 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
     ctx.restore();
 
-    // ── 3. Waveform ring ─────────────────────────────────────
-    const engine = MixiEngine.getInstance();
-    if (engine.isInitialized) {
-      const state = useMixiStore.getState();
-      const playingDeck = state.decks.A.isPlaying ? 'A' : state.decks.B.isPlaying ? 'B' : null;
-      
-      if (playingDeck) {
-        const analyser = engine.channels[playingDeck].analyser;
-        const waveData = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteTimeDomainData(waveData);
+    // ── 3. Circular oscilloscopes around jog wheels ──────────
+    // Update cached positions every 60 frames (~1s)
+    if (frame % 60 === 0) updateJogPositions();
+    const jogPositions = jogCacheRef.current;
+    const deckIds: DeckId[] = ['A', 'B'];
 
-        const cx = w / 2;
-        const cy = h * 0.42;
-        const baseR = Math.min(w, h) * 0.12 + beat * 20;
+    if (engine.isInitialized) {
+      jogPositions.forEach((jog, idx) => {
+        const deckId = deckIds[idx] || 'A';
+        const state = useMixiStore.getState();
+        if (!state.decks[deckId].isPlaying) return;
+
+        const analyser = engine.channels[deckId].analyser;
+        // Reuse waveform buffer
+        const bufRef = idx === 0 ? waveBufA : waveBufB;
+        if (!bufRef.current || bufRef.current.length !== analyser.frequencyBinCount) {
+          bufRef.current = new Uint8Array(analyser.frequencyBinCount);
+        }
+        analyser.getByteTimeDomainData(bufRef.current as Uint8Array<ArrayBuffer>);
+        const waveData = bufRef.current;
+
+        const oscR = jog.r + 12;
+        const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
 
         ctx.save();
-        ctx.globalAlpha = 0.5 + beat * 0.3;
-        ctx.strokeStyle = `hsla(${hue}, 100%, 70%, 0.8)`;
-        ctx.lineWidth = 1.5 + beat * 2;
-        ctx.shadowColor = `hsla(${hue}, 100%, 60%, 0.6)`;
-        ctx.shadowBlur = 8 + beat * 15;
+        ctx.globalAlpha = 0.6 + beat * 0.3;
+        ctx.strokeStyle = deckColor;
+        ctx.lineWidth = 1.5 + beat * 1.5;
+        ctx.shadowColor = deckColor;
+        ctx.shadowBlur = 6 + beat * 10;
         ctx.beginPath();
 
-        for (let i = 0; i < waveData.length; i++) {
-          const angle = (i / waveData.length) * Math.PI * 2;
+        const len = waveData.length;
+        for (let i = 0; i < len; i++) {
+          const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
           const amplitude = (waveData[i] - 128) / 128;
-          const r = baseR + amplitude * 40;
-          const x = cx + Math.cos(angle) * r;
-          const y = cy + Math.sin(angle) * r;
+          const r = oscR + amplitude * 18;
+          const x = jog.cx + Math.cos(angle) * r;
+          const y = jog.cy + Math.sin(angle) * r;
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -233,73 +195,28 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         ctx.closePath();
         ctx.stroke();
         ctx.restore();
-      }
+      });
     }
 
-    // ── 4. Particles ─────────────────────────────────────────
-    // Spawn
-    const spawnCount = Math.floor(SPAWN_RATE + level * 5 + beat * 8);
-    for (let i = 0; i < spawnCount; i++) {
-      spawnParticle(w, h, level);
-    }
-
-    // Update & draw
-    const particles = particlesRef.current;
+    // ── 4. Scanlines ─────────────────────────────────────────
     ctx.save();
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.life++;
-      if (p.life > p.maxLife) {
-        particles.splice(i, 1);
-        continue;
-      }
-
-      // Move
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.005; // gentle gravity
-
-      // Beat pulse: expand on hit
-      const beatPulse = beat > 0.3 ? 1 + beat * 0.5 : 1;
-
-      // Fade
-      const lifeRatio = p.life / p.maxLife;
-      const fadeIn = Math.min(1, p.life / 10);
-      const fadeOut = 1 - Math.pow(lifeRatio, 2);
-      const alpha = p.alpha * fadeIn * fadeOut;
-
-      const size = p.size * beatPulse;
-
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${p.hue % 360}, 90%, 70%, ${alpha})`;
-      ctx.shadowColor = `hsla(${p.hue % 360}, 100%, 60%, ${alpha * 0.5})`;
-      ctx.shadowBlur = size * 3;
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // ── 5. Scanlines ─────────────────────────────────────────
-    ctx.save();
-    ctx.globalAlpha = 0.03;
+    ctx.globalAlpha = 0.025;
     ctx.fillStyle = '#000';
     for (let y = 0; y < h; y += 3) {
       ctx.fillRect(0, y, w, 1);
     }
     ctx.restore();
 
-    // ── 6. Vignette ──────────────────────────────────────────
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
+    // ── 5. Vignette ──────────────────────────────────────────
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
     vignette.addColorStop(0, 'transparent');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.4)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.35)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    // Loop
+    ctx.restore();
     rafRef.current = requestAnimationFrame(render);
-  }, [getAudioLevel, spawnParticle]);
-
-  // ── Lifecycle ──────────────────────────────────────────────
+  }, [updateJogPositions]);
 
   useEffect(() => {
     if (!active) {
@@ -307,33 +224,28 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = 0;
       }
-      particlesRef.current = [];
       return;
     }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Match canvas to screen resolution
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
-      const ctx2 = canvas.getContext('2d');
-      if (ctx2) ctx2.scale(dpr, dpr);
+      updateJogPositions(); // refresh positions on resize
     };
     resize();
     window.addEventListener('resize', resize);
 
-    // Reset state
-    timeRef.current = 0;
     beatEnergyRef.current = 0;
     prevLevelRef.current = 0;
-    particlesRef.current = [];
+    frameRef.current = 0;
+    updateJogPositions();
 
-    // Start render loop
     rafRef.current = requestAnimationFrame(render);
 
     return () => {
@@ -341,14 +253,13 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       rafRef.current = 0;
       window.removeEventListener('resize', resize);
     };
-  }, [active, render]);
+  }, [active, render, updateJogPositions]);
 
   if (!active) return null;
 
   return (
     <canvas
       ref={canvasRef}
-      className="mixi-vfx-canvas"
       style={{
         position: 'fixed',
         inset: 0,
