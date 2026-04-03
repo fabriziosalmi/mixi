@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-04-03
+## [0.1.1] - 2026-04-04
 
 ### Added
 
@@ -17,35 +17,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Per-parameter delete (✕) and global Clear All
   - Preset dropdown (Manual / Akai MIDI Mix)
 - **MIDI Store**: `loadPreset()`, `exportMappings()`, `activePreset` tracking
-- **Testing Suite**: 33 unit tests across 3 test files
-  - `mixiStore.test.ts` — 16 assertions (crossfader, EQ, volume, gain, play guard, CUE, headphones)
-  - `settingsStore.test.ts` — 8 assertions (EQ range, BPM, FPS, skin, quantize)
-  - `midiStore.test.ts` — 9 assertions (CRUD, presets, export, learn state)
+- **Master FX Store**: Filter, Distortion, Punch migrated from React local state to Zustand store
+  - 3 new store actions: `setMasterFilter`, `setMasterDistortion`, `setMasterPunch`
+  - Full sync pipeline: store → `useMixiSync` → engine (bidirectional)
+  - Bridge whitelist + state snapshot includes master FX (AI/MCP agent can control remotely)
+  - AI ghost proxy marks filter/dist/punch for glow indicators
+  - Panic handler resets master FX via store (single source of truth)
+- **MixiEngine API**: Public `setLimiterEnabled()` method replaces unsafe internal cast
+- **Testing Suite**: 73 unit tests across 5 test files (+121% from 33)
+  - `mixiStore.test.ts` — 27 assertions (+11: master FX, clamping, modes, AI, crossfader curve)
+  - `mathUtils.test.ts` — 21 assertions (NEW: dbToGain, crossfaderGains smooth/sharp, logFrequency, clamp)
+  - `logger.test.ts` — 8 assertions (NEW: all log levels, console routing, DEV-only debug, extra data)
+  - `settingsStore.test.ts` — 8 assertions
+  - `midiStore.test.ts` — 9 assertions
+- **Coverage**: `audio/utils` 12.5% → 75%, `utils/logger` 38% → 100%
 - **Dynamic Version**: `__APP_VERSION__` injected from `package.json` via Vite `define`
 - **Type Declaration**: `src/vite-env.d.ts` for Vite client types
 
 ### Changed
 
-- **Empty Deck Overlay**: Reduced from opaque black/blur to subtle frosted-glass (`bg-black/30 backdrop-blur-sm`, `opacity-60 blur-[2px]`)
-- **Demo Track Loading**: Now loads every session (not one-shot); `loadDemoTrack` removed from localStorage persistence
+- **MasterBus Distortion**: Dynamic oversample toggle (`'4x'` when active, `'none'` when bypassed) — dramatically reduces CPU when distortion is off
+- **MasterBus Buffer**: Simplified `Float32Array(samples)` allocation (no intermediate `ArrayBuffer`)
+- **SystemHud CPU Meter**: True O(1) ring buffer (`Float64Array`) replaces `Array.shift()` per-frame overhead
+- **MasterLedScreen Lissajous**: Pre-computed 256-entry RGBA alpha LUT eliminates ~61,440 string allocs/sec in inner loop
+- **PremiumJogWheel Iris**: Pre-computed `HEX_LUT[256]` replaces `toString(16).padStart()` in render loop
+- **SampleManager**: Fixed inverted logger arguments `(message, tag)` → `(tag, message)`
+- **Logging Policy**: Zero `console.*` calls remain in entire `src/` directory — all migrated to structured `log.*`
+- **Empty Deck Overlay**: Reduced from opaque black/blur to subtle frosted-glass
+- **Demo Track Loading**: Now loads every session (not one-shot)
 - **WS Bridge Logging**: Only first connection attempt logged; subsequent reconnects silent until success
 - **Settings Persistence**: Added explicit `merge` function to strip stale `loadDemoTrack` from localStorage
-- **README**: Tech stack corrected (`Tailwind CSS` → `vanilla CSS + CSS custom properties`); test scripts added
-- **DECKS.md**: Fixed API mismatches (`playing` → `isPlaying`, `rate` → `playbackRate`, `togglePlay()` → `setDeckPlaying()`)
+- **README**: Tech stack corrected; test scripts added
+- **DECKS.md**: Fixed API mismatches
 - **Audio Decode Error**: Now includes browser's native error message and lists supported formats
 
 ### Fixed
 
-- **Deck B Crash**: Removed forced `setDeckTrackLoaded('B', true)` at startup that caused `play()` on null buffer
-- **Play Buttons Broken**: `loadDemoTrack` was permanently disabled after first boot via localStorage; now defaults to `true` on every session
-- **AudioContext Double-Close**: Guard `ctx.state !== 'closed'` prevents crash in React StrictMode dev mode
-- **Version String**: SettingsModal no longer shows hardcoded "v0.1.0"; reads from `package.json`
-- **ArrayBuffer Consumed**: `decodeAudioData` now receives `arrayBuffer.slice(0)` to prevent consumption
+- **Deck B Crash**: Removed forced `setDeckTrackLoaded('B', true)` at startup
+- **Play Buttons Broken**: `loadDemoTrack` localStorage fix
+- **AudioContext Double-Close**: Guard `ctx.state !== 'closed'`
+- **Version String**: SettingsModal reads from `package.json`
+- **ArrayBuffer Consumed**: `decodeAudioData` receives `arrayBuffer.slice(0)`
+- **PitchStrip Nudge Timer**: `setTimeout` now stored in ref and cleared on unmount (prevents stale timer leak)
+- **MasterHud LimiterDot**: Uses public `MixiEngine` API instead of unsafe internal cast
 
 ### Removed
 
 - **Tracked Build Artifacts**: `tsconfig.tsbuildinfo` removed from git tracking
-- **Stale .gitignore**: Fixed malformed `API.md*.tsbuildinfo` line; added `api/dist/`, `api/build/`, `*.spec`
+- **Stale .gitignore**: Fixed malformed entries; added `api/dist/`, `api/build/`, `*.spec`, `coverage/`
 
 ## [0.1.0] - 2026-04-03
 
