@@ -43,8 +43,8 @@ const R_TICK = 98;
 // Spiral config
 const SPIRAL_R_MIN = 26;      // inner radius (just outside label)
 const SPIRAL_R_MAX = 74;      // outer radius (just inside LED ring)
-const SPIRAL_TURNS = 6;       // fewer turns = visible spiral shape
-const SPIRAL_POINTS = 200;    // points per zone for smoothness
+const SPIRAL_TURNS = 5;       // visible spiral shape
+const SPIRAL_POINTS = 350;    // enough points for smooth curves
 
 // Band boundaries (normalized 0-1 of spiral radius range)
 const BAND_BASS = 0.38;       // inner 38% = bass
@@ -207,10 +207,10 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
             ? smoothHigh.current * (1 - attack) + highLevel * attack
             : smoothHigh.current * release;
 
-          // Apply to spiral zone refs — 0 at rest, glow on activity
-          if (spiralBassRef.current) spiralBassRef.current.style.opacity = String(smoothBass.current * 0.4);
-          if (spiralMidRef.current) spiralMidRef.current.style.opacity = String(smoothMid.current * 0.3);
-          if (spiralHighRef.current) spiralHighRef.current.style.opacity = String(smoothHigh.current * 0.2);
+          // Apply to spiral zone refs — visible glow on activity
+          if (spiralBassRef.current) spiralBassRef.current.style.opacity = String(smoothBass.current * 0.8);
+          if (spiralMidRef.current) spiralMidRef.current.style.opacity = String(smoothMid.current * 0.6);
+          if (spiralHighRef.current) spiralHighRef.current.style.opacity = String(smoothHigh.current * 0.45);
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
@@ -404,8 +404,8 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
           <path
             d={spiralPaths.full}
             fill="none"
-            stroke="rgba(255,255,255,0.018)"
-            strokeWidth="0.4"
+            stroke="rgba(255,255,255,0.03)"
+            strokeWidth="0.6"
           />
           {/* ── Spiral 3D shadow (offset) ─────────────────── */}
           <g transform="translate(0, 0.3)">
@@ -426,27 +426,27 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
             d={spiralPaths.bass}
             fill="none"
             stroke={color}
-            strokeWidth="0.8"
+            strokeWidth="1.2"
             opacity="0"
             strokeLinecap="round"
           />
-          {/* Mid zone (middle) — deck color, thinner */}
+          {/* Mid zone (middle) — deck color */}
           <path
             ref={spiralMidRef}
             d={spiralPaths.mid}
             fill="none"
             stroke={color}
-            strokeWidth="0.6"
+            strokeWidth="1.0"
             opacity="0"
             strokeLinecap="round"
           />
-          {/* High zone (outer) — white, finest */}
+          {/* High zone (outer) — white */}
           <path
             ref={spiralHighRef}
             d={spiralPaths.high}
             fill="none"
             stroke="#fff"
-            strokeWidth="0.4"
+            strokeWidth="0.7"
             opacity="0"
             strokeLinecap="round"
           />
