@@ -152,4 +152,129 @@ describe('mixiStore', () => {
     store.toggleCue('A');
     expect(useMixiStore.getState().decks.A.cueActive).toBe(false);
   });
+
+  // ── Master Filter ──────────────────────────────────────────
+
+  it('sets master filter (bipolar -1..+1)', () => {
+    const store = useMixiStore.getState();
+    store.setMasterFilter(-0.5);
+    expect(useMixiStore.getState().master.filter).toBe(-0.5);
+
+    store.setMasterFilter(0.8);
+    expect(useMixiStore.getState().master.filter).toBe(0.8);
+
+    store.setMasterFilter(0);
+    expect(useMixiStore.getState().master.filter).toBe(0);
+  });
+
+  it('clamps master filter to -1..+1', () => {
+    const store = useMixiStore.getState();
+    store.setMasterFilter(-5);
+    expect(useMixiStore.getState().master.filter).toBe(-1);
+
+    store.setMasterFilter(3);
+    expect(useMixiStore.getState().master.filter).toBe(1);
+  });
+
+  // ── Master Distortion ──────────────────────────────────────
+
+  it('sets master distortion (0..1)', () => {
+    const store = useMixiStore.getState();
+    store.setMasterDistortion(0.4);
+    expect(useMixiStore.getState().master.distortion).toBe(0.4);
+  });
+
+  it('clamps master distortion to 0..1', () => {
+    const store = useMixiStore.getState();
+    store.setMasterDistortion(-0.5);
+    expect(useMixiStore.getState().master.distortion).toBe(0);
+
+    store.setMasterDistortion(2);
+    expect(useMixiStore.getState().master.distortion).toBe(1);
+  });
+
+  // ── Master Punch ───────────────────────────────────────────
+
+  it('sets master punch (0..1)', () => {
+    const store = useMixiStore.getState();
+    store.setMasterPunch(0.7);
+    expect(useMixiStore.getState().master.punch).toBe(0.7);
+  });
+
+  it('clamps master punch to 0..1', () => {
+    const store = useMixiStore.getState();
+    store.setMasterPunch(-1);
+    expect(useMixiStore.getState().master.punch).toBe(0);
+
+    store.setMasterPunch(5);
+    expect(useMixiStore.getState().master.punch).toBe(1);
+  });
+
+  // ── Master state isolation ─────────────────────────────────
+
+  it('master FX changes preserve other master fields', () => {
+    const store = useMixiStore.getState();
+    store.setMasterVolume(0.8);
+    store.setMasterFilter(-0.3);
+    store.setMasterDistortion(0.5);
+    store.setMasterPunch(0.2);
+
+    const m = useMixiStore.getState().master;
+    expect(m.volume).toBe(0.8);
+    expect(m.filter).toBe(-0.3);
+    expect(m.distortion).toBe(0.5);
+    expect(m.punch).toBe(0.2);
+
+    // Changing one shouldn't reset others
+    store.setMasterVolume(0.6);
+    const m2 = useMixiStore.getState().master;
+    expect(m2.volume).toBe(0.6);
+    expect(m2.filter).toBe(-0.3);
+    expect(m2.distortion).toBe(0.5);
+    expect(m2.punch).toBe(0.2);
+  });
+
+  // ── Crossfader clamping ────────────────────────────────────
+
+  it('clamps crossfader to 0..1', () => {
+    const store = useMixiStore.getState();
+    store.setCrossfader(-0.5);
+    expect(useMixiStore.getState().crossfader).toBe(0);
+
+    store.setCrossfader(1.5);
+    expect(useMixiStore.getState().crossfader).toBe(1);
+  });
+
+  // ── Crossfader curve ───────────────────────────────────────
+
+  it('sets crossfader curve', () => {
+    const store = useMixiStore.getState();
+    store.setCrossfaderCurve('sharp');
+    expect(useMixiStore.getState().crossfaderCurve).toBe('sharp');
+
+    store.setCrossfaderCurve('smooth');
+    expect(useMixiStore.getState().crossfaderCurve).toBe('smooth');
+  });
+
+  // ── Deck modes ─────────────────────────────────────────────
+
+  it('sets deck mode', () => {
+    const store = useMixiStore.getState();
+    store.setDeckMode('A', 'groovebox');
+    expect(useMixiStore.getState().deckModes.A).toBe('groovebox');
+
+    store.setDeckMode('A', 'track');
+    expect(useMixiStore.getState().deckModes.A).toBe('track');
+  });
+
+  // ── AI mode ────────────────────────────────────────────────
+
+  it('sets AI mode', () => {
+    const store = useMixiStore.getState();
+    store.setAiMode('CRUISE');
+    expect(useMixiStore.getState().ai.mode).toBe('CRUISE');
+
+    store.setAiMode('OFF');
+    expect(useMixiStore.getState().ai.mode).toBe('OFF');
+  });
 });
