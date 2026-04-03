@@ -18,6 +18,7 @@
 import { useCallback, useRef, type FC, useMemo } from 'react';
 import { useSettingsStore, BUILTIN_SKINS, type BuiltinSkinId } from '../../store/settingsStore';
 import { parseSkinFolder, injectSkinCSS } from '../../utils/skinLoader';
+import { log } from '../../utils/logger';
 
 /** Dot colors for built-in skins. */
 const BUILTIN_DOT: Record<BuiltinSkinId, string> = {
@@ -68,7 +69,7 @@ export const SkinSelector: FC = () => {
         addCustomSkin(loaded);
         setSkin(loaded.id);
       } catch (err) {
-        console.error('[SkinLoader]', err);
+        log.error('SkinLoader', `Failed to load custom skin: ${err}`);
       }
       // Reset input so same folder can be re-selected
       e.target.value = '';

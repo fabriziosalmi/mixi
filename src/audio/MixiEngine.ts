@@ -847,7 +847,7 @@ export class MixiEngine {
         this.pitchShifters[deck] = node;
       }
     } catch (err) {
-      console.warn('MixiEngine: pitch-shift worklet failed to load', err);
+      log.warn('Engine', `Pitch-shift worklet failed to load: ${err}`);
     }
   }
 

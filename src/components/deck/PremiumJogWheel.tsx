@@ -38,6 +38,9 @@ const R_LED = 82;
 const R_LABEL = 20;
 const R_LABEL_BEZEL = 21;
 const R_MARKER = 76;
+
+/** Pre-computed 2-char hex strings (0x00–0xFF) — avoids toString(16) + padStart in render loops. */
+const HEX_LUT: string[] = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
 const R_TICK = 98;
 
 // Groove config (concentric circles)
@@ -862,7 +865,7 @@ const JogEye: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLS
         // Iris ring glow
         c.beginPath();
         c.arc(irisCx, irisCy, irisR, 0, Math.PI * 2);
-        c.strokeStyle = color + Math.floor(20 + bassLevel * 60).toString(16).padStart(2, '0');
+        c.strokeStyle = color + HEX_LUT[Math.min(255, (20 + bassLevel * 60) | 0)];
         c.lineWidth = 1 + bassLevel * 1.5;
         c.stroke();
 

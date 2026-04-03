@@ -115,16 +115,23 @@ export const PitchStrip: FC<PitchStripProps> = ({
   const pitchPercent = ((clamped - 1) * 100).toFixed(1);
   const pitchLabel = `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
 
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleNudge = useCallback(
     (direction: -1 | 1) => {
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized) return;
       const originalRate = useMixiStore.getState().decks[deckId].playbackRate;
       engine.setPlaybackRate(deckId, originalRate + direction * 0.03);
-      setTimeout(() => engine.setPlaybackRate(deckId, originalRate), 200);
+      if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = setTimeout(() => engine.setPlaybackRate(deckId, originalRate), 200);
     },
     [deckId],
   );
+
+  useEffect(() => {
+    return () => { if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current); };
+  }, []);
 
   const keyLock = useMixiStore((s) => s.decks[deckId].keyLock);
   const toggleKeyLock = useCallback(() => {

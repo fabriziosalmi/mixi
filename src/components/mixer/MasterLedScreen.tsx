@@ -128,6 +128,13 @@ export const MasterLedScreen: FC = () => {
     const scale = Math.min(cx, cy) * GAIN;
     const invSqrt2 = 0.7071;
 
+    // Pre-compute 256-entry RGBA string LUT — eliminates ~2048
+    // template string allocations per frame (61k allocs/sec saved).
+    const alphaLUT: string[] = new Array(256);
+    for (let a = 0; a < 256; a++) {
+      alphaLUT[a] = `rgba(${DOT_COLOR_R},${DOT_COLOR_G},${DOT_COLOR_B},${(a / 255).toFixed(3)})`;
+    }
+
     let sumCorr = 0;
     let sumL2 = 0;
     let sumR2 = 0;
@@ -147,11 +154,11 @@ export const MasterLedScreen: FC = () => {
       const px = cx + x * scale;
       const py = cy + y * scale;
 
-      // Distance from center → intensity
+      // Distance from center → intensity (quantized to LUT index)
       const dist = Math.sqrt(x * x + y * y);
-      const alpha = Math.min(1, DOT_ALPHA + dist * 0.8);
+      const alphaIdx = Math.min(255, (DOT_ALPHA + dist * 0.8) * 255) | 0;
 
-      ctx.fillStyle = `rgba(${DOT_COLOR_R},${DOT_COLOR_G},${DOT_COLOR_B},${alpha})`;
+      ctx.fillStyle = alphaLUT[alphaIdx];
       ctx.fillRect(px - 0.5, py - 0.5, 1.5, 1.5);
     }
 
