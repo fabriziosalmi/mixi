@@ -21,7 +21,7 @@
 // React re-renders during playback.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState, useMemo, type FC } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
 import type { DeckId } from '../../types';
@@ -40,53 +40,27 @@ const R_LABEL_BEZEL = 21;
 const R_MARKER = 76;
 const R_TICK = 98;
 
-// Spiral config
-const SPIRAL_R_MIN = 14;      // extends under centre dot (R_LABEL=20) for seamless look
-const SPIRAL_R_MAX = 74;      // outer radius (just inside LED ring)
-const SPIRAL_TURNS = 4;       // 4 turns — visible spiral shape
-const SPIRAL_POINTS = 350;    // enough points for smooth curves
+// Groove config (concentric circles)
+const GROOVE_R_MIN = 14;      // extends under centre dot
+const GROOVE_R_MAX = 74;      // just inside LED ring
+const GROOVE_COUNT = 18;      // number of concentric rings
+const GROOVE_SPACING = (GROOVE_R_MAX - GROOVE_R_MIN) / GROOVE_COUNT;
 
-// Band boundaries (normalized 0-1 of spiral radius range)
-const BAND_BASS = 0.38;       // inner 38% = bass
-const BAND_MID = 0.72;        // next 34% = mid
-                               // remaining 28% = high
+// Band boundaries (by ring index)
+const BASS_RINGS_END = 7;     // rings 0-6 = bass
+const MID_RINGS_END = 13;     // rings 7-12 = mid
+                               // rings 13-17 = high
 
 // LED ring config — round dots (strokeLinecap round + dash 0)
-const LED_DOT_GAP = 7.2;          // gap between dot centers
+const LED_DOT_GAP = 7.2;
 const LED_DASH = `0.01 ${LED_DOT_GAP}`;
-const LED_WIDTH = 3.5;             // dot diameter
+const LED_WIDTH = 3.5;
 const LED_WIDTH_CORE = 2;
 
 interface PremiumJogWheelProps {
   deckId: DeckId;
   color: string;
   size?: number;
-}
-
-// ── Spiral path generator ──────────────────────────────────
-
-function spiralPath(
-  cx: number, cy: number,
-  rMin: number, rMax: number,
-  turns: number, points: number,
-  startNorm: number, endNorm: number,
-): string {
-  const totalAngle = turns * 2 * Math.PI;
-  const rRange = rMax - rMin;
-  const startAngle = startNorm * totalAngle;
-  const endAngle = endNorm * totalAngle;
-  const stepAngle = (endAngle - startAngle) / points;
-
-  const parts: string[] = [];
-  for (let i = 0; i <= points; i++) {
-    const angle = startAngle + i * stepAngle;
-    const norm = angle / totalAngle;
-    const r = rMin + norm * rRange;
-    const x = cx + r * Math.cos(angle - Math.PI / 2);
-    const y = cy + r * Math.sin(angle - Math.PI / 2);
-    parts.push(i === 0 ? `M${x.toFixed(2)},${y.toFixed(2)}` : `L${x.toFixed(2)},${y.toFixed(2)}`);
-  }
-  return parts.join(' ');
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -106,23 +80,15 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
   const ledRingRef = useRef<SVGCircleElement>(null);
   const ledCoreRef = useRef<SVGCircleElement>(null);
   const coronaRef = useRef<SVGCircleElement>(null);
-  const spiralBassRef = useRef<SVGPathElement>(null);
-  const spiralMidRef = useRef<SVGPathElement>(null);
-  const spiralHighRef = useRef<SVGPathElement>(null);
+  const grooveBassRef = useRef<SVGGElement>(null);
+  const grooveMidRef = useRef<SVGGElement>(null);
+  const grooveHighRef = useRef<SVGGElement>(null);
   const bezelGlowRef = useRef<SVGCircleElement>(null);
 
   // Smoothed band levels for gentle transitions
   const smoothBass = useRef(0);
   const smoothMid = useRef(0);
   const smoothHigh = useRef(0);
-
-  // Pre-compute spiral paths (static — only computed once)
-  const spiralPaths = useMemo(() => ({
-    bass: spiralPath(CX, CY, SPIRAL_R_MIN, SPIRAL_R_MAX, SPIRAL_TURNS, SPIRAL_POINTS, 0, BAND_BASS),
-    mid: spiralPath(CX, CY, SPIRAL_R_MIN, SPIRAL_R_MAX, SPIRAL_TURNS, SPIRAL_POINTS, BAND_BASS, BAND_MID),
-    high: spiralPath(CX, CY, SPIRAL_R_MIN, SPIRAL_R_MAX, SPIRAL_TURNS, SPIRAL_POINTS, BAND_MID, 1),
-    full: spiralPath(CX, CY, SPIRAL_R_MIN, SPIRAL_R_MAX, SPIRAL_TURNS, SPIRAL_POINTS * 3, 0, 1),
-  }), []);
 
   // Boot-up animation
   const isLoaded = useMixiStore((s) => s.decks[deckId].isTrackLoaded);
@@ -207,10 +173,10 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
             ? smoothHigh.current * (1 - attack) + highLevel * attack
             : smoothHigh.current * release;
 
-          // Apply to spiral zone refs — visible glow on activity
-          if (spiralBassRef.current) spiralBassRef.current.style.opacity = String(smoothBass.current * 0.8);
-          if (spiralMidRef.current) spiralMidRef.current.style.opacity = String(smoothMid.current * 0.6);
-          if (spiralHighRef.current) spiralHighRef.current.style.opacity = String(smoothHigh.current * 0.45);
+          // Apply to groove zone refs — visible glow on activity
+          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(smoothBass.current * 0.8);
+          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(smoothMid.current * 0.6);
+          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(smoothHigh.current * 0.45);
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
@@ -226,10 +192,10 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
         if (coronaRef.current) coronaRef.current.style.opacity = String(0.04 + level * 0.12);
       } else {
         if (beatEl) beatEl.textContent = '';
-        // Fade spiral when stopped
-        if (spiralBassRef.current) spiralBassRef.current.style.opacity = '0';
-        if (spiralMidRef.current) spiralMidRef.current.style.opacity = '0';
-        if (spiralHighRef.current) spiralHighRef.current.style.opacity = '0';
+        // Fade grooves when stopped
+        if (grooveBassRef.current) grooveBassRef.current.style.opacity = '0';
+        if (grooveMidRef.current) grooveMidRef.current.style.opacity = '0';
+        if (grooveHighRef.current) grooveHighRef.current.style.opacity = '0';
         if (bezelGlowRef.current) bezelGlowRef.current.style.opacity = '0';
       }
 
@@ -399,58 +365,80 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
           ref={wheelRef}
           style={{ transformOrigin: `${CX}px ${CY}px`, willChange: 'transform' }}
         >
-          {/* ── Spiral groove (dark, always visible) ────────────── */}
+          {/* ── Concentric grooves (vinyl-style, always visible) ── */}
           <g mask={`url(#${deckId}-spiral-mask)`}>
-          <path
-            d={spiralPaths.full}
-            fill="none"
-            stroke="rgba(255,255,255,0.04)"
-            strokeWidth="0.6"
-          />
-          {/* ── Spiral 3D shadow (offset) ─────────────────── */}
-          <g transform="translate(0, 0.3)">
-            <path
-              d={spiralPaths.full}
-              fill="none"
-              stroke="rgba(0,0,0,0.12)"
-              strokeWidth="0.5"
-            />
-          </g>
+            {Array.from({ length: GROOVE_COUNT }, (_, i) => {
+              const r = GROOVE_R_MIN + i * GROOVE_SPACING;
+              return (
+                <circle
+                  key={`groove-${i}`}
+                  cx={CX} cy={CY} r={r}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.04)"
+                  strokeWidth="0.5"
+                />
+              );
+            })}
+            {/* 3D groove shadows */}
+            {Array.from({ length: GROOVE_COUNT }, (_, i) => {
+              const r = GROOVE_R_MIN + i * GROOVE_SPACING;
+              return (
+                <circle
+                  key={`shadow-${i}`}
+                  cx={CX} cy={CY + 0.3} r={r}
+                  fill="none"
+                  stroke="rgba(0,0,0,0.1)"
+                  strokeWidth="0.4"
+                />
+              );
+            })}
           </g>
 
-          {/* ── Reactive spiral zones (masked for taper) ──────── */}
+          {/* ── Reactive groove zones ───────────────────────── */}
           <g mask={`url(#${deckId}-spiral-mask)`}>
-          {/* Bass zone (inner) — deck color */}
-          <path
-            ref={spiralBassRef}
-            d={spiralPaths.bass}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.2"
-            opacity="0"
-            strokeLinecap="round"
-          />
-          {/* Mid zone (middle) — deck color */}
-          <path
-            ref={spiralMidRef}
-            d={spiralPaths.mid}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.0"
-            opacity="0"
-            strokeLinecap="round"
-          />
-          {/* High zone (outer) — white */}
-          <path
-            ref={spiralHighRef}
-            d={spiralPaths.high}
-            fill="none"
-            stroke="#fff"
-            strokeWidth="0.7"
-            opacity="0"
-            strokeLinecap="round"
-          />
-          </g>  {/* end masked reactive spiral */}
+            {/* Bass zone (inner rings) */}
+            <g ref={grooveBassRef} opacity="0">
+              {Array.from({ length: BASS_RINGS_END }, (_, i) => (
+                <circle
+                  key={`bass-${i}`}
+                  cx={CX} cy={CY} r={GROOVE_R_MIN + i * GROOVE_SPACING}
+                  fill="none" stroke={color} strokeWidth="1.2"
+                />
+              ))}
+            </g>
+            {/* Mid zone (middle rings) */}
+            <g ref={grooveMidRef} opacity="0">
+              {Array.from({ length: MID_RINGS_END - BASS_RINGS_END }, (_, i) => (
+                <circle
+                  key={`mid-${i}`}
+                  cx={CX} cy={CY} r={GROOVE_R_MIN + (BASS_RINGS_END + i) * GROOVE_SPACING}
+                  fill="none" stroke={color} strokeWidth="1.0"
+                />
+              ))}
+            </g>
+            {/* High zone (outer rings) */}
+            <g ref={grooveHighRef} opacity="0">
+              {Array.from({ length: GROOVE_COUNT - MID_RINGS_END }, (_, i) => (
+                <circle
+                  key={`high-${i}`}
+                  cx={CX} cy={CY} r={GROOVE_R_MIN + (MID_RINGS_END + i) * GROOVE_SPACING}
+                  fill="none" stroke="#fff" strokeWidth="0.7"
+                />
+              ))}
+            </g>
+          </g>
+
+          {/* ── Hourglass reflection (simulates record spin) ──── */}
+          <g opacity="0.07" style={{ filter: 'blur(2px)' }}>
+            <path
+              d={`M${CX},${CY - GROOVE_R_MAX}
+                  L${CX + 12},${CY}
+                  L${CX},${CY + GROOVE_R_MAX}
+                  L${CX - 12},${CY}
+                  Z`}
+              fill="rgba(255,255,255,0.5)"
+            />
+          </g>
 
           {/* Rotation marker */}
           <RotationMarker color={color} deckId={deckId} />
