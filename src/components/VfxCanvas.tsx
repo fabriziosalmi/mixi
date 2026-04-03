@@ -43,6 +43,8 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
   // Cached jog positions — updated every 60 frames
   const jogCacheRef = useRef<JogPos[]>([]);
+  // Cached vignette gradient — rebuilt on resize only
+  const vignetteRef = useRef<CanvasGradient | null>(null);
 
   const updateJogPositions = useCallback(() => {
     const positions: JogPos[] = [];
@@ -198,12 +200,11 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
     ctx.restore();
 
-    // ── 4. Vignette ──────────────────────────────────────────
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
-    vignette.addColorStop(0, 'transparent');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.35)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
+    // ── 4. Vignette (cached gradient) ───────────────────────────
+    if (vignetteRef.current) {
+      ctx.fillStyle = vignetteRef.current;
+      ctx.fillRect(0, 0, w, h);
+    }
 
     ctx.restore();
     rafRef.current = requestAnimationFrame(render);
@@ -227,7 +228,16 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
-      updateJogPositions(); // refresh positions on resize
+      updateJogPositions();
+      // Rebuild vignette gradient
+      const ctx2 = canvas.getContext('2d');
+      if (ctx2) {
+        const w = window.innerWidth;
+        const vig = ctx2.createRadialGradient(w / 2, window.innerHeight / 2, w * 0.25, w / 2, window.innerHeight / 2, w * 0.7);
+        vig.addColorStop(0, 'transparent');
+        vig.addColorStop(1, 'rgba(0,0,0,0.35)');
+        vignetteRef.current = vig;
+      }
     };
     resize();
     window.addEventListener('resize', resize);

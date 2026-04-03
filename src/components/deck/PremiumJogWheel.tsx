@@ -43,7 +43,7 @@ const R_TICK = 98;
 // Spiral config
 const SPIRAL_R_MIN = 14;      // extends under centre dot (R_LABEL=20) for seamless look
 const SPIRAL_R_MAX = 74;      // outer radius (just inside LED ring)
-const SPIRAL_TURNS = 5;       // visible spiral shape
+const SPIRAL_TURNS = 4;       // 4 turns — visible spiral shape
 const SPIRAL_POINTS = 350;    // enough points for smooth curves
 
 // Band boundaries (normalized 0-1 of spiral radius range)
@@ -214,7 +214,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
-            bezelGlowRef.current.style.opacity = String(smoothBass.current * 0.2);
+            bezelGlowRef.current.style.opacity = String(smoothBass.current * 0.35);
           }
         }
 
@@ -404,7 +404,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
           <path
             d={spiralPaths.full}
             fill="none"
-            stroke="rgba(255,255,255,0.03)"
+            stroke="rgba(255,255,255,0.04)"
             strokeWidth="0.6"
           />
           {/* ── Spiral 3D shadow (offset) ─────────────────── */}
