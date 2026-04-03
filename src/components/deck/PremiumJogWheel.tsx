@@ -160,9 +160,9 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
           const midLevel = Math.min(1, (midSum / ((midBins - bassBins) * 255)) * 3);
           const highLevel = Math.min(1, (highSum / ((binCount - midBins) * 255)) * 4);
 
-          // Smooth with EMA (attack fast, release slow)
-          const attack = 0.6;
-          const release = 0.85;
+          // Smooth with EMA (fast attack, snappy release)
+          const attack = 0.7;
+          const release = 0.65;
           smoothBass.current = bassLevel > smoothBass.current
             ? smoothBass.current * (1 - attack) + bassLevel * attack
             : smoothBass.current * release;
@@ -173,10 +173,15 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
             ? smoothHigh.current * (1 - attack) + highLevel * attack
             : smoothHigh.current * release;
 
-          // Apply to groove zone refs — visible glow on activity
-          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(smoothBass.current * 0.8);
-          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(smoothMid.current * 0.6);
-          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(smoothHigh.current * 0.45);
+          // Hard cutoff — below threshold = fully off
+          const bVal = smoothBass.current < 0.05 ? 0 : smoothBass.current;
+          const mVal = smoothMid.current < 0.05 ? 0 : smoothMid.current;
+          const hVal = smoothHigh.current < 0.05 ? 0 : smoothHigh.current;
+
+          // Apply to groove zone refs
+          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(bVal * 0.9);
+          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(mVal * 0.7);
+          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(hVal * 0.55);
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
