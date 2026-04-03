@@ -141,7 +141,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         const waveData = bufRef.current;
 
         const oscR = jog.r + 2; // snug to wheel edge
-        const bandWidth = 30; // black band width
+        const bandWidth = 20; // black band width
         const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
 
         // Bass-reactive band behind oscilloscope
