@@ -179,9 +179,9 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
           const hVal = smoothHigh.current < 0.05 ? 0 : smoothHigh.current;
 
           // Apply to groove zone refs
-          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(bVal * 0.9);
-          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(mVal * 0.7);
-          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(hVal * 0.55);
+          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(bVal * 0.67);
+          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(mVal * 0.52);
+          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(hVal * 0.41);
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
