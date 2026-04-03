@@ -69,7 +69,12 @@ export class MixiEngine {
   private static instance: MixiEngine | null = null;
 
   private ctx!: AudioContext;
-  private channels!: Record<DeckId, DeckChannel>;
+  private _channels!: Record<DeckId, DeckChannel>;
+
+  /** Read-only access to deck channel strips (for analyser nodes, VFX, etc.) */
+  get channels(): Record<DeckId, DeckChannel> {
+    return this._channels;
+  }
   private master!: MasterBus;
   private headphones!: HeadphoneBus;
   private transports!: Record<DeckId, DeckTransport>;
@@ -117,7 +122,7 @@ export class MixiEngine {
     this.ctx = new AudioContext({ sampleRate: 44_100 });
 
     // Build channel strips.
-    this.channels = {
+    this._channels = {
       A: new DeckChannel(this.ctx, 'A'),
       B: new DeckChannel(this.ctx, 'B'),
     };

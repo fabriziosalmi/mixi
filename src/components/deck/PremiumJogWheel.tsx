@@ -606,10 +606,211 @@ const RotationMarker: FC<{ color: string; deckId: DeckId }> = ({ color, deckId }
   );
 };
 
-// ── Centre Display ─────────────────────────────────────────
+// ── Jog Eye — Audio-reactive iris inside centre dot ─────────
+//
+// A realistic eye rendered as an HTML overlay on the centre circle.
+// Deck A and B eyes move in mirrored directions based on audio.
+// The iris pulses with bass, the pupil dilates on beats, and
+// iris fibers shimmer with high-frequency content.
 
-const CentreDisplay: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLSpanElement | null> }> = () => {
-  // Centre display intentionally empty — clean OLED look.
-  // Beat counter is in the deck header, pitch is on the pitch strip.
-  return null;
+const JogEye: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLSpanElement | null> }> = ({
+  deckId, color,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef2 = useRef(0);
+  const pupilRef = useRef(0.35); // normalised pupil size (0=tiny, 1=dilated)
+  const lookRef = useRef({ x: 0, y: 0 }); // iris offset
+  const prevBassRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const isMirrored = deckId === 'B';
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const SIZE = 80; // canvas pixel size
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.scale(dpr, dpr);
+
+    const cx = SIZE / 2;
+    const cy = SIZE / 2;
+    const eyeR = SIZE * 0.42; // outer iris radius
+
+    function tick() {
+      const engine = MixiEngine.getInstance();
+      const deck = useMixiStore.getState().decks[deckId];
+
+      let bassLevel = 0;
+      let midLevel = 0;
+      let highLevel = 0;
+
+      if (engine.isInitialized && deck.isPlaying) {
+        const analyser = engine.getDeckAnalyser(deckId);
+        if (analyser) {
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteFrequencyData(data);
+          const bins = data.length;
+          const bassEnd = Math.floor(bins * 0.08);
+          const midEnd = Math.floor(bins * 0.4);
+
+          let bSum = 0, mSum = 0, hSum = 0;
+          for (let i = 0; i < bassEnd; i++) bSum += data[i];
+          for (let i = bassEnd; i < midEnd; i++) mSum += data[i];
+          for (let i = midEnd; i < bins; i++) hSum += data[i];
+
+          bassLevel = Math.min(1, (bSum / (bassEnd * 255)) * 2.5);
+          midLevel = Math.min(1, (mSum / ((midEnd - bassEnd) * 255)) * 3);
+          highLevel = Math.min(1, (hSum / ((bins - midEnd) * 255)) * 4);
+        }
+      }
+
+      // Beat detection for pupil dilation
+      const isBeat = bassLevel > 0.5 && bassLevel - prevBassRef.current > 0.12;
+      prevBassRef.current = bassLevel;
+
+      // Pupil: dilate on beat, contract slowly
+      if (isBeat) {
+        pupilRef.current = Math.min(1, pupilRef.current + 0.3);
+      } else {
+        pupilRef.current *= 0.94;
+        pupilRef.current = Math.max(0.15, pupilRef.current);
+      }
+      const pupilSize = 0.25 + pupilRef.current * 0.25; // normalized 0.25-0.50 of eyeR
+
+      // Eye direction: follows audio balance (mirrored for deck B)
+      const targetX = (highLevel - 0.3) * 4 * (isMirrored ? -1 : 1);
+      const targetY = (midLevel - 0.4) * 3;
+      lookRef.current.x += (targetX - lookRef.current.x) * 0.08;
+      lookRef.current.y += (targetY - lookRef.current.y) * 0.08;
+      const lookX = lookRef.current.x * 3;
+      const lookY = lookRef.current.y * 2;
+
+      // ── Draw ─────────────────────────────────────────────────
+      if (!ctx) return;
+      ctx.clearRect(0, 0, SIZE, SIZE);
+
+      // Outer dark circle (sclera)
+      ctx.beginPath();
+      ctx.arc(cx, cy, eyeR, 0, Math.PI * 2);
+      ctx.fillStyle = '#080c14';
+      ctx.fill();
+
+      // Iris
+      const irisCx = cx + lookX;
+      const irisCy = cy + lookY;
+      const irisR = eyeR * 0.82;
+
+      // Iris gradient
+      const irisGrad = ctx.createRadialGradient(irisCx, irisCy, irisR * 0.2, irisCx, irisCy, irisR);
+      irisGrad.addColorStop(0, color);
+      irisGrad.addColorStop(0.5, color + 'cc');
+      irisGrad.addColorStop(0.8, color + '44');
+      irisGrad.addColorStop(1, '#0a0e18');
+
+      ctx.beginPath();
+      ctx.arc(irisCx, irisCy, irisR, 0, Math.PI * 2);
+      ctx.fillStyle = irisGrad;
+      ctx.fill();
+
+      // Iris fibers (radial lines)
+      ctx.save();
+      ctx.globalAlpha = 0.15 + highLevel * 0.3;
+      const fiberCount = 24;
+      for (let i = 0; i < fiberCount; i++) {
+        const angle = (i / fiberCount) * Math.PI * 2;
+        const innerR = irisR * (pupilSize + 0.05);
+        const outerR = irisR * (0.85 + Math.sin(i * 3.7 + bassLevel * 5) * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(
+          irisCx + Math.cos(angle) * innerR,
+          irisCy + Math.sin(angle) * innerR
+        );
+        ctx.lineTo(
+          irisCx + Math.cos(angle) * outerR,
+          irisCy + Math.sin(angle) * outerR
+        );
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Iris ring glow (bass pulse)
+      ctx.beginPath();
+      ctx.arc(irisCx, irisCy, irisR, 0, Math.PI * 2);
+      ctx.strokeStyle = color + Math.floor(bassLevel * 80 + 20).toString(16).padStart(2, '0');
+      ctx.lineWidth = 1.5 + bassLevel * 2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = bassLevel * 12;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Pupil
+      const pupilR = irisR * pupilSize;
+      ctx.beginPath();
+      ctx.arc(irisCx, irisCy, pupilR, 0, Math.PI * 2);
+      ctx.fillStyle = '#000';
+      ctx.fill();
+
+      // Pupil edge softness
+      const pupilEdge = ctx.createRadialGradient(irisCx, irisCy, pupilR * 0.8, irisCx, irisCy, pupilR * 1.15);
+      pupilEdge.addColorStop(0, 'transparent');
+      pupilEdge.addColorStop(0.7, 'rgba(0,0,0,0.3)');
+      pupilEdge.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(irisCx, irisCy, pupilR * 1.15, 0, Math.PI * 2);
+      ctx.fillStyle = pupilEdge;
+      ctx.fill();
+
+      // Specular highlight (top-left)
+      const specX = irisCx - irisR * 0.25 + lookX * 0.3;
+      const specY = irisCy - irisR * 0.3 + lookY * 0.3;
+      ctx.beginPath();
+      ctx.ellipse(specX, specY, 3, 2.2, -0.3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fill();
+
+      // Second smaller highlight
+      ctx.beginPath();
+      ctx.arc(irisCx + irisR * 0.15, irisCy + irisR * 0.2, 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fill();
+
+      rafRef2.current = requestAnimationFrame(tick);
+    }
+
+    rafRef2.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef2.current);
+  }, [deckId, color]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: `${(R_LABEL * 2 / VB) * 100}%`,
+        height: `${(R_LABEL * 2 / VB) * 100}%`,
+        borderRadius: '50%',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      />
+    </div>
+  );
+};
+
+// ── Centre Display (delegated to JogEye) ───────────────────
+
+const CentreDisplay: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLSpanElement | null> }> = (props) => {
+  return <JogEye {...props} />;
 };

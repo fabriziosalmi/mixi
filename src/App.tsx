@@ -35,6 +35,7 @@ import { MasterClock } from './components/hud/MasterClock';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
 import { SplashScreen } from './components/SplashScreen';
+import { VfxCanvas } from './components/VfxCanvas';
 import { MidiManager } from './midi/MidiManager';
 import { generateFingerprint, createUiWatermarkCanvas } from './utils/watermark';
 import type { DeckId } from './types';
@@ -181,6 +182,8 @@ const App: FC = () => {
 
   return (
     <div className={`flex h-screen w-screen flex-col text-white overflow-hidden mixi-chassis mixi-skin-${skin} ${vfxActive ? 'mixi-vfx' : ''}`}>
+      {/* VFX visual overlay — audio-reactive canvas */}
+      <VfxCanvas active={vfxActive} />
       {/* Top bar */}
       <header className="flex items-center justify-between border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-3">
         {/* ── Group: Telemetry + Master FX + Skin + AI + Intent ── */}
