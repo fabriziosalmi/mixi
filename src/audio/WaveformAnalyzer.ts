@@ -1,0 +1,252 @@
+/*
+ * Copyright (c) 2026 Fabrizio Salmi. All rights reserved.
+ *
+ * This file is part of MIXI.
+ * MIXI is licensed under the PolyForm Noncommercial License 1.0.0.
+ * You may not use this file for commercial purposes without explicit permission.
+ * For commercial licensing, contact: fabrizio.salmi@gmail.com
+ */
+
+// ─────────────────────────────────────────────────────────────
+// Mixi – Offline Waveform Analyzer (RGB Multi-Band + BPM)
+//
+// Generates a Rekordbox-style 3-band energy profile AND detects
+// the BPM / beatgrid from a decoded AudioBuffer.
+//
+// Pipeline (all offline, non-blocking):
+//
+//   1.  Three OfflineAudioContexts run in parallel, each with
+//       a BiquadFilter isolating one frequency band:
+//         LOW  → lowpass   250 Hz   (kick, bass)
+//         MID  → bandpass  250–4 kHz (vocals, synths, snares)
+//         HIGH → highpass  4 kHz    (hi-hats, cymbals, air)
+//
+//   2.  Each rendered buffer is sliced into windows and RMS
+//       energy is computed per window (100 points per second).
+//
+//   3.  The LOW band buffer is also fed to the BPM detector
+//       which runs peak detection + IOI histogram analysis.
+//
+//   4.  Output: waveform data + BPM + grid offset.
+// ─────────────────────────────────────────────────────────────
+
+import { log } from '../utils/logger';
+import { detectBpm, type BpmResult } from './BpmDetector';
+import { useSettingsStore, BPM_RANGE_PRESETS } from '../store/settingsStore';
+import { detectDrops, type DropMarker } from './DropDetector';
+import { detectKey, type KeyResult } from './KeyDetector';
+
+// ── Types ────────────────────────────────────────────────────
+
+/** One data point per "pixel column" of the waveform. */
+export interface WaveformPoint {
+  low: number;   // 0–1, energy in the bass band
+  mid: number;   // 0–1, energy in the mid band
+  high: number;  // 0–1, energy in the high band
+}
+
+/** Complete analysis result returned by analyzeWaveform(). */
+export interface AnalysisResult {
+  waveform: WaveformPoint[];
+  bpm: number;
+  firstBeatOffset: number;
+  bpmConfidence: number;
+  /** Beat numbers where drops occur, sorted by strength. */
+  dropBeats: number[];
+  /** Musical key in Camelot notation (e.g. "8A"). */
+  musicalKey: string;
+  /** Standard key name (e.g. "Am"). */
+  musicalKeyName: string;
+  /**
+   * Peak sample level (0–1) of the original audio.
+   * Used for auto-gain: trimGain = 1 / peakLevel
+   * so all tracks play at the same perceived loudness.
+   */
+  peakLevel: number;
+}
+
+// ── Constants ────────────────────────────────────────────────
+
+/** Waveform resolution: data points per second of audio. */
+const POINTS_PER_SECOND = 100;
+
+/** Filter crossover frequencies (Hz). */
+const LOW_CUTOFF = 250;
+const HIGH_CUTOFF = 4_000;
+
+// ── Offline rendering helpers ────────────────────────────────
+
+/**
+ * Render an AudioBuffer through a BiquadFilter offline and
+ * return the filtered output buffer.
+ */
+async function renderBand(
+  source: AudioBuffer,
+  filterType: BiquadFilterType,
+  frequency: number,
+  Q: number,
+): Promise<AudioBuffer> {
+  const { numberOfChannels, length, sampleRate } = source;
+  const offCtx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+
+  const bufferSrc = offCtx.createBufferSource();
+  bufferSrc.buffer = source;
+
+  const filter = offCtx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = frequency;
+  filter.Q.value = Q;
+
+  bufferSrc.connect(filter).connect(offCtx.destination);
+  bufferSrc.start(0);
+
+  return offCtx.startRendering();
+}
+
+/**
+ * Compute RMS energy for fixed-size windows across all channels.
+ *
+ *   RMS = sqrt( (1/N) * Σ xᵢ² )
+ */
+function computeRms(buffer: AudioBuffer, chunkSize: number): Float32Array {
+  const numChunks = Math.ceil(buffer.length / chunkSize);
+  const rms = new Float32Array(numChunks);
+  const channels = buffer.numberOfChannels;
+
+  const channelData: Float32Array[] = [];
+  for (let ch = 0; ch < channels; ch++) {
+    channelData.push(buffer.getChannelData(ch));
+  }
+
+  for (let i = 0; i < numChunks; i++) {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, buffer.length);
+    let sumSq = 0;
+
+    for (let ch = 0; ch < channels; ch++) {
+      const data = channelData[ch];
+      for (let s = start; s < end; s++) {
+        const sample = data[s];
+        sumSq += sample * sample;
+      }
+    }
+
+    const count = (end - start) * channels;
+    rms[i] = Math.sqrt(sumSq / count);
+  }
+
+  return rms;
+}
+
+/** Normalise a Float32Array in-place so peak = 1.0. */
+function normalise(arr: Float32Array): number {
+  let peak = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] > peak) peak = arr[i];
+  }
+  if (peak > 0) {
+    const inv = 1 / peak;
+    for (let i = 0; i < arr.length; i++) {
+      arr[i] *= inv;
+    }
+  }
+  return peak;
+}
+
+// ── Public API ───────────────────────────────────────────────
+
+/**
+ * Analyse an AudioBuffer: extract RGB waveform data AND detect
+ * the BPM / beatgrid offset.
+ *
+ * @param buffer  – Decoded AudioBuffer from MixiEngine.loadTrack.
+ * @returns       – { waveform, bpm, firstBeatOffset, bpmConfidence }
+ */
+export async function analyzeWaveform(
+  buffer: AudioBuffer,
+): Promise<AnalysisResult> {
+  const t0 = performance.now();
+
+  const chunkSize = Math.floor(buffer.sampleRate / POINTS_PER_SECOND);
+
+  // ── Peak level detection + band rendering in parallel ──────
+  // Peak scan runs concurrently with the 3 offline renders,
+  // so it never blocks the main thread alone.
+  const peakLevelPromise = new Promise<number>((resolve) => {
+    // Defer to next microtask to not block before Promise.all
+    setTimeout(() => {
+      let peak = 0;
+      for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+        const data = buffer.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) {
+          const abs = Math.abs(data[i]);
+          if (abs > peak) peak = abs;
+        }
+      }
+      resolve(peak || 1);
+    }, 0);
+  });
+
+  // Run all 3 band filters + peak scan in parallel.
+  const [lowBuf, midBuf, highBuf, peakLevel] = await Promise.all([
+    renderBand(buffer, 'lowpass', LOW_CUTOFF, 1),
+    renderBand(buffer, 'bandpass', Math.sqrt(LOW_CUTOFF * HIGH_CUTOFF), 0.8),
+    renderBand(buffer, 'highpass', HIGH_CUTOFF, 1),
+    peakLevelPromise,
+  ]);
+
+  // ── BPM detection (runs on the low-band buffer) ────────────
+  const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
+  const bpmResult: BpmResult = detectBpm(lowBuf, { bpmMin: bpmPreset.min, bpmMax: bpmPreset.max });
+
+  // ── Key detection (runs on the original buffer) ────────────
+  const keyResult: KeyResult = detectKey(buffer);
+
+  // ── RMS waveform ───────────────────────────────────────────
+  const lowRms = computeRms(lowBuf, chunkSize);
+  const midRms = computeRms(midBuf, chunkSize);
+  const highRms = computeRms(highBuf, chunkSize);
+
+  normalise(lowRms);
+  normalise(midRms);
+  normalise(highRms);
+
+  const numPoints = lowRms.length;
+  const waveform: WaveformPoint[] = new Array(numPoints);
+  for (let i = 0; i < numPoints; i++) {
+    waveform[i] = {
+      low: lowRms[i],
+      mid: midRms[i],
+      high: highRms[i],
+    };
+  }
+
+  // ── Drop detection (runs on the waveform + BPM data) ───────
+  const drops: DropMarker[] = detectDrops(
+    waveform,
+    bpmResult.bpm,
+    bpmResult.firstBeatOffset,
+    buffer.duration,
+  );
+
+  const elapsed = (performance.now() - t0).toFixed(0);
+  log.success(
+    'Analyzer',
+    `Full analysis done in ${elapsed} ms — ${numPoints} points, ` +
+    `${bpmResult.bpm} BPM, key ${keyResult.camelot} (${keyResult.name}), ` +
+    `${drops.length} drops (${buffer.duration.toFixed(1)}s @ ${buffer.sampleRate} Hz)`,
+  );
+
+  return {
+    waveform,
+    bpm: bpmResult.bpm,
+    firstBeatOffset: bpmResult.firstBeatOffset,
+    bpmConfidence: bpmResult.confidence,
+    dropBeats: drops.map((d) => d.beat),
+    musicalKey: keyResult.camelot,
+    musicalKeyName: keyResult.name,
+    peakLevel,
+  };
+}
+
+export { POINTS_PER_SECOND };

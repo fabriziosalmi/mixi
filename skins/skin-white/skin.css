@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Cream White                                    */
+/* Aesthetic: Bright, clean, white with cream reflections      */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-white {
+  /* ── 1. STRUTTURA ESTERNA (Chassis e Pannelli) ── */
+  --chassis:   #eef0f3; /* Leggermente più grigio per far staccare i bianchi */
+  --topbar:    #f5f7fa;
+  --panel:     #f5f7fa;
+  --recess:    #e4e7ec;
+  --surface:   #ffffff;
+  --border:    rgba(0, 0, 0, 0.04);
+  --noise-opacity: 0.02;
+
+  /* ── 2. SUPERFICI INTERNE E COMPONENTI (White Mode deciso) ── */
+  --srf-deep:   #d8dce3;    /* Schermi, groovebox più scuro per contrasto */
+  --srf-base:   #e1e5eb;    
+  --srf-inset:  #dce0e6;    /* Rotaie dei fader sprofondate */
+  --srf-mid:    #f0f2f5;    /* Bottoni base */
+  --srf-raised: #ffffff;    /* Bottoni in rilievo */
+  --srf-light:  #ffffff;    /* Hover */
+
+  /* ── 3. BORDI E LINEE ── */
+  --brd-subtle:  #d0d5dc;
+  --brd-default: #b8c0c9;
+  --brd-strong:  #9aa4af;
+
+  /* ── 4. TESTI E ICONE (Invertiti, il nero assoluto diventa il primario) ── */
+  /* Aumentiamo vistosamente la scurezza delle basi testuali per garantire leggibilità su bianco */
+  --txt-dim:       #7b8794; /* Prima era troppo chiaro, mo' si legge! */
+  --txt-muted:     #616e7c; 
+  --txt-secondary: #52606d;
+  --txt-tertiary:  #3e4c59;
+  --txt-primary:   #1f2933; /* Blu navy scurissimo quasi nero */
+  --txt-bright:    #12161a;
+  --txt-white:     #000000; 
+  
+  /* ── 5. ONDE E LUCI SPECIFICHE ── */
+  --wave-bg: #eef0f3;
+  --wave-playhead: #111111;
+  --led-off: #b5bdc6; /* Spento più scuro, fa spiccare quando si accendono i LED veri */
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAGIA 3D: NEUMORFISMO (Soft UI)
+   Creiamo l'illusione ottica usando doppie ombre (luce in alto a sx, ombra in basso a dx)
+────────────────────────────────────────────────────────────── */
+
+/* I pannelli e i bottoni sembrano emergere bombati */
+.mixi-skin-white .mixi-panel,
+.mixi-skin-white .mixi-btn:not(:active),
+.mixi-skin-white .mixi-pad:not(:active),
+.mixi-skin-white .mixi-hud-group {
+  box-shadow: 
+    4px 4px 10px rgba(18, 25, 43, 0.1),
+    -4px -4px 10px rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Le "fossette" (recess e track dei fader) sembrano scavate nel materiale */
+.mixi-skin-white .mixi-recess,
+.mixi-skin-white [class*="track"] {
+  box-shadow: 
+    inset 4px 4px 8px rgba(18, 25, 43, 0.08),
+    inset -4px -4px 8px rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Reazione al click: il bottone si "schiaccia" dentro */
+.mixi-skin-white .mixi-btn:active,
+.mixi-skin-white .mixi-pad:active {
+  box-shadow: 
+    inset 2px 2px 5px rgba(18, 25, 43, 0.1),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Topbar per separarla */
+.mixi-skin-white .mixi-topbar {
+  border-bottom-color: rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+}
+
+.mixi-skin-white::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Riflessi panna (Cream) trasversali per dare una colorazione calda e lucida */
+    linear-gradient(
+      135deg,
+      transparent 0%,
+      transparent 30%,
+      rgba(255, 245, 225, 0.4) 60%,
+      rgba(255, 240, 210, 0.7) 100%
+    ),
+    /* Riflesso di luce zenitale morbida a simulare plastica/metallo verniciato lucido */
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.8) 0%,
+      rgba(255, 255, 255, 0) 25%
+    ),
+    /* Leggerissima vignettatura "perlata" ai bordi per chiudere l'interfaccia */
+    radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(200, 195, 190, 0.2) 100%);
+}

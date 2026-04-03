@@ -1,0 +1,186 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-arcade-invaders,
+.mixi-skin-arcade-invaders input,
+.mixi-skin-arcade-invaders button,
+.mixi-skin-arcade-invaders label,
+.mixi-skin-arcade-invaders .mixi-lbl,
+.mixi-skin-arcade-invaders .mixi-value,
+.mixi-skin-arcade-invaders .mixi-btn {
+  font-family: 'Press Start 2P', cursive !important;
+}
+
+body.mixi-skin-arcade-invaders {
+  cursor: crosshair !important;
+}
+.mixi-skin-arcade-invaders .mixi-btn, .mixi-skin-arcade-invaders .mixi-pad {
+  cursor: crosshair !important;
+}
+
+
+      .mixi-skin-arcade-invaders, .mixi-skin-arcade-invaders button, .mixi-skin-arcade-invaders label, .mixi-skin-arcade-invaders .mixi-lbl { font-size: 0.6em !important; line-height: 1.4; text-shadow: 2px 2px 0px #000; }
+      .mixi-skin-arcade-invaders .mixi-btn { border-radius: 0 !important; }
+      .mixi-skin-arcade-invaders .mixi-panel { border-radius: 0 !important; border: 4px solid var(--brd-strong) !important; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Arcade Invaders                                */
+/* Aesthetic: 8-Bit, Floating SVGs, Neon Glows e Animazioni    */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-arcade-invaders {
+  /* DARK ARCADE CABINET PLASTIC */
+  --chassis:   transparent; 
+  --topbar:    rgba(10, 5, 20, 0.9);
+  --panel:     rgba(15, 15, 25, 0.6); /* Vetro scuro per vedere gli alieni sotto */
+  --recess:    rgba(5, 5, 10, 0.9);
+  --surface:   rgba(20, 20, 30, 0.7);
+  --border:    rgba(51, 255, 51, 0.2); 
+  --noise-opacity: 0; 
+  
+  /* ARCADE SCREEN BACKGROUND */
+  background-color: #050510 !important;
+  background-attachment: fixed !important;
+
+  /* INNER SURFACES */
+  --srf-deep:   #020202;
+  --srf-base:   #080811;
+  --srf-inset:  #000000;
+  --srf-mid:    #111122;
+  --srf-raised: #1c1c33;
+  --srf-light:  #2f2f55;
+
+  /* CHUNKY NEON BORDERS */
+  --brd-subtle:  #111122;
+  --brd-default: #33ff33; /* Neon Green */
+  --brd-strong:  #ff00ff; /* Neon Magenta */
+
+  /* 8-BIT TEXT */
+  --txt-dim:       #205020;
+  --txt-muted:     #307030;
+  --txt-secondary: #00cccc;
+  --txt-tertiary:  #00ffff;
+  --txt-primary:   #ffff00; /* Yellow Score Text */
+  --txt-bright:    #ffffff;
+  --txt-white:     #ffffff;
+
+  /* LEDS AND FX */
+  --wave-bg: #020202;
+  --wave-playhead: #ff00ff;
+  --led-off: #110000;
+  --status-ok: #33ff33;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   👾 ANIMATED FLOATING INVADERS IN BACKGROUND
+────────────────────────────────────────────────────────────── */
+
+@keyframes invadersDrift {
+  0% { background-position: 0 0, 0 0, 50% 50%; }
+  100% { background-position: 400px 300px, -200px 400px, 50% 50%; }
+}
+
+/* Creiamo due layer di astronavine fluttuanti e un raggio centrale */
+body.mixi-skin-arcade-invaders {
+  background-image:
+    /* Layer 1: Alieni grandi verdi (veloci) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8'%3E%3Cpath fill='%2333ff33' opacity='0.08' d='M2 0v1h1V0H2Zm6 0v1h1V0H8Zm-7 1v1h1V1H1Zm8 0v1h1V1H9ZM0 2v1h1V2H0Zm2 0v1H1v1h9V3H8V2H2Zm7 0v1h1V2H9Zm1 2v1h1V4h-1Zm-11 0v1h1V4H0Zm1 1v1h1V5H1Zm8 0v1h1V5H9Zm-6 1v1H2v1h1V6H3Zm6 0v1h1V6H9v1H8V6Zm-3 0v1h1V6H6zm-2 0v1H3v1h1V7H4Zm3 0v1H6v1h1V7H7Z'/%3E%3C/svg%3E"),
+    /* Layer 2: Alieni piccoli Magenta (lenti) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath fill='%23ff00ff' opacity='0.05' d='M3 0h2v1H3V0zm-1 1h4v1H2V1zm-1 1h6v1H1V2zm-1 1h8v1H0V3zm0 1h2v1H0V4zm3 0h2v1H3V4zm3 0h2v1H6V4zm-5 1h1v1H1V5zm5 0h1v1H6V5zm-4 1h4v1H2V6zm0 1h1v1H2V7zm3 0h1v1H5V7z'/%3E%3C/svg%3E"),
+    /* Layer 3: Orizzonte / raggio base per chiudere lo sfondo */
+    radial-gradient(ellipse at 50% 120%, rgba(51, 255, 51, 0.15), transparent 60%) !important;
+    
+  background-size: 80px, 40px, auto;
+  background-repeat: repeat, repeat, no-repeat;
+  animation: invadersDrift 60s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   🕹️ SURPRISE EFFECTS & TRANSITIONS
+────────────────────────────────────────────────────────────── */
+
+/* I pannelli pulsano leggerissimamente come schermi CRT stanchi */
+@keyframes crtPulse {
+  0% { box-shadow: 0 0 10px rgba(51, 255, 51, 0.05); }
+  50% { box-shadow: 0 0 15px rgba(51, 255, 51, 0.15); }
+  100% { box-shadow: 0 0 10px rgba(51, 255, 51, 0.05); }
+}
+
+.mixi-skin-arcade-invaders .mixi-panel {
+  border: 2px dashed rgba(51, 255, 51, 0.3) !important;
+  animation: crtPulse 4s infinite alternate;
+  border-radius: 0px !important;
+}
+
+/* Tasti 8-BIt Chunky */
+.mixi-skin-arcade-invaders .mixi-btn:not(:active),
+.mixi-skin-arcade-invaders .mixi-pad:not(:active) {
+  border-radius: 0 !important;
+  background-color: #050510 !important;
+  border: 2px solid var(--brd-default) !important;
+  border-bottom: 4px solid var(--brd-default) !important;
+  box-shadow: inset 0 0 10px rgba(51, 255, 51, 0.2);
+  transition: all 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28); /* Bouncy hover! */
+}
+
+/* Hover magico sulle manopole o bottoni: si scalano e cambiano colore al bordo */
+.mixi-skin-arcade-invaders .mixi-btn:hover,
+.mixi-skin-arcade-invaders .mixi-pad:hover {
+  border-color: #ffff00 !important;
+  box-shadow: 0 0 20px rgba(255, 255, 0, 0.6) !important;
+  transform: scale(1.05); /* Lieve espansione a sorpresa */
+  z-index: 1000;
+}
+
+/* Click distruttivissimo */
+.mixi-skin-arcade-invaders .mixi-btn:active,
+.mixi-skin-arcade-invaders .mixi-pad:active {
+  background-color: #ff00ff !important;
+  border-color: #ff00ff !important;
+  border-bottom-width: 2px !important;
+  color: #fff !important;
+  transform: scale(0.9) translateY(2px) !important; /* Il tasto affonda e si ritira */
+  box-shadow: 0 0 30px rgba(255, 0, 255, 0.9) !important;
+  transition: all 0.05s ease;
+}
+
+/* Topbar effect (Laser wipe continuo lento) */
+@keyframes laserWipe {
+  0% { border-bottom-color: rgba(51, 255, 51, 0.1); }
+  50% { border-bottom-color: rgba(255, 0, 255, 0.9); }
+  100% { border-bottom-color: rgba(51, 255, 51, 0.1); }
+}
+
+.mixi-skin-arcade-invaders .mixi-topbar {
+  border-bottom: 2px solid;
+  animation: laserWipe 3s infinite;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-arcade-invaders {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-arcade-invaders .mixi-btn,
+.mixi-skin-arcade-invaders .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-arcade-invaders .mixi-btn:active,
+.mixi-skin-arcade-invaders .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

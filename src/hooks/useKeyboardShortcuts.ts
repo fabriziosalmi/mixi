@@ -1,0 +1,113 @@
+/*
+ * Copyright (c) 2026 Fabrizio Salmi. All rights reserved.
+ *
+ * This file is part of MIXI.
+ * MIXI is licensed under the PolyForm Noncommercial License 1.0.0.
+ * You may not use this file for commercial purposes without explicit permission.
+ * For commercial licensing, contact: fabrizio.salmi@gmail.com
+ */
+
+// ─────────────────────────────────────────────────────────────
+// Mixi – Keyboard Shortcuts
+//
+// Global keyboard handler.  Captures key events on `window`
+// and maps them to store actions.
+//
+// Layout (mirrors a DJ controller):
+//
+//   DECK A (left hand)           DECK B (right hand)
+//   ─────────────────            ─────────────────
+//   Shift+A  = play/pause A      Shift+B  = play/pause B
+//   1–8      = hot cues A        Shift+1–8 = hot cues B (via numpad not implemented yet)
+//   Q        = toggle quantize A
+//
+//   Global:
+//   Space    = play/pause the deck that has focus (A by default)
+//   Escape   = eject focused deck
+// ─────────────────────────────────────────────────────────────
+
+import { useEffect } from 'react';
+import { useMixiStore } from '../store/mixiStore';
+import { MixiEngine } from '../audio/MixiEngine';
+
+export function useKeyboardShortcuts() {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Ignore if typing in an input field.
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      const store = useMixiStore.getState();
+      const engine = MixiEngine.getInstance();
+
+      switch (e.code) {
+        // ── Space: play/pause Deck A ───────────────────────
+        case 'Space':
+          e.preventDefault();
+          store.setDeckPlaying('A', !store.decks.A.isPlaying);
+          break;
+
+        // ── Shift+A / Shift+B: play/pause specific deck ───
+        case 'KeyA':
+          if (e.shiftKey) {
+            e.preventDefault();
+            store.setDeckPlaying('A', !store.decks.A.isPlaying);
+          }
+          break;
+        case 'KeyB':
+          if (e.shiftKey) {
+            e.preventDefault();
+            store.setDeckPlaying('B', !store.decks.B.isPlaying);
+          }
+          break;
+
+        // ── Q: toggle quantize on Deck A ───────────────────
+        case 'KeyQ':
+          if (!e.shiftKey) {
+            store.setQuantize('A', !store.decks.A.quantize);
+          } else {
+            store.setQuantize('B', !store.decks.B.quantize);
+          }
+          break;
+
+        // ── S: sync Deck A, Shift+S: sync Deck B ──────────
+        case 'KeyS':
+          if (!e.shiftKey) {
+            if (store.decks.A.isSynced) store.unsyncDeck('A');
+            else store.syncDeck('A');
+          } else {
+            if (store.decks.B.isSynced) store.unsyncDeck('B');
+            else store.syncDeck('B');
+          }
+          break;
+
+        // ── Escape: eject Deck A, Shift+Esc: eject B ──────
+        case 'Escape':
+          e.preventDefault();
+          store.ejectDeck(e.shiftKey ? 'B' : 'A');
+          break;
+
+        // ── 1–8: hot cues on Deck A ────────────────────────
+        case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
+        case 'Digit5': case 'Digit6': case 'Digit7': case 'Digit8': {
+          const idx = parseInt(e.code.slice(-1)) - 1;
+          const deck = e.shiftKey ? 'B' : 'A';
+          const cue = store.decks[deck].hotCues[idx];
+          if (cue !== null) {
+            store.triggerHotCue(deck, idx);
+          } else if (engine.isInitialized) {
+            const time = engine.getCurrentTime(deck);
+            store.setHotCue(deck, idx, time);
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+}

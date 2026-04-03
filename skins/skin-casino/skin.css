@@ -1,0 +1,126 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Emerald Casino                                 */
+/* Aesthetic: Las Vegas Table, Green Felt, Shiny Glossy Domes  */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-casino {
+  /* VEGAS FELT GREEN */
+  --chassis:   #062D1C;
+  --topbar:    #031B10;
+  --panel:     #08422A;
+  --recess:    #02120B;
+  --surface:   #085132;
+  --border:    rgba(229, 193, 88, 0.4); /* Gold trimmings */
+  --noise-opacity: 0.15; /* Simulation of felt/panno da biliardo */
+
+  /* DEEP FELT SHADOWS */
+  --srf-deep:   #010C07;
+  --srf-base:   #031B10;
+  --srf-inset:  #02120B;
+  --srf-mid:    #08422A;
+  --srf-raised: #0A5E3A;
+  --srf-light:  #0F8C58;
+
+  /* GOLD BORDERS */
+  --brd-subtle:  #0A5E3A;
+  --brd-default: #806020;
+  --brd-strong:  #E5C158;
+
+  /* CASINO CHIP TEXT (Bright Whites & Gold) */
+  --txt-dim:       #2A8E5C;
+  --txt-muted:     #4BAF7D;
+  --txt-secondary: #D4B456;
+  --txt-tertiary:  #E5C158;
+  --txt-primary:   #F9DF8D; /* Pale gold */
+  --txt-bright:    #FFF5D1;
+  --txt-white:     #FFFFFF;
+
+  /* JACKPOT LIGHTS */
+  --wave-bg: #010C07;
+  --wave-playhead: #E5C158; /* Gold wave */
+  --led-off: #031B10;
+  --status-ok: #0CE855; /* Super bright casino green */
+}
+
+/* Il tappeto del Casinò */
+body.mixi-skin-casino {
+  background-color: #062D1C !important;
+  background-image: repeating-linear-gradient(
+    45deg, 
+    rgba(255,255,255,0.015) 0, 
+    rgba(255,255,255,0.015) 20px, 
+    transparent 20px, 
+    transparent 40px
+  ) !important;
+}
+
+/* Pannelli foderati in panno verde e legno scuro */
+.mixi-skin-casino .mixi-panel {
+  border: 4px solid #031B10 !important;
+  outline: 1px solid #806020 !important; /* Gold trim outline */
+  border-radius: 12px !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.9), inset 0 0 100px rgba(0,0,0,0.5) !important;
+}
+
+/* Pulsanti stile FICHE GLOSSY traslucidi da Casinò */
+.mixi-skin-casino .mixi-btn,
+.mixi-skin-casino .mixi-pad {
+  border-radius: 50% !important; /* Forza i tasti a sembrare bottoni rotondi tondi! (ove possibile) */
+  background: radial-gradient(circle at 30% 30%, #0F8C58 0%, #08422A 70%, #031B10 100%) !important;
+  border: 2px solid #E5C158 !important; /* Bordo dorato */
+  box-shadow: 
+    inset 2px 2px 5px rgba(255,255,255,0.4), /* Specchio glints */
+    0 5px 10px rgba(0,0,0,0.6) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.mixi-skin-casino .mixi-pad {
+  border-radius: 16px !important; /* I pad sono rettangolari, usiamo un arrotondamento forte tipo fiches lunghe */
+}
+
+/* Il riflessino arcuato in cima (glass dome effect) */
+.mixi-skin-casino .mixi-btn::after,
+.mixi-skin-casino .mixi-pad::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 10%; right: 10%; height: 30%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 100%);
+  border-radius: 50% 50% 0 0;
+  pointer-events: none;
+}
+
+.mixi-skin-casino .mixi-btn:active,
+.mixi-skin-casino .mixi-pad:active {
+  box-shadow: 
+    inset 0 10px 15px rgba(0,0,0,0.8), 
+    0 1px 1px rgba(0,0,0,0.4) !important;
+  background: radial-gradient(circle at 50% 50%, #0CE855 0%, #08422A 100%) !important;
+  border-color: #0CE855 !important;
+  transform: translateY(3px) scale(0.95);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-casino {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-casino .mixi-btn,
+.mixi-skin-casino .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-casino .mixi-btn:active,
+.mixi-skin-casino .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

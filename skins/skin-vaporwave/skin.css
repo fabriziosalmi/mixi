@@ -1,0 +1,141 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-vaporwave,
+.mixi-skin-vaporwave input,
+.mixi-skin-vaporwave button,
+.mixi-skin-vaporwave label,
+.mixi-skin-vaporwave .mixi-lbl,
+.mixi-skin-vaporwave .mixi-value,
+.mixi-skin-vaporwave .mixi-btn {
+  font-family: 'Orbitron', sans-serif !important;
+}
+
+body.mixi-skin-vaporwave {
+  cursor: crosshair !important;
+}
+.mixi-skin-vaporwave .mixi-btn, .mixi-skin-vaporwave .mixi-pad {
+  cursor: crosshair !important;
+}
+
+
+      .mixi-skin-vaporwave .mixi-btn { letter-spacing: 1px; }
+      .mixi-skin-vaporwave { text-shadow: 2px 2px 4px rgba(255,0,255,0.4); }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Vaporwave Summer                               */
+/* Aesthetic: Pastel Pink, Mint, Soft 90s Nostalgia            */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-vaporwave {
+  /* PASTEL DREAMS */
+  --chassis:   #FFE4F2; /* Soft pale pink */
+  --topbar:    #FFFFFF;
+  --panel:     #FFFFFF;
+  --recess:    #FFF0F7;
+  --surface:   #FFFFFF;
+  --border:    rgba(255, 113, 206, 0.2);
+  --noise-opacity: 0;
+
+  /* INNER LIGHT SURFACES */
+  --srf-deep:   #E8F6FA; /* Pale mint/cyan */
+  --srf-base:   #F5F9FB;
+  --srf-inset:  #D4EDF4;
+  --srf-mid:    #FFFFFF;
+  --srf-raised: #FFFFFF;
+  --srf-light:  #FFFFFF;
+
+  /* BORDERS (Vapor Cyan & Pink) */
+  --brd-subtle:  rgba(1, 205, 254, 0.2);
+  --brd-default: rgba(1, 205, 254, 0.5);
+  --brd-strong:  #01CDFE;
+
+  /* TEXT (Aesthetic Lavender and Soft Blues) */
+  --txt-dim:       #A3A3D4;
+  --txt-muted:     #8282B3;
+  --txt-secondary: #5F5F9E;
+  --txt-tertiary:  #B967FF; /* Purple accent */
+  --txt-primary:   #40407A;
+  --txt-bright:    #2C2C54;
+  --txt-white:     #1A1A3A;
+
+  /* NEON PASTEL LEDS */
+  --wave-bg: #E8F6FA;
+  --wave-playhead: #FF71CE;
+  --led-off: #D4EDF4;
+  --status-ok: #05FFA1; /* Vaporwave Mint Green */
+}
+
+/* ─────────────────────────────────────────────────────────────
+   VAPORWAVE MAGIC: SOFT BLURRY CORNERS & SUNSETS
+────────────────────────────────────────────────────────────── */
+
+/* Background gradient slowly waving */
+@keyframes vaporSunset {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body.mixi-skin-vaporwave {
+  background: linear-gradient(-45deg, #FF71CE 0%, #01CDFE 50%, #B967FF 100%) !important;
+  background-size: 400% 400% !important;
+  animation: vaporSunset 20s ease infinite !important;
+  background-attachment: fixed !important;
+}
+
+/* Trasparenti pannelli ghiacciati rosa */
+.mixi-skin-vaporwave .mixi-panel {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 4px solid rgba(255, 255, 255, 0.8) !important;
+  border-radius: 24px !important; /* Extremely round aesthetics */
+  box-shadow: 0 10px 40px rgba(255, 113, 206, 0.2) !important;
+}
+
+/* Bottoni rotondissimi e morbidi */
+.mixi-skin-vaporwave .mixi-btn:not(:active),
+.mixi-skin-vaporwave .mixi-pad:not(:active) {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 2px solid #FFFFFF !important;
+  box-shadow: 0 6px 15px rgba(1, 205, 254, 0.15), inset 0 2px 2px white !important;
+}
+
+.mixi-skin-vaporwave .mixi-btn:active,
+.mixi-skin-vaporwave .mixi-pad:active {
+  background: #FF71CE !important;
+  color: #fff !important;
+  border-color: #FF71CE !important;
+  box-shadow: inset 0 4px 10px rgba(0,0,0,0.1) !important;
+  transform: translateY(2px) scale(0.95);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-vaporwave {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-vaporwave .mixi-btn,
+.mixi-skin-vaporwave .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-vaporwave .mixi-btn:active,
+.mixi-skin-vaporwave .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

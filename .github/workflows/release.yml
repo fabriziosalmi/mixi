@@ -1,0 +1,125 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build the Python engine binary per OS ───────────────────
+  build-engine:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: mixi-engine-macos
+            ext: ""
+          - os: windows-latest
+            artifact: mixi-engine-windows
+            ext: ".exe"
+          - os: ubuntu-latest
+            artifact: mixi-engine-linux
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python deps
+        run: |
+          pip install pyinstaller
+          pip install -r api/requirements.txt
+
+      - name: Build mixi-engine
+        run: |
+          cd api
+          pyinstaller --onefile --name mixi-engine main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: api/dist/mixi-engine${{ matrix.ext }}
+
+  # ── Build the Electron app per OS ───────────────────────────
+  build-app:
+    needs: build-engine
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            engine-artifact: mixi-engine-macos
+            ext: ""
+            dist-cmd: "npm run dist:mac"
+          - os: windows-latest
+            engine-artifact: mixi-engine-windows
+            ext: ".exe"
+            dist-cmd: "npm run dist:win"
+          - os: ubuntu-latest
+            engine-artifact: mixi-engine-linux
+            ext: ""
+            dist-cmd: "npm run dist:linux"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Download mixi-engine binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.engine-artifact }}
+          path: api/dist/
+
+      - name: Make engine executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x api/dist/mixi-engine
+
+      - name: Build & package
+        env:
+          EXEC_EXT: ${{ matrix.ext }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ${{ matrix.dist-cmd }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.AppImage
+          if-no-files-found: warn
+
+  # ── Create GitHub Release ───────────────────────────────────
+  release:
+    needs: build-app
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,140 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-eink,
+.mixi-skin-eink input,
+.mixi-skin-eink button,
+.mixi-skin-eink label,
+.mixi-skin-eink .mixi-lbl,
+.mixi-skin-eink .mixi-value,
+.mixi-skin-eink .mixi-btn {
+  font-family: 'Space Mono', monospace !important;
+}
+
+body.mixi-skin-eink {
+  cursor: text !important;
+}
+.mixi-skin-eink .mixi-btn, .mixi-skin-eink .mixi-pad {
+  cursor: text !important;
+}
+
+
+      .mixi-skin-eink * { border-radius: 0 !important; }
+      .mixi-skin-eink .mixi-panel { box-shadow: 4px 4px 0px #000, inset 0 0 0 1px #000 !important; border: none !important; }
+      .mixi-skin-eink .mixi-btn { box-shadow: 2px 2px 0px #000 !important; border: 1px solid #000 !important; }
+      .mixi-skin-eink .mixi-btn:active { box-shadow: 0 0 0 #000 !important; transform: translate(2px, 2px) !important; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: E-Ink Brutalist                                */
+/* Aesthetic: Kindle screen, pure monochrome, no gradients     */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-eink {
+  /* THE PAPER SHEET */
+  --chassis:   #E9E9E9;
+  --topbar:    #F5F5F5;
+  --panel:     #FFFFFF;
+  --recess:    #D5D5D5;
+  --surface:   #E9E9E9;
+  --border:    #000000;
+  --noise-opacity: 0.1; /* Heavy paper grain */
+
+  /* INK COMPONENTS */
+  --srf-deep:   #FFFFFF;
+  --srf-base:   #F5F5F5;
+  --srf-inset:  #DDDDDD;
+  --srf-mid:    #FFFFFF;
+  --srf-raised: #FFFFFF;
+  --srf-light:  #FFFFFF;
+
+  /* HARD INK BORDERS */
+  --brd-subtle:  #000000;
+  --brd-default: #000000;
+  --brd-strong:  #000000;
+
+  /* PURE BLACK TEXT */
+  --txt-dim:       #000000;
+  --txt-muted:     #000000;
+  --txt-secondary: #000000;
+  --txt-tertiary:  #000000;
+  --txt-primary:   #000000;
+  --txt-bright:    #000000;
+  --txt-white:     #000000;
+
+  /* MONOCHROME LIGHTS */
+  --wave-bg: #FFFFFF;
+  --wave-playhead: #000000;
+  --led-off: #D5D5D5;
+  --status-ok: #000000;
+}
+
+/* ZERO SHADOWS, PURE BRUTALISM */
+.mixi-skin-eink * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Hard 2px black borders on everything to simulate wireframes */
+.mixi-skin-eink .mixi-panel {
+  border: 3px solid #000 !important;
+  border-radius: 0 !important;
+}
+
+.mixi-skin-eink .mixi-topbar {
+  border-bottom: 3px solid #000 !important;
+}
+
+/* Harsh, flat buttons */
+.mixi-skin-eink .mixi-btn:not(:active),
+.mixi-skin-eink .mixi-pad:not(:active) {
+  border: 2px solid #000 !important;
+  background-color: transparent !important;
+  border-radius: 0 !important;
+}
+
+/* Inverse colors on click, simulating e-ink refresh */
+.mixi-skin-eink .mixi-btn:active,
+.mixi-skin-eink .mixi-pad:active {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+/* Paper grain overlay */
+.mixi-skin-eink::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background: repeating-radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.01) 0%, rgba(0,0,0,0.03) 1%, transparent 2%);
+  background-size: 4px 4px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-eink {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-eink .mixi-btn,
+.mixi-skin-eink .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-eink .mixi-btn:active,
+.mixi-skin-eink .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}
