@@ -145,7 +145,7 @@ function createWindow(): void {
     title: 'Mixi',
     backgroundColor: '#0a0a0a',
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },

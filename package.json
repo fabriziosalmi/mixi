@@ -2,7 +2,8 @@
   "name": "mixi",
   "version": "0.1.0",
   "private": true,
-  "main": "electron/dist/main.js",
+  "type": "module",
+  "main": "electron/dist/main.cjs",
   "scripts": {
     "dev": "concurrently -c \"cyan,magenta,yellow\" -n \"UI,API,MCP\" \"npm run dev:ui\" \"npm run dev:api\" \"npm run dev:mcp\"",
     "docs:dev": "vitepress dev docs",
@@ -13,7 +14,7 @@
     "dev:mcp": "cd api && python mcp_server.py",
     "dev:electron": "npm run build:electron && concurrently -c \"cyan,magenta\" -n \"UI,ELECTRON\" \"vite\" \"electron .\"",
     "build": "tsc -b && vite build",
-    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:electron": "tsc -p electron/tsconfig.json && node -e \"require('fs').renameSync('electron/dist/main.js', 'electron/dist/main.cjs'); require('fs').renameSync('electron/dist/preload.js', 'electron/dist/preload.cjs');\"",
     "build:all": "npm run build && npm run build:electron",
     "build:engine": "cd api && pyinstaller --onefile --name mixi-engine main.py",
     "dist": "npm run build:all && electron-builder",

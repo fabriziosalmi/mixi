@@ -55,6 +55,14 @@ The brickwall limiter (threshold -0.5dB, ratio 20:1, attack 1ms) guarantees the 
 
 ## Quick Start
 
+The fastest way to install the desktop app on macOS or Linux is via our terminal installer:
+
+```bash
+curl -sL https://raw.githubusercontent.com/fabriziosalmi/mixi/main/install.sh | bash
+```
+
+Alternatively, to build and run it locally:
+
 ```bash
 git clone https://github.com/fabriziosalmi/mixi.git
 cd mixi
