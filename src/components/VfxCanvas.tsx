@@ -151,9 +151,9 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         ctx.beginPath();
         ctx.arc(jog.cx, jog.cy, oscR + bandWidth / 2, 0, Math.PI * 2);
         // Dark base → bright yellow flash on bass
-        const r = Math.floor(40 + bandIntensity * 215);  // 40→255
-        const g = Math.floor(10 + bandIntensity * 220);   // 10→230
-        const b2 = Math.floor(5 + bandIntensity * 5);     // stays dark (5→10)
+        const r = Math.floor(bandIntensity * 255);   // 0→255
+        const g = Math.floor(bandIntensity * 230);    // 0→230
+        const b2 = Math.floor(bandIntensity * 10);    // stays dark
         ctx.strokeStyle = `rgb(${r},${g},${b2})`;
         ctx.lineWidth = bandWidth;
         if (bandIntensity > 0.3) {
