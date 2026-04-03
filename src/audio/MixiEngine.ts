@@ -542,6 +542,16 @@ export class MixiEngine {
     return this.master.limiter.reduction;
   }
 
+  /**
+   * Enable/disable the brick-wall limiter.
+   * When disabled, threshold is set to 0 dBFS (effectively bypass).
+   * Uses smoothParam for click-free transition.
+   */
+  setLimiterEnabled(enabled: boolean): void {
+    if (!this.initialized) return;
+    smoothParam(this.master.limiter.threshold, enabled ? -0.5 : 0, this.ctx);
+  }
+
   // ── Stereo Spatializer Data ────────────────────────────────
 
   /**

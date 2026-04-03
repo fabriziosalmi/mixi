@@ -56,6 +56,9 @@ const PUSH_THROTTLE_MS = 50;
 const ALLOWED_ACTIONS: ReadonlySet<string> = new Set([
   // Master
   'setMasterVolume',
+  'setMasterFilter',
+  'setMasterDistortion',
+  'setMasterPunch',
   'setCrossfader',
   // Deck transport
   'setDeckPlaying',
@@ -252,7 +255,7 @@ export class MixiBridge {
     };
 
     const data: SerializableMixerState = {
-      master: { volume: state.master.volume },
+      master: { volume: state.master.volume, filter: state.master.filter, distortion: state.master.distortion, punch: state.master.punch },
       crossfader: state.crossfader,
       headphones: { ...state.headphones },
       decks: {

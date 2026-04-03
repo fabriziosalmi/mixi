@@ -40,6 +40,9 @@ export function useMixiSync() {
     // Push the full current state into the engine.
     const state = useMixiStore.getState();
     engine.setMasterVolume(state.master.volume);
+    engine.setMasterFilter(state.master.filter);
+    engine.setDistortion(state.master.distortion);
+    engine.setPunch(state.master.punch);
     engine.setCrossfader(state.crossfader);
 
     // Headphones
@@ -70,6 +73,39 @@ export function useMixiSync() {
       (volume) => {
         if (!engine.isInitialized) return;
         engine.setMasterVolume(volume);
+      },
+    );
+  }, [engine]);
+
+  // Master filter
+  useEffect(() => {
+    return useMixiStore.subscribe(
+      (s) => s.master.filter,
+      (filter) => {
+        if (!engine.isInitialized) return;
+        engine.setMasterFilter(filter);
+      },
+    );
+  }, [engine]);
+
+  // Master distortion
+  useEffect(() => {
+    return useMixiStore.subscribe(
+      (s) => s.master.distortion,
+      (dist) => {
+        if (!engine.isInitialized) return;
+        engine.setDistortion(dist);
+      },
+    );
+  }, [engine]);
+
+  // Master punch
+  useEffect(() => {
+    return useMixiStore.subscribe(
+      (s) => s.master.punch,
+      (punch) => {
+        if (!engine.isInitialized) return;
+        engine.setPunch(punch);
       },
     );
   }, [engine]);

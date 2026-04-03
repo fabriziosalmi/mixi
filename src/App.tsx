@@ -38,6 +38,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { VfxCanvas } from './components/VfxCanvas';
 import { MidiManager } from './midi/MidiManager';
 import { generateFingerprint, createUiWatermarkCanvas } from './utils/watermark';
+import { log } from './utils/logger';
 import type { DeckId } from './types';
 
 import { COLOR_DECK_A, COLOR_DECK_B } from './theme';
@@ -93,7 +94,7 @@ const App: FC = () => {
         useMixiStore.getState().setDeckTrackName('A', 'Welcome to MIXI ^_^');
         useMixiStore.getState().setDeckTrackLoaded('A', true);
       } catch (e) {
-        console.warn('[Mixi] Demo track load failed:', e);
+        log.warn('App', `Demo track load failed: ${e}`);
       }
     }
   }, [initEngine]);
@@ -142,11 +143,12 @@ const App: FC = () => {
           engine.setDeckFx(d, fx, 0, false);
         }
       }
-      // Reset master FX
-      engine.setMasterFilter(0);
-      engine.setDistortion(0);
-      engine.setPunch(0);
     }
+
+    // Reset master FX via store (sync hook forwards to engine)
+    store.setMasterFilter(0);
+    store.setMasterDistortion(0);
+    store.setMasterPunch(0);
 
     // Reset crossfader to center
     store.setCrossfader(0.5);

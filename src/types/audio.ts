@@ -103,6 +103,12 @@ export interface DeckState {
 /** Master section state. */
 export interface MasterState {
   volume: UnitValue;
+  /** Bipolar master filter: -1 (LPF full) → 0 (off) → +1 (HPF full). */
+  filter: number;
+  /** Master distortion amount (0 = off, 1 = max). */
+  distortion: UnitValue;
+  /** Punch parallel compression (0 = off, 1 = max). */
+  punch: UnitValue;
 }
 
 /** Headphone monitoring state. */

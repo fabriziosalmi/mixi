@@ -101,7 +101,9 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
 
   const cpuSmooth = useRef(0);
   const cpuHistory = useRef<number[]>([]);
-  const frameTimes = useRef<number[]>([]);
+  const frameTimes = useRef<Float64Array>(new Float64Array(120));
+  const frameIdx = useRef(0);
+  const frameCount = useRef(0);
   const rafRef = useRef(0);
   const idleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -128,12 +130,10 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
 
   useEffect(() => {
     function sample() {
-      const times = frameTimes.current;
-      if (times.length >= 120) {
-        // Ring buffer: overwrite oldest instead of splice (O(1) vs O(n))
-        times.shift();
-      }
-      times.push(performance.now());
+      const buf = frameTimes.current;
+      buf[frameIdx.current % 120] = performance.now();
+      frameIdx.current++;
+      if (frameCount.current < 120) frameCount.current++;
       rafRef.current = requestAnimationFrame(sample);
     }
     rafRef.current = requestAnimationFrame(sample);
@@ -142,11 +142,19 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const times = frameTimes.current;
-      if (times.length > 10) {
+      const count = frameCount.current;
+      if (count > 10) {
+        const buf = frameTimes.current;
+        const head = frameIdx.current;
+        // Read the last `count` entries in chronological order
         let totalDelta = 0;
-        for (let i = 1; i < times.length; i++) totalDelta += times[i] - times[i - 1];
-        const avgFrame = totalDelta / (times.length - 1);
+        let prev = buf[(head - count + 120) % 120];
+        for (let i = 1; i < count; i++) {
+          const cur = buf[(head - count + i + 120) % 120];
+          totalDelta += cur - prev;
+          prev = cur;
+        }
+        const avgFrame = totalDelta / (count - 1);
         const cpuRaw = Math.min(1, Math.max(0, (avgFrame - 10) / 25));
         cpuSmooth.current = cpuSmooth.current * (1 - SMOOTH_ALPHA) + cpuRaw * SMOOTH_ALPHA;
       }

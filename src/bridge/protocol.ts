@@ -91,7 +91,7 @@ export interface SerializableDeckState {
 }
 
 export interface SerializableMixerState {
-  master: { volume: number };
+  master: { volume: number; filter: number; distortion: number; punch: number };
   crossfader: number;
   headphones: { level: number; mix: number; splitMode: boolean };
   decks: Record<'A' | 'B', SerializableDeckState>;

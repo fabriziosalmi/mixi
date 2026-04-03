@@ -298,6 +298,9 @@ export class AutoMixEngine {
       setDeckColorFx: wrap('setDeckColorFx', (deck) => markGhost(`${deck}.colorFx`)),
       setDeckPlaybackRate: wrap('setDeckPlaybackRate', (deck) => markGhost(`${deck}.playbackRate`)),
       setMasterVolume: wrap('setMasterVolume', () => markGhost('master.volume')),
+      setMasterFilter: wrap('setMasterFilter', () => markGhost('master.filter')),
+      setMasterDistortion: wrap('setMasterDistortion', () => markGhost('master.distortion')),
+      setMasterPunch: wrap('setMasterPunch', () => markGhost('master.punch')),
       setCrossfader: wrap('setCrossfader', () => markGhost('crossfader')),
       setAutoLoop: wrap('setAutoLoop', (deck) => markGhost(`${deck}.autoLoop`)),
     };

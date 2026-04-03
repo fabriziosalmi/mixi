@@ -17,7 +17,6 @@
 import { useCallback, useState, useEffect, useRef, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
-import { smoothParam } from '../../audio/utils/paramSmooth';
 import { Knob } from '../controls/Knob';
 import { COLOR_MASTER } from '../../theme';
 import { isGhost } from '../../ai/ghostFields';
@@ -68,37 +67,30 @@ const PnchIcon: FC<{ color: string }> = ({ color }) => (
 
 export const MasterHud: FC = () => {
   const volume = useMixiStore((s) => s.master.volume);
+  const filterKnob = useMixiStore((s) => s.master.filter);
+  const distAmount = useMixiStore((s) => s.master.distortion);
+  const punchAmount = useMixiStore((s) => s.master.punch);
   const setMasterVolume = useMixiStore((s) => s.setMasterVolume);
-  const [filterKnob, setFilterKnob] = useState(0);
-  const [distAmount, setDistAmount] = useState(0);
-  const [punchAmount, setPunchAmount] = useState(0);
+  const setMasterFilter = useMixiStore((s) => s.setMasterFilter);
+  const setMasterDistortion = useMixiStore((s) => s.setMasterDistortion);
+  const setMasterPunch = useMixiStore((s) => s.setMasterPunch);
 
   const onVolumeChange = useCallback(
     (v: number) => setMasterVolume(v),
     [setMasterVolume],
   );
-  const onFilterChange = useCallback((v: number) => {
-    setFilterKnob(v);
-    MixiEngine.getInstance().setMasterFilter(v);
-  }, []);
-  const onDistChange = useCallback((v: number) => {
-    setDistAmount(v);
-    MixiEngine.getInstance().setDistortion(v);
-  }, []);
-  const onPunchChange = useCallback((v: number) => {
-    setPunchAmount(v);
-    MixiEngine.getInstance().setPunch(v);
-  }, []);
-
-  // On mount / HMR remount, push local defaults into the engine
-  // to ensure audio matches the visual knob positions.
-  useEffect(() => {
-    const engine = MixiEngine.getInstance();
-    if (!engine.isInitialized) return;
-    engine.setMasterFilter(0);
-    engine.setDistortion(0);
-    engine.setPunch(0);
-  }, []);
+  const onFilterChange = useCallback(
+    (v: number) => setMasterFilter(v),
+    [setMasterFilter],
+  );
+  const onDistChange = useCallback(
+    (v: number) => setMasterDistortion(v),
+    [setMasterDistortion],
+  );
+  const onPunchChange = useCallback(
+    (v: number) => setMasterPunch(v),
+    [setMasterPunch],
+  );
 
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
   const dbLabel = db <= -60 ? '-∞' : `${db}dB`;
@@ -127,6 +119,7 @@ export const MasterHud: FC = () => {
         icon={<FltIcon color={filterActive ? 'var(--clr-filter)' : 'var(--txt-muted)'} />}
         label="Flt" valueText={filterLabel}
         defaultValue={0} bipolar
+        ghost={isGhost('master.filter')}
         activeGlow={filterActive ? 'var(--clr-filter)' : undefined}
       />
       <HudKnob
@@ -136,6 +129,7 @@ export const MasterHud: FC = () => {
         icon={<DistIcon color={distActive ? 'var(--status-error)' : 'var(--txt-muted)'} />}
         label="Dist" valueText={`${Math.round(distAmount * 100)}%`}
         defaultValue={0}
+        ghost={isGhost('master.distortion')}
         activeGlow={distActive ? 'var(--status-error)' : undefined}
       />
       <HudKnob
@@ -145,6 +139,7 @@ export const MasterHud: FC = () => {
         icon={<PnchIcon color={punchActive ? 'var(--status-warn)' : 'var(--txt-muted)'} />}
         label="Pnch" valueText={`${Math.round(punchAmount * 100)}%`}
         defaultValue={0}
+        ghost={isGhost('master.punch')}
         activeGlow={punchActive ? 'var(--status-warn)' : undefined}
       />
     </div>
@@ -201,11 +196,7 @@ const LimiterDot: FC = () => {
   const handleToggle = useCallback(() => {
     setEnabled((prev) => {
       const next = !prev;
-      const engine = MixiEngine.getInstance();
-      if (engine.isInitialized) {
-        const limiter = (engine as unknown as { master: { limiter: DynamicsCompressorNode } }).master.limiter;
-        smoothParam(limiter.threshold, next ? -0.5 : 0, engine.getAudioContext());
-      }
+      MixiEngine.getInstance().setLimiterEnabled(next);
       return next;
     });
   }, []);

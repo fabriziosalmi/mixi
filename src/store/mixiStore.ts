@@ -53,6 +53,9 @@ const _hotCueLastCall: Record<string, number> = {};
 export interface MixiActions {
   // Master
   setMasterVolume: (v: UnitValue) => void;
+  setMasterFilter: (v: number) => void;
+  setMasterDistortion: (v: UnitValue) => void;
+  setMasterPunch: (v: UnitValue) => void;
 
   // Crossfader
   setCrossfader: (v: UnitValue) => void;
@@ -169,7 +172,7 @@ export const useMixiStore = create<MixiStore>()(
     persist(
       (set, get) => ({
     // ── Initial state ────────────────────────────────────────
-    master: { volume: 1.0 },
+    master: { volume: 1.0, filter: 0, distortion: 0, punch: 0 },
     crossfader: 0.5,
     crossfaderCurve: 'smooth' as CrossfaderCurve,
     headphones: { level: 1.0, mix: 0, splitMode: false },
@@ -183,7 +186,16 @@ export const useMixiStore = create<MixiStore>()(
     // ── Actions ──────────────────────────────────────────────
 
     setMasterVolume: (v) =>
-      set({ master: { volume: clamp(v, 0, 1) } }),
+      set((s) => ({ master: { ...s.master, volume: clamp(v, 0, 1) } })),
+
+    setMasterFilter: (v) =>
+      set((s) => ({ master: { ...s.master, filter: clamp(v, -1, 1) } })),
+
+    setMasterDistortion: (v) =>
+      set((s) => ({ master: { ...s.master, distortion: clamp(v, 0, 1) } })),
+
+    setMasterPunch: (v) =>
+      set((s) => ({ master: { ...s.master, punch: clamp(v, 0, 1) } })),
 
     setCrossfader: (v) =>
       set({ crossfader: clamp(v, 0, 1) }),
