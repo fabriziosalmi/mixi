@@ -1,0 +1,159 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-acid,
+.mixi-skin-acid input,
+.mixi-skin-acid button,
+.mixi-skin-acid label,
+.mixi-skin-acid .mixi-lbl,
+.mixi-skin-acid .mixi-value,
+.mixi-skin-acid .mixi-btn {
+  font-family: 'Bungee', cursive !important;
+}
+
+body.mixi-skin-acid {
+  cursor: help !important;
+}
+.mixi-skin-acid .mixi-btn, .mixi-skin-acid .mixi-pad {
+  cursor: help !important;
+}
+
+
+      .mixi-skin-acid .mixi-btn { transform: skewX(-5deg); border-radius: 0 !important; font-size: 0.9em !important; }
+      .mixi-skin-acid .mixi-btn:active { transform: skewX(5deg) scale(0.95) !important; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Acid Techno                                    */
+/* Aesthetic: Brutal visual assault, Yellow & Black swirls     */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-acid {
+  /* BASE NERA FUMÉ PER SOPRAVVIVERE AL CAOS */
+  --chassis:   transparent;
+  --topbar:    rgba(10, 10, 10, 0.9);
+  --panel:     rgba(0, 0, 0, 0.75); /* Molto scuri per rendere l'UI leggibile */
+  --recess:    rgba(0, 0, 0, 0.95);
+  --surface:   rgba(20, 20, 20, 0.8);
+  --border:    #CCFF00; 
+  --noise-opacity: 0;
+
+  /* HYPNOTIC ACID BACKGROUND */
+  background-color: #000000 !important;
+  background-attachment: fixed !important;
+
+  /* SURFACES OPACHE */
+  --srf-deep:   #000000;
+  --srf-base:   #0a0a0a;
+  --srf-inset:  #000000;
+  --srf-mid:    #111111;
+  --srf-raised: #1a1a1a;
+  --srf-light:  #222222;
+
+  /* BORDERS */
+  --brd-subtle:  #333333;
+  --brd-default: #CCFF00; /* Giallo Acido ovunque */
+  --brd-strong:  #FF00FF; /* Incursioni Magenta */
+
+  /* ACID TEXTS */
+  --txt-dim:       #555555;
+  --txt-muted:     #888888;
+  --txt-secondary: #aaaaaa;
+  --txt-tertiary:  #CCFF00;
+  --txt-primary:   #DDEE22;
+  --txt-bright:    #EEFF44;
+  --txt-white:     #FFFFFF;
+
+  /* ACID FX */
+  --wave-bg: #000000;
+  --wave-playhead: #FF00FF;
+  --led-off: #222200;
+  --status-ok: #CCFF00;
+}
+
+/* ANIMAZIONE IPNOTICA ACID (Spirale Oculare) */
+@keyframes acidTrip {
+  0% { transform: scale(1.5) rotate(0deg); }
+  100% { transform: scale(1.5) rotate(360deg); }
+}
+
+body.mixi-skin-acid::before {
+  content: '';
+  position: fixed;
+  top: -50%; left: -50%; right: -50%; bottom: -50%; /* Sovradimensionato per poterlo ruotare */
+  z-index: -1; 
+  background: repeating-conic-gradient(
+    from 0deg,
+    #000000 0deg, #000000 10deg,
+    #CCFF00 10deg, #CCFF00 20deg
+  );
+  animation: acidTrip 60s linear infinite;
+  opacity: 0.8;
+  /* Lieve blur per non distruggere le retine istantaneamente */
+  filter: blur(8px); 
+}
+
+/* Pannelli con bordi spessissimi giallo acido */
+.mixi-skin-acid .mixi-panel {
+  border: 4px solid #CCFF00 !important;
+  box-shadow: 10px 10px 0px rgba(204, 255, 0, 0.4) !important;
+  border-radius: 0;
+}
+
+/* Tasti hardware brutali */
+.mixi-skin-acid .mixi-btn:not(:active),
+.mixi-skin-acid .mixi-pad:not(:active) {
+  border: 2px solid #CCFF00 !important;
+  border-radius: 0 !important;
+  background-color: #000 !important;
+}
+
+/* Hover Stroboscopico */
+@keyframes strobeHover {
+  0%, 100% { background-color: #000; color: #CCFF00; }
+  50% { background-color: #CCFF00; color: #000; }
+}
+
+.mixi-skin-acid .mixi-btn:hover,
+.mixi-skin-acid .mixi-pad:hover {
+  animation: strobeHover 0.2s steps(2) infinite !important;
+  cursor: crosshair;
+}
+
+/* Active click violento in magenta */
+.mixi-skin-acid .mixi-btn:active,
+.mixi-skin-acid .mixi-pad:active {
+  animation: none !important;
+  background-color: #FF00FF !important;
+  border-color: #FF00FF !important;
+  color: #fff !important;
+  transform: scale(1.1);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-acid {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-acid .mixi-btn,
+.mixi-skin-acid .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-acid .mixi-btn:active,
+.mixi-skin-acid .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

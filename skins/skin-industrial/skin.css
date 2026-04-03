@@ -1,0 +1,164 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;600&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-industrial,
+.mixi-skin-industrial input,
+.mixi-skin-industrial button,
+.mixi-skin-industrial label,
+.mixi-skin-industrial .mixi-lbl,
+.mixi-skin-industrial .mixi-value,
+.mixi-skin-industrial .mixi-btn {
+  font-family: 'Teko', sans-serif !important;
+}
+
+body.mixi-skin-industrial {
+  cursor: crosshair !important;
+}
+.mixi-skin-industrial .mixi-btn, .mixi-skin-industrial .mixi-pad {
+  cursor: crosshair !important;
+}
+
+
+      .mixi-skin-industrial .mixi-btn { font-size: 1.3em !important; text-transform: uppercase; clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%); border-radius: 0 !important;}
+      .mixi-skin-industrial .mixi-panel { clip-path: polygon(2% 0, 98% 0, 100% 2%, 100% 98%, 98% 100%, 2% 100%, 0 98%, 0 2%); border-radius: 0 !important;}
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Rack Industrial                                */
+/* Aesthetic: Cold brushed steel, 19" studio rack gear         */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-industrial {
+  /* ── 1. STRUTTURA ESTERNA (Chassis metallico opaco) ── */
+  --chassis:   #2a2c30; /* Gunmetal grigio scuro opaco */
+  --topbar:    #1f2124;
+  --panel:     #212326; /* Pannelli in metallo grezzo */
+  --recess:    #16171a; /* Scassi neri e profondi */
+  --surface:   #2e3136;
+  --border:    rgba(0, 0, 0, 0.4); /* Bordi molto marcati e neri */
+  --noise-opacity: 0.08; /* Grana metallica molto visibile (rugginoso/opaco) */
+
+  /* ── 2. SUPERFICI INTERNE E COMPONENTI (Pulsanti hardware) ── */
+  --srf-deep:   #121315; /* Sfondi per gli schermi LED neri */
+  --srf-base:   #191b1d;
+  --srf-inset:  #151618; /* Rotaie incise a vivo nel metallo */
+  --srf-mid:    #2a2c30; /* Pulsanti metallici */
+  --srf-raised: #34373d;
+  --srf-light:  #43474e;
+
+  /* ── 3. BORDI E LINEE ── */
+  --brd-subtle:  #3a3d44;
+  --brd-default: #484c55;
+  --brd-strong:  #606670;
+
+  /* ── 4. TESTI E ICONE (Serigrafati bianchi o rossi) ── */
+  --txt-dim:       #58606a;
+  --txt-muted:     #747c87;
+  --txt-secondary: #9099a4;
+  --txt-tertiary:  #acb4be;
+  --txt-primary:   #c8cfd7;
+  --txt-bright:    #e4e9f0;
+  --txt-white:     #ffffff; /* Scritte ben incise ad alto contrasto */
+
+  /* ── 5. ONDE E LUCI SPECIFICHE (LED da rack anni 90) ── */
+  --wave-bg: #121315;
+  --wave-playhead: #ffffff;
+  --led-off: #1b1d22;
+  --status-ok: #ff3300; /* Le lucine verdi le facciamo rosso/arancio industriale */
+}
+
+/* ─────────────────────────────────────────────────────────────
+   EFFETTI MATERIALI: ACCIAIO SPAZZOLATO (Brushed Steel)
+────────────────────────────────────────────────────────────── */
+
+.mixi-skin-industrial::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Graffi metallici orizzontali (lathe marks / spazzolatura) */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(255, 255, 255, 0.015) 1px,
+      rgba(255, 255, 255, 0.015) 2px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(0, 0, 0, 0.02) 3px,
+      rgba(0, 0, 0, 0.02) 4px
+    ),
+    /* Una passata irregolare e obliqua per simulare i segni dell'usura pesante */
+    repeating-linear-gradient(
+      20deg,
+      transparent,
+      transparent 30px,
+      rgba(0, 0, 0, 0.015) 30px,
+      transparent 31px
+    ),
+    /* Leggero riflesso metallico curvo (specular highlight) nell'angolo in alto - simulazione rack sotto faretto */
+    radial-gradient(ellipse at 10% 10%, rgba(255, 255, 255, 0.04) 0%, transparent 60%),
+    
+    /* Ombra pesante e sporcizia negli angoli per chiudere il frame e dare senso di "pesantezza hardware" */
+    radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+/* Hard shadow in stile rack gear. Bordi rigidi e tagli netti, no ombre morbide diffuse */
+.mixi-skin-industrial .mixi-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 
+    0px 2px 2px rgba(0,0,0,0.6),
+    inset 0px 1px 0px rgba(255,255,255,0.05); /* Labbro metallico di riflesso */
+}
+
+.mixi-skin-industrial .mixi-recess {
+  box-shadow: inset 0px 4px 6px rgba(0,0,0,0.8) !important;
+}
+
+/* Pulsanti squadrati di ferro */
+.mixi-skin-industrial .mixi-btn:not(:active),
+.mixi-skin-industrial .mixi-pad:not(:active) {
+  border: 1px solid rgba(0, 0, 0, 0.8) !important;
+  box-shadow: 
+    0px 3px 0px rgba(0, 0, 0, 0.8),
+    inset 0px 1px 0px rgba(255,255,255,0.1);
+}
+
+.mixi-skin-industrial .mixi-btn:active,
+.mixi-skin-industrial .mixi-pad:active {
+  box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.9) !important;
+  transform: translateY(3px); /* Feedback meccanico molto pronunciato giù */
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-industrial {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-industrial .mixi-btn,
+.mixi-skin-industrial .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-industrial .mixi-btn:active,
+.mixi-skin-industrial .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

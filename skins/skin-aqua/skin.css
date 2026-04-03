@@ -1,0 +1,129 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-aqua,
+.mixi-skin-aqua input,
+.mixi-skin-aqua button,
+.mixi-skin-aqua label,
+.mixi-skin-aqua .mixi-lbl,
+.mixi-skin-aqua .mixi-value,
+.mixi-skin-aqua .mixi-btn {
+  font-family: 'Quicksand', sans-serif !important;
+}
+
+body.mixi-skin-aqua {
+  cursor: default !important;
+}
+.mixi-skin-aqua .mixi-btn, .mixi-skin-aqua .mixi-pad {
+  cursor: pointer !important;
+}
+
+
+      .mixi-skin-aqua .mixi-btn { border-radius: 50% !important; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Abyssal Glass                                  */
+/* Aesthetic: Deep Water Glassmorphism, Fluid UI               */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-aqua {
+  /* DEEP WATER MAC OS VIBES - Trasparent to let fluid logic through */
+  --chassis:   transparent;
+  --topbar:    rgba(0, 20, 30, 0.4);
+  --panel:     rgba(0, 40, 60, 0.5); /* Smoky blue glass */
+  --recess:    rgba(0, 10, 15, 0.8);
+  --surface:   rgba(0, 60, 90, 0.3);
+  --border:    rgba(0, 229, 255, 0.15); /* Light glass rim */
+  --noise-opacity: 0; 
+
+  /* BACKGROUND WATER SIMULATION */
+  background: 
+    radial-gradient(ellipse at top left, #004d66 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, #001f33 0%, #000c14 100%) !important;
+  background-attachment: fixed !important;
+
+  /* INNER SURFACES */
+  --srf-deep:   rgba(0, 0, 0, 0.6);
+  --srf-base:   rgba(0, 30, 50, 0.6);
+  --srf-inset:  rgba(0, 10, 20, 0.8);
+  --srf-mid:    rgba(0, 60, 80, 0.5);
+  --srf-raised: rgba(0, 80, 110, 0.6);
+  --srf-light:  rgba(0, 100, 140, 0.7);
+
+  /* FROST BORDERS */
+  --brd-subtle:  rgba(255, 255, 255, 0.05);
+  --brd-default: rgba(255, 255, 255, 0.1);
+  --brd-strong:  rgba(255, 255, 255, 0.2);
+
+  /* BUBBLE WHITE TEXT */
+  --txt-dim:       #4d7d99;
+  --txt-muted:     #66a3cc;
+  --txt-secondary: #99ccff;
+  --txt-tertiary:  #b3d9ff;
+  --txt-primary:   #cce6ff;
+  --txt-bright:    #e6f2ff;
+  --txt-white:     #ffffff;
+
+  /* NEON WATER LEDS */
+  --wave-bg: rgba(0, 0, 0, 0.4);
+  --wave-playhead: #00e5ff;
+  --led-off: rgba(0, 40, 60, 0.8);
+  --status-ok: #00e5ff;
+}
+
+/* Glassmorphism Panels */
+.mixi-skin-aqua .mixi-panel {
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 
+    inset 0 0 10px rgba(0, 229, 255, 0.05),
+    0 15px 30px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 12px !important;
+}
+
+/* Liquid/Jelly Buttons */
+.mixi-skin-aqua .mixi-btn:not(:active),
+.mixi-skin-aqua .mixi-pad:not(:active) {
+  border-radius: 20px !important; /* Oblong/circular smooth buttons */
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.1) !important;
+}
+
+.mixi-skin-aqua .mixi-btn:active,
+.mixi-skin-aqua .mixi-pad:active {
+  background: rgba(0, 229, 255, 0.2) !important;
+  border-color: rgba(0, 229, 255, 0.5) !important;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3) !important;
+  transform: scale(0.95);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-aqua {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-aqua .mixi-btn,
+.mixi-skin-aqua .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-aqua .mixi-btn:active,
+.mixi-skin-aqua .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

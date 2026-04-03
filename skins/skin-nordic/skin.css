@@ -1,0 +1,121 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-nordic,
+.mixi-skin-nordic input,
+.mixi-skin-nordic button,
+.mixi-skin-nordic label,
+.mixi-skin-nordic .mixi-lbl,
+.mixi-skin-nordic .mixi-value,
+.mixi-skin-nordic .mixi-btn {
+  font-family: 'Inter', sans-serif !important;
+}
+
+body.mixi-skin-nordic {
+  cursor: default !important;
+}
+.mixi-skin-nordic .mixi-btn, .mixi-skin-nordic .mixi-pad {
+  cursor: pointer !important;
+}
+
+
+      .mixi-skin-nordic .mixi-btn { letter-spacing: 0.5px; text-transform: uppercase; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Nordic Slate                                   */
+/* Aesthetic: Premium, Modern Flat, Low Contrast Slate Blue    */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-nordic {
+  /* POLAR NIGHT BASE */
+  --chassis:   #2E3440;
+  --topbar:    #3B4252;
+  --panel:     #3B4252;
+  --recess:    #292E39;
+  --surface:   #434C5E;
+  --border:    rgba(216, 222, 233, 0.05); /* Soft frost borders */
+  --noise-opacity: 0;
+
+  /* INNER SURFACES */
+  --srf-deep:   #242933;
+  --srf-base:   #2E3440;
+  --srf-inset:  #292E39;
+  --srf-mid:    #434C5E;
+  --srf-raised: #4C566A;
+  --srf-light:  #5f6a82;
+
+  /* SCALE FOR BORDERS */
+  --brd-subtle:  #434C5E;
+  --brd-default: #4C566A;
+  --brd-strong:  #81A1C1;
+
+  /* SNOW STORM TEXT */
+  --txt-dim:       #4C566A;
+  --txt-muted:     #D8DEE9;
+  --txt-secondary: #E5E9F0;
+  --txt-tertiary:  #ECEFF4;
+  --txt-primary:   #ECEFF4;
+  --txt-bright:    #FFFFFF;
+  --txt-white:     #FFFFFF;
+
+  /* FROST LIGHTS */
+  --wave-bg: #2E3440;
+  --wave-playhead: #8FBCBB;
+  --led-off: #434C5E;
+  --status-ok: #A3BE8C;
+}
+
+/* Minimalist clean styling, no 3D gimmicks, pure flat modernism */
+.mixi-skin-nordic .mixi-panel {
+  border: 1px solid rgba(216, 222, 233, 0.08) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+  border-radius: 8px; /* Slightly squarer for a modern IDE look */
+}
+
+.mixi-skin-nordic .mixi-btn:not(:active),
+.mixi-skin-nordic .mixi-pad:not(:active) {
+  border: 1px solid #4C566A !important;
+  background-color: #434C5E !important;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.15) !important;
+}
+
+.mixi-skin-nordic .mixi-btn:active,
+.mixi-skin-nordic .mixi-pad:active {
+  background-color: #8FBCBB !important;
+  color: #2E3440 !important;
+  border-color: #88C0D0 !important;
+  transform: translateY(1px);
+}
+
+.mixi-skin-nordic .mixi-topbar {
+  border-bottom: 2px solid #81A1C1 !important;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-nordic {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-nordic .mixi-btn,
+.mixi-skin-nordic .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-nordic .mixi-btn:active,
+.mixi-skin-nordic .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

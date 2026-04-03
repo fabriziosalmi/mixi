@@ -1,0 +1,32 @@
+node_modules/
+.claude/
+.venv/
+.DS_Store
+
+# Build outputs
+dist/
+release/
+electron/dist/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+
+# dev temp docs
+ARCHITECTURE.md
+BPMDETECTION.md
+GROOVEBOX.md
+INSTRUMENTS.md
+MIXER.md
+WATERMARKING.md
+FULLREVIEW.md
+SHIPPING.md
+COPYRIGHT.md
+WHITE_PAPER.md
+SAAS.md
+ROADMAP.md
+API.md*.tsbuildinfo
+.vite/

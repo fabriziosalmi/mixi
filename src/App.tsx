@@ -1,0 +1,330 @@
+/*
+ * Copyright (c) 2026 Fabrizio Salmi. All rights reserved.
+ *
+ * This file is part of MIXI.
+ * MIXI is licensed under the PolyForm Noncommercial License 1.0.0.
+ * You may not use this file for commercial purposes without explicit permission.
+ * For commercial licensing, contact: fabrizio.salmi@gmail.com
+ */
+
+// ─────────────────────────────────────────────────────────────
+// Mixi – Main Application Shell
+// ─────────────────────────────────────────────────────────────
+
+import { useState, useCallback, useEffect, type FC } from 'react';
+import { useMixiSync } from './hooks/useMixiSync';
+import { useMixiBridge } from './hooks/useMixiBridge';
+import { useMixiStore } from './store/mixiStore';
+import { MixiEngine } from './audio/MixiEngine';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useAIEngine } from './ai/useAIEngine';
+import { AiControlPanel } from './ai/components/AiControlPanel';
+import { IntentDisplay } from './ai/components/IntentDisplay';
+import { AiDebugPanel } from './ai/components/AiDebugPanel';
+import { DeckSection } from './components/deck/DeckSection';
+import { GrooveboxDeck } from './groovebox/GrooveboxDeck';
+import { MixerSection } from './components/mixer/MixerSection';
+import { SettingsModal } from './components/settings/SettingsModal';
+import { useSettingsStore } from './store/settingsStore';
+import { SkinSelector } from './components/hud/SkinSelector';
+import { injectAllCustomSkins } from './utils/skinLoader';
+import { SystemHud } from './components/hud/SystemHud';
+import { MasterHud } from './components/hud/MasterHud';
+import { RecPanel } from './components/hud/RecPanel';
+import { MasterClock } from './components/hud/MasterClock';
+import { TrackBrowser } from './components/browser/TrackBrowser';
+import { useBrowserStore } from './store/browserStore';
+import { SplashScreen } from './components/SplashScreen';
+import { MidiManager } from './midi/MidiManager';
+import { generateFingerprint, createUiWatermarkCanvas } from './utils/watermark';
+import type { DeckId } from './types';
+
+import { COLOR_DECK_A, COLOR_DECK_B } from './theme';
+const CYAN = COLOR_DECK_A;
+const ORANGE = COLOR_DECK_B;
+
+// ── Deck slot: renders track deck or groovebox per slot mode ─
+
+const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
+  const mode = useMixiStore((s) => s.deckModes[deckId]);
+  const setDeckMode = useMixiStore((s) => s.setDeckMode);
+
+  if (mode === 'groovebox') {
+    return (
+      <GrooveboxDeck
+        deckId={deckId}
+        color={color}
+        onSwitchToTrack={() => setDeckMode(deckId, 'track')}
+      />
+    );
+  }
+  return <DeckSection deckId={deckId} color={color} />;
+};
+
+const App: FC = () => {
+  const { initEngine } = useMixiSync();
+  const { connected: mcpConnected } = useMixiBridge();
+  const { state: aiState, toggle: toggleAI } = useAIEngine();
+  useKeyboardShortcuts();
+  const toggleSettings = useSettingsStore((s) => s.toggleSettings);
+  const skin = useSettingsStore((s) => s.skin);
+  const customSkins = useSettingsStore((s) => s.customSkins);
+  const toggleBrowser = useBrowserStore((s) => s.toggle);
+  const browserOpen = useBrowserStore((s) => s.open);
+  const [audioStarted, setAudioStarted] = useState(false);
+  const [vfxActive, setVfxActive] = useState(false);
+
+  const handleStart = useCallback(async () => {
+    await initEngine();
+    setAudioStarted(true);
+
+    // Init Web MIDI
+    MidiManager.getInstance();
+
+    // Load demo track on Deck A if enabled
+    const settings = useSettingsStore.getState();
+    if (settings.loadDemoTrack) {
+      try {
+        const res = await fetch(new URL('../assets/v0.1.0.mp3', import.meta.url).href);
+        const buf = await res.arrayBuffer();
+        const engine = MixiEngine.getInstance();
+        await engine.loadTrack('A', buf);
+        useMixiStore.getState().setDeckTrackName('A', 'Welcome to MIXI ^_^');
+        useMixiStore.getState().setDeckTrackLoaded('A', true);
+      } catch (e) {
+        console.warn('[Mixi] Demo track load failed:', e);
+      }
+      settings.setLoadDemoTrack(false);
+    }
+  }, [initEngine]);
+
+  // ── Block browser default file-open on drag/drop ────────
+  useEffect(() => {
+    const prevent = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
+  // ── UI Watermark (Tier 1) — invisible canvas fingerprint ──
+  useEffect(() => {
+    let canvas: HTMLCanvasElement | null = null;
+    generateFingerprint().then((fp) => {
+      canvas = createUiWatermarkCanvas(fp);
+      document.body.appendChild(canvas);
+    });
+    return () => { canvas?.remove(); };
+  }, []);
+
+  // ── Panic reset (Escape key or button) ──────────────────
+  const handlePanic = useCallback(() => {
+    const store = useMixiStore.getState();
+    const engine = MixiEngine.getInstance();
+
+    // Reset EQ flat + gain + color FX for both decks
+    for (const d of ['A', 'B'] as const) {
+      store.setDeckEq(d, 'high', 0);
+      store.setDeckEq(d, 'mid', 0);
+      store.setDeckEq(d, 'low', 0);
+      store.setDeckGain(d, 0);
+      store.setDeckColorFx(d, 0);
+      // Exit loops
+      if (store.decks[d].activeLoop) store.exitLoop(d);
+    }
+
+    // Reset per-deck FX
+    if (engine.isInitialized) {
+      for (const d of ['A', 'B'] as const) {
+        for (const fx of ['flt', 'dly', 'rev', 'pha', 'flg', 'gate'] as const) {
+          engine.setDeckFx(d, fx, 0, false);
+        }
+      }
+      // Reset master FX
+      engine.setMasterFilter(0);
+      engine.setDistortion(0);
+      engine.setPunch(0);
+    }
+
+    // Reset crossfader to center
+    store.setCrossfader(0.5);
+
+    // VFX off
+    setVfxActive(false);
+  }, []);
+
+  // Escape key binding
+  useEffect(() => {
+    // Re-inject persisted custom skin CSS on mount or when skins change
+    if (customSkins.length > 0) injectAllCustomSkins(customSkins);
+  }, [customSkins]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); handlePanic(); }
+      if (e.key === 'Tab') {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          e.preventDefault();
+          toggleBrowser();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handlePanic, toggleBrowser]);
+
+  if (!audioStarted) {
+    return <SplashScreen onStart={handleStart} />;
+  }
+
+  return (
+    <div className={`flex h-screen w-screen flex-col text-white overflow-hidden mixi-chassis mixi-skin-${skin} ${vfxActive ? 'mixi-vfx' : ''}`}>
+      {/* Top bar */}
+      <header className="flex items-center justify-between border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-3">
+        {/* ── Group: Telemetry + Master FX + Skin + AI + Intent ── */}
+        <div className="mixi-hud-group">
+          <SystemHud mcpConnected={mcpConnected} />
+          <div className="h-4 border-r border-zinc-700/40" />
+          <MasterHud />
+          <div className="h-4 border-r border-zinc-700/40" />
+          <SkinSelector />
+          <div className="h-4 border-r border-zinc-700/40" />
+          <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
+          <div className="h-4 border-r border-zinc-700/40" />
+          <IntentDisplay engineState={aiState} />
+        </div>
+
+        {/* ── Group: Master Clock + REC ────────────────────── */}
+        <div className="mixi-hud-group">
+          <MasterClock />
+          <div className="h-4 border-r border-zinc-700/40" />
+          <RecPanel />
+        </div>
+
+        {/* ── Group: VFX + MCP + Settings ──────────────────── */}
+        <div className="mixi-hud-group">
+          {/* Track Browser toggle */}
+          <button
+            type="button"
+            onClick={toggleBrowser}
+            className="rounded p-0.5 transition-all duration-150"
+            title="Track Browser (Tab)"
+            style={{
+              color: browserOpen ? 'var(--clr-master)' : 'var(--txt-muted)',
+              filter: browserOpen ? 'drop-shadow(0 0 4px var(--clr-master)88)' : 'none',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+          </button>
+
+          <div className="h-4 border-r border-zinc-700/40" />
+
+          {/* VFX toggle — Space Invader */}
+          <button
+            type="button"
+            onClick={() => setVfxActive((v) => !v)}
+            className={`rounded p-0.5 transition-all duration-300 ${vfxActive ? 'mixi-vfx-btn' : ''}`}
+            title={vfxActive ? 'VFX: ON' : 'VFX: OFF'}
+            style={{
+              color: vfxActive ? 'var(--txt-white)' : 'var(--txt-muted)',
+              filter: vfxActive ? 'drop-shadow(0 0 6px #ff00ff88)' : 'none',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="3" y="1" width="2" height="2" />
+              <rect x="11" y="1" width="2" height="2" />
+              <rect x="5" y="3" width="2" height="2" />
+              <rect x="9" y="3" width="2" height="2" />
+              <rect x="3" y="5" width="10" height="2" />
+              <rect x="1" y="7" width="2" height="2" />
+              <rect x="3" y="7" width="2" height="2" />
+              <rect x="5" y="7" width="6" height="2" />
+              <rect x="11" y="7" width="2" height="2" />
+              <rect x="13" y="7" width="2" height="2" />
+              <rect x="1" y="9" width="2" height="2" />
+              <rect x="5" y="9" width="2" height="2" />
+              <rect x="9" y="9" width="2" height="2" />
+              <rect x="13" y="9" width="2" height="2" />
+              <rect x="3" y="11" width="2" height="2" />
+              <rect x="5" y="11" width="2" height="2" />
+              <rect x="9" y="11" width="2" height="2" />
+              <rect x="11" y="11" width="2" height="2" />
+            </svg>
+          </button>
+
+          {/* Panic button — reset all FX/EQ/loops */}
+          <button
+            type="button"
+            onClick={handlePanic}
+            className="rounded p-0.5 text-zinc-600 hover:text-red-400 transition-colors duration-150 active:scale-90"
+            title="Panic Reset (Esc) — flatten EQ, kill FX, exit loops"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </button>
+
+          <div className="h-4 border-r border-zinc-700/40" />
+
+          {/* Settings gear */}
+          <button
+            type="button"
+            onClick={toggleSettings}
+            className="mixi-gear rounded p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Settings"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main className="grid flex-1 grid-cols-[1fr_auto_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative">
+        <DeckSlot deckId="A" color={CYAN} />
+        <MixerSection />
+        <DeckSlot deckId="B" color={ORANGE} />
+
+        {/* Track Browser — slides up from bottom */}
+        <TrackBrowser />
+      </main>
+
+      {/* Glass vignette — subtle edge darkening for physical cohesion */}
+      <div
+        className="fixed inset-0 pointer-events-none z-[9995]"
+        style={{
+          background: 'radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.05) 100%)',
+        }}
+      />
+
+      {/* Limiter clip flash — thin red border */}
+      <div
+        id="mixi-clip-flash"
+        className="fixed inset-0 pointer-events-none z-[9996]"
+        style={{
+          opacity: 0,
+          border: '2px solid var(--clr-clip-border)',
+          borderImage: 'linear-gradient(135deg, var(--clr-clip-border), var(--clr-clip-grad), var(--clr-clip-border)) 1',
+          transition: 'opacity 0.04s ease-out',
+        }}
+      />
+
+      {/* Modals / overlays */}
+      <SettingsModal />
+      <AiDebugPanel engineState={aiState} />
+    </div>
+  );
+};
+
+export default App;

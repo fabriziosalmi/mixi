@@ -1,0 +1,56 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Freetekno Rave                                */
+/* Acid-green on charred black. Warehouse strobe aesthetic.   */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-custom-freetekno {
+  --chassis:   #050504;
+  --topbar:    #0a0a06;
+  --panel:     #080805;
+  --recess:    #030302;
+  --surface:   #111108;
+  --border:    rgba(0,255,60,0.08);
+  --noise-opacity: 0.06;
+}
+
+.mixi-skin-custom-freetekno .mixi-topbar {
+  border-bottom-color: rgba(0,255,60,0.15) !important;
+}
+
+.mixi-skin-custom-freetekno::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Harsh diagonal slashes — razor cuts on steel */
+    repeating-linear-gradient(
+      -25deg,
+      transparent,
+      transparent 22px,
+      rgba(0,255,60,0.015) 22px,
+      transparent 23px
+    ),
+    repeating-linear-gradient(
+      140deg,
+      transparent,
+      transparent 50px,
+      rgba(0,255,60,0.008) 50px,
+      transparent 51px
+    ),
+    /* Toxic glow patches */
+    radial-gradient(ellipse at 20% 30%, rgba(0,255,60,0.04) 0%, transparent 45%),
+    radial-gradient(ellipse at 75% 65%, rgba(0,200,40,0.03) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 85%, rgba(0,180,30,0.025) 0%, transparent 35%),
+    /* Vertical machining lines */
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 4px,
+      rgba(255,255,255,0.005) 4px,
+      rgba(255,255,255,0.005) 5px
+    ),
+    /* Dark vignette */
+    radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,5,0,0.18) 100%);
+}

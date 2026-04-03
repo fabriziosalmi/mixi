@@ -1,0 +1,879 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Global resets for DJ UI ──────────────────────────────── */
+
+body {
+  @apply text-white antialiased;
+  background-color: var(--chassis, #0e0f12);
+  overflow: hidden;
+  user-select: none;
+
+  /* ── DESIGN TOKENS ──────────────────────────────────────── */
+  /* Every visual color lives here. Zero hardcoded hex in TSX. */
+  /* Skin classes below may override any token.                */
+
+  /* ── Surface scale (dark → light) ─────────────────────── */
+  --srf-deep:   #050505;    /* deepest recess, OLED, LED screens   */
+  --srf-base:   #0a0a0a;    /* standard dark bg, canvas bg         */
+  --srf-inset:  #151515;    /* fader track, shallow recess          */
+  --srf-mid:    #1a1a1a;    /* panels, toggle tracks, LED off       */
+  --srf-raised: #1e1e1e;    /* raised buttons, inactive states      */
+  --srf-light:  #2a2a2a;    /* lighter surfaces, hover states       */
+
+  /* ── Border scale ─────────────────────────────────────── */
+  --brd-subtle:  #222222;   /* subtle borders, icon boxes           */
+  --brd-default: #333333;   /* default borders, separators          */
+  --brd-strong:  #444444;   /* strong borders, tick marks           */
+
+  /* ── Text scale ───────────────────────────────────────── */
+  --txt-dim:       #444444; /* barely visible labels                */
+  --txt-muted:     #555555; /* muted labels, inactive icons         */
+  --txt-secondary: #666666; /* secondary icons / text               */
+  --txt-tertiary:  #777777; /* FX labels inactive                   */
+  --txt-primary:   #888888; /* primary text, headphone color        */
+  --txt-bright:    #cccccc; /* bright indicators                    */
+  --txt-white:     #ffffff; /* maximum brightness                   */
+
+  /* ── Accent: Deck A (electric cyan) ───────────────────── */
+  --clr-a:      #00f0ff;
+  --clr-a-glow: #00f0ff66;
+  --clr-a-dim:  #00f0ff44;
+
+  /* ── Accent: Deck B (warm orange) ─────────────────────── */
+  --clr-b:      #ff6a00;
+  --clr-b-glow: #ff6a0066;
+  --clr-b-dim:  #ff6a0044;
+
+  /* ── Accent: Master / AI (purple) ─────────────────────── */
+  --clr-master:      #a855f7;
+  --clr-master-glow: #a855f766;
+  --clr-master-dim:  #a855f744;
+
+  /* ── Accent: misc ─────────────────────────────────────── */
+  --clr-cue:    #f59e0b;
+  --clr-hp:     #888888;
+  --clr-ai:     #00f0ff;
+  --clr-filter: #06b6d4;
+
+  /* ── Status ───────────────────────────────────────────── */
+  --status-ok:          #4ade80;
+  --status-ok-dim:      #22c55e;
+  --status-warn:        #f59e0b;
+  --status-warn-bright: #fbbf24;
+  --status-error:       #ef4444;
+  --status-error-dim:   #dc2626;
+
+  /* ── VU / LED ─────────────────────────────────────────── */
+  --vu-green: #22c55e;
+  --vu-amber: #f59e0b;
+  --vu-red:   #ef4444;
+  --led-off:  #1a1a1a;
+
+  /* ── Waveform: main ───────────────────────────────────── */
+  --wave-low:      #991133;
+  --wave-mid:      #aa6611;
+  --wave-high:     #2266aa;
+  --wave-bg:       #0a0a0a;
+  --wave-playhead: #ffffff;
+  --wave-drop:     #ff0044;
+  --wave-loop:     74, 222, 128;   /* RGB tuple for rgba() usage    */
+
+  /* ── Waveform: overview (alpha-blended) ───────────────── */
+  --wave-ov-low:  #ff004466;
+  --wave-ov-mid:  #ffaa0066;
+  --wave-ov-high: #00ffff66;
+
+  /* ── Special ──────────────────────────────────────────── */
+  --clr-rec:         #dc2626;
+  --clr-kill:        #dc2626;
+  --clr-limiter-bg:  #331111;
+  --clr-limiter-brd: #44111155;
+  --clr-clip-border: #dc2626;
+  --clr-clip-grad:   #991b1b;
+
+  /* ── Skin identity dots ───────────────────────────────── */
+  --skin-dot-midnight:  #6366f1;
+  --skin-dot-freetekno: #d97706;
+  --skin-dot-carbon:    #71717a;
+
+  /* ── Hot cue palette ──────────────────────────────────── */
+  --cue-1: #22c55e;
+  --cue-2: #ef4444;
+  --cue-3: #3b82f6;
+  --cue-4: #f59e0b;
+  --cue-5: #a855f7;
+  --cue-6: #ec4899;
+  --cue-7: #06b6d4;
+  --cue-8: #ff6a00;
+
+  /* ── Font families ────────────────────────────────────── */
+  --font-display: system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-ui: system-ui, -apple-system, sans-serif;
+}
+
+/* ── Tabular numerals for all monospace data ──────────────── */
+/* Prevents jittering when numbers change (1 is narrower than 0) */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Noise texture overlay (simulates powder-coated aluminium) ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--noise-opacity, 0.03);
+  background-image: url('../assets/noise.png');
+  background-size: 64px 64px;
+  background-repeat: repeat;
+}
+
+/* ── Mixi Skin System ────────────────────────────────────── */
+/* All surface colors driven by CSS custom properties.        */
+/* Skin class on root swaps the palette + texture overlays.   */
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Skin: Midnight ─────────────────────────────────────── */
+/* Deep blue-black brushed steel. Clean, clinical, surgical.  */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-midnight {
+  --chassis:   #0c0d12;
+  --topbar:    #11121a;
+  --panel:     #0f1018;
+  --recess:    #0a0b10;
+  --surface:   #16171e;
+  --border:    rgba(100,130,255,0.06);
+  --noise-opacity: 0.025;
+}
+
+/* Midnight: brushed horizontal steel + subtle blue vignette */
+.mixi-skin-midnight::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Horizontal brushed lines */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(150,170,220,0.008) 1px,
+      rgba(150,170,220,0.008) 2px
+    ),
+    /* Subtle blue vignette from edges */
+    radial-gradient(
+      ellipse at 50% 50%,
+      transparent 50%,
+      rgba(30,40,80,0.15) 100%
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Skin: Freetekno Underground ────────────────────────── */
+/* Oxidized iron, squat warehouse, 20 years of bass.          */
+/* Warm rust tones, heavy grain, industrial battle scars.     */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-freetekno {
+  --chassis:   #0a0806;
+  --topbar:    #0e0b08;
+  --panel:     #0c0a07;
+  --recess:    #070604;
+  --surface:   #181410;
+  --border:    rgba(180,120,60,0.08);
+  --noise-opacity: 0.055;
+}
+
+/* Freetekno: rust border glow */
+.mixi-skin-freetekno .mixi-topbar {
+  border-bottom-color: rgba(140,80,30,0.2) !important;
+}
+
+/* Freetekno: layered industrial texture */
+.mixi-skin-freetekno::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Diagonal scratch marks (tool marks on steel) */
+    repeating-linear-gradient(
+      -32deg,
+      transparent,
+      transparent 18px,
+      rgba(255,200,120,0.012) 18px,
+      transparent 19px
+    ),
+    repeating-linear-gradient(
+      156deg,
+      transparent,
+      transparent 44px,
+      rgba(255,180,80,0.008) 44px,
+      transparent 45px
+    ),
+    /* Rust / oxidation patches — irregular warm spots */
+    radial-gradient(ellipse at 15% 25%, rgba(120,60,20,0.06) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 70%, rgba(100,50,15,0.05) 0%, transparent 35%),
+    radial-gradient(ellipse at 50% 90%, rgba(80,40,10,0.04) 0%, transparent 30%),
+    radial-gradient(ellipse at 90% 15%, rgba(110,55,20,0.03) 0%, transparent 25%),
+    /* Vertical machining lines (lathe marks) */
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.006) 3px,
+      rgba(255,255,255,0.006) 4px
+    ),
+    /* Warm ambient wash */
+    radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(40,20,5,0.12) 100%);
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Skin: Carbon ───────────────────────────────────────── */
+/* Aerospace carbon fiber composite. Cold, precise, lethal.   */
+/* Tight weave pattern, matte finish, clinical contrast.      */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-carbon {
+  --chassis:   #060606;
+  --topbar:    #0a0a0a;
+  --panel:     #080808;
+  --recess:    #040404;
+  --surface:   #121212;
+  --border:    rgba(255,255,255,0.035);
+  --noise-opacity: 0.015;
+}
+
+/* Carbon: woven fiber weave + specular highlight */
+.mixi-skin-carbon::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* Primary weave (45°) */
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.018) 2px,
+      rgba(255,255,255,0.018) 3px,
+      transparent 3px,
+      transparent 5px
+    ),
+    /* Cross weave (-45°) — offset for authentic twill */
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.014) 2px,
+      rgba(255,255,255,0.014) 3px,
+      transparent 3px,
+      transparent 5px
+    ),
+    /* Specular highlight — top-left studio light catch */
+    radial-gradient(
+      ellipse at 25% 15%,
+      rgba(255,255,255,0.03) 0%,
+      transparent 50%
+    ),
+    /* Depth vignette — matte carbon absorbs light at edges */
+    radial-gradient(
+      ellipse at 50% 50%,
+      transparent 45%,
+      rgba(0,0,0,0.25) 100%
+    );
+}
+
+/* ── Apply skin variables to chassis classes ─────────────── */
+
+.mixi-chassis {
+  background-color: var(--chassis, #0e0f12);
+}
+
+.mixi-topbar {
+  background-color: var(--topbar, #13141a);
+}
+
+.mixi-panel {
+  background-color: var(--panel, #111218);
+}
+
+.mixi-recess {
+  background-color: var(--recess, #0c0d10);
+}
+
+/* ── Skin transition (smooth theme swap, excludes canvas) ──── */
+
+.mixi-chassis,
+.mixi-topbar,
+.mixi-panel,
+.mixi-recess,
+.mixi-hud-group {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ── Top bar HUD group (consistent container for all groups) ── */
+
+.mixi-hud-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ── Mixer edge glow (subtle deck→mixer separator) ───────── */
+
+.mixi-mixer-glow {
+  position: relative;
+}
+.mixi-mixer-glow::before,
+.mixi-mixer-glow::after {
+  content: '';
+  position: absolute;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  pointer-events: none;
+}
+.mixi-mixer-glow::before {
+  left: -1px;
+  background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.06), transparent);
+}
+.mixi-mixer-glow::after {
+  right: -1px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 85, 0, 0.06), transparent);
+}
+
+/* ── EQ band background stripe (grid rows 4-6) ──────────── */
+
+.mixi-eq-band {
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  height: 100%;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.015);
+  border-top: 1px solid rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.015);
+}
+
+/* ── Tactile click for buttons (CUE, SYNC, mode tabs) ────── */
+
+/* #50: Expand touch hitbox beyond the visible button.
+   The ::before pseudo extends the tap area by 6px on each side,
+   preventing accidental mis-taps on tightly spaced controls. */
+.mixi-btn {
+  position: relative;
+}
+.mixi-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.mixi-btn:active {
+  transform: scale(0.97);
+  transition: transform 50ms ease-out;
+}
+
+/* ── Performance Pad physics ─────────────────────────────── */
+/* On press: pad sinks — loses top bevel and bottom shadow,
+   gains a deeper inset shadow to simulate physical depression. */
+
+.mixi-pad:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 #111 !important;
+}
+
+/* ── Jog Wheel breathing (track loaded, paused) ──────────── */
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.05; }
+  50%      { opacity: 0.15; }
+}
+
+.mixi-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* ── Deck dot pulse (playing indicator) ──────────────────── */
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+.mixi-dot-pulse {
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+/* ── MIXI brand shimmer — once per minute ─────────────────── */
+
+@keyframes mixi-shimmer {
+  0%, 93%, 100% {
+    opacity: 0.4;
+    color: var(--brd-default);
+    text-shadow: none;
+  }
+  95% {
+    opacity: 0.85;
+    color: #cccccc;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.5), 0 1px 0 rgba(255,255,255,0.15);
+  }
+  96.5% {
+    opacity: 1;
+    color: #ffffff;
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.9), 0 0 28px rgba(255, 255, 255, 0.4), 0 1px 0 rgba(255,255,255,0.3);
+  }
+  98% {
+    opacity: 0.6;
+    color: #aaaaaa;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+  }
+}
+
+.mixi-brand-shimmer {
+  color: var(--brd-default);
+  opacity: 0.4;
+  animation: mixi-shimmer 60s linear infinite;
+}
+
+/* ── Jog Wheel spin animation ─────────────────────────────── */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Loop pad pulse animation ─────────────────────────────── */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ── DSP engine pulse (SYNC OK indicator) ────────────────── */
+
+@keyframes dsp-pulse {
+  0%, 100% { opacity: 0.7; box-shadow: 0 0 4px currentColor; }
+  50%      { opacity: 1;   box-shadow: 0 0 8px currentColor; }
+}
+
+.mixi-dsp-pulse {
+  animation: dsp-pulse 3.5s ease-in-out infinite;
+}
+
+/* ── MCP icon glow (connected state) ─────────────────────── */
+
+@keyframes mcp-glow {
+  0%, 100% { box-shadow: 0 0 4px var(--clr-master-glow); }
+  50%      { box-shadow: 0 0 8px var(--clr-master); }
+}
+
+.mixi-mcp-glow {
+  animation: mcp-glow 3s ease-in-out infinite;
+}
+
+/* ── Settings gear hover rotation ────────────────────────── */
+
+.mixi-gear svg {
+  transition: transform 0.4s ease-out;
+}
+
+.mixi-gear:hover svg {
+  transform: rotate(45deg);
+}
+
+/* ── Jog Wheel boot sweep (LED ring fill on first load) ──── */
+
+@keyframes jog-boot-sweep {
+  from { stroke-dashoffset: 515; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* ── VFX Mode (Space Invader activated) ──────────────────── */
+/* Pure CSS — GPU-composited, zero JS overhead.               */
+
+@keyframes mixi-rainbow {
+  0%   { --mixi-hue: 0deg; }
+  100% { --mixi-hue: 360deg; }
+}
+
+@property --mixi-hue {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+.mixi-vfx {
+  animation: mixi-rainbow 4s linear infinite;
+}
+
+/* LED rings: rainbow hue shift */
+.mixi-vfx svg circle[filter] {
+  filter: hue-rotate(var(--mixi-hue)) !important;
+}
+
+/* Spiral glow paths: rainbow + boosted opacity */
+.mixi-vfx svg path[opacity] {
+  filter: hue-rotate(var(--mixi-hue));
+}
+
+/* Waveforms: tint handled by canvas draw — no CSS filter (GPU-expensive) */
+
+/* Knob arcs and fader glows */
+.mixi-vfx .mixi-mixer-glow::before,
+.mixi-vfx .mixi-mixer-glow::after {
+  filter: hue-rotate(var(--mixi-hue));
+}
+
+/* VFX button rainbow pulse when active */
+@keyframes vfx-btn-pulse {
+  0%, 100% { box-shadow: 0 0 4px #ff00ff88; color: #ff00ff; }
+  33%      { box-shadow: 0 0 6px #00ffff88; color: #00ffff; }
+  66%      { box-shadow: 0 0 6px #ffff0088; color: #ffff00; }
+}
+
+.mixi-vfx-btn {
+  animation: vfx-btn-pulse 3s ease-in-out infinite;
+}
+
+/* Performance pads: subtle glow cycling */
+.mixi-vfx .mixi-pad {
+  filter: hue-rotate(var(--mixi-hue));
+}
+
+/* ── VFX Strobe overlay (dedicated layer, hidden by default) ── */
+
+.mixi-vfx > .mixi-strobe-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  pointer-events: none;
+  background: white;
+  opacity: 0;
+  transition: opacity 0.02s;
+}
+
+/* Flash on every beat — sharp white spike */
+.mixi-strobe > .mixi-strobe-layer {
+  opacity: 0.06;
+}
+
+/* Downbeat glow (every 4 beats) — stronger + warm */
+.mixi-downbeat > .mixi-strobe-layer {
+  opacity: 0.12;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(200,180,255,0.7));
+}
+
+/* ── Splash Screen (Technics Vinyl Edition) ──────────────── */
+
+/* ── Keyframes ──────────────────────────────────────────── */
+
+@keyframes splash-noise-scroll {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 -512px; }
+}
+
+@keyframes splash-chromatic-drift {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(1px, -1px); }
+  50%  { transform: translate(-1px, 1px); }
+  75%  { transform: translate(1px, 0); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes splash-ring-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.7; }
+}
+
+/* ── Container ──────────────────────────────────────────── */
+
+.mixi-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #050505;
+  cursor: default;
+  transition: opacity 0.5s ease-out;
+  outline: none;
+  overflow: hidden;
+}
+
+/* #26: vignettatura inversa — subtle blue-gray glow behind disc */
+
+.mixi-splash-bg-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(30, 50, 80, 0.25) 0%,
+    rgba(10, 15, 25, 0.15) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* ── Static noise layer ─────────────────────────────────── */
+
+.mixi-splash-noise {
+  position: absolute;
+  inset: -50%;
+  z-index: 0;
+  opacity: 0.08;
+  background-image: url('../assets/noise.png');
+  background-size: 64px 64px;
+  background-repeat: repeat;
+  animation: splash-noise-scroll 0.5s steps(10) infinite;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* ── CRT scanlines ──────────────────────────────────────── */
+
+.mixi-splash-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 1.5px,
+    rgba(0, 0, 0, 0.25) 1.5px,
+    rgba(0, 0, 0, 0.25) 3px
+  );
+  pointer-events: none;
+}
+
+/* ── Vignette ───────────────────────────────────────────── */
+
+.mixi-splash-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.75) 100%);
+  pointer-events: none;
+}
+
+/* ── Chromatic aberration ───────────────────────────────── */
+
+.mixi-splash-chromatic {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow:
+    inset 2px 0 12px rgba(255, 0, 50, 0.04),
+    inset -2px 0 12px rgba(0, 150, 255, 0.04);
+  animation: splash-chromatic-drift 4s ease-in-out infinite;
+}
+
+/* ── Center container ───────────────────────────────────── */
+
+.mixi-splash-center {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Vinyl button ────────────────────────────────────────── */
+
+.mixi-splash-vinyl-btn {
+  position: relative;
+  width: min(520px, 90vw, 40vh);
+  height: min(520px, 90vw, 40vh);
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 50%;
+  transition: transform 0.2s ease-out;
+  cursor: default;
+}
+
+/* #17: custom cursor */
+.mixi-splash-vinyl-btn.is-ready {
+  cursor: pointer;
+}
+
+/* #16: parallax hover handled by JS; gentle scale fallback */
+.mixi-splash-vinyl-btn.is-ready:hover {
+  filter: brightness(1.05);
+}
+
+/* #18: press feedback — scale + ring flash */
+.mixi-splash-vinyl-btn.is-ready:active {
+  transform: scale(0.99) !important;
+}
+
+/* #23: dive overflow clip */
+.mixi-splash-vinyl-btn.is-dive {
+  overflow: hidden;
+}
+
+/* ── Vinyl image ─────────────────────────────────────────── */
+
+.mixi-splash-vinyl {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+  /* #5: subtle lip — inset shadow simulates vinyl edge bevel */
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.04),
+    0 0 40px rgba(0, 0, 0, 0.7);
+}
+
+/* ── SVG micro-grooves overlay (#4) ──────────────────────── */
+
+.mixi-splash-grooves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* ── LED ring wrap (#11-13) ──────────────────────────────── */
+
+.mixi-splash-ring-wrap {
+  position: absolute;
+  inset: -12px;
+  pointer-events: none;
+}
+
+.mixi-splash-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Glow layer — blurred, colored */
+.mixi-splash-ring--glow {
+  filter: blur(15px);
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+}
+
+/* Core layer — sharp white stroke */
+.mixi-splash-ring--core {
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+}
+
+/* stroke-dashoffset draw animation */
+.mixi-splash-ring--glow circle,
+.mixi-splash-ring--core circle {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Show layers when drawing */
+.mixi-splash-ring--glow.is-visible {
+  opacity: 0.8;
+}
+
+.mixi-splash-ring--core.is-visible {
+  opacity: 1;
+}
+
+/* #13: breathing pulse when ready */
+.mixi-splash-ring.is-breathing {
+  animation: splash-ring-breathe 4s ease-in-out infinite;
+}
+
+/* ── Spindle hole (#2) ───────────────────────────────────── */
+
+.mixi-splash-spindle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #000;
+  border: 1px solid rgba(100, 100, 100, 0.4);
+  pointer-events: none;
+}
+
+.mixi-splash-spindle-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.06);
+}
+
+/* ── Anisotropic reflection (#3) ─────────────────────────── */
+/* Stays fixed while disc rotates beneath it */
+
+.mixi-splash-aniso {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 200deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.04) 40deg,
+    rgba(255, 255, 255, 0.08) 60deg,
+    transparent 90deg,
+    transparent 180deg,
+    rgba(255, 255, 255, 0.03) 220deg,
+    transparent 260deg,
+    transparent 360deg
+  );
+  mix-blend-mode: screen;
+}
+
+/* ── Background light spill (#14) ────────────────────────── */
+
+.mixi-splash-light-spill {
+  position: absolute;
+  inset: -60px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 200, 240, 0.06) 30%,
+    rgba(255, 106, 0, 0.03) 60%,
+    transparent 80%
+  );
+  filter: blur(30px);
+  z-index: -1;
+}
