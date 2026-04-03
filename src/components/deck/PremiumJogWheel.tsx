@@ -41,7 +41,7 @@ const R_MARKER = 76;
 const R_TICK = 98;
 
 // Spiral config
-const SPIRAL_R_MIN = 26;      // inner radius (just outside label)
+const SPIRAL_R_MIN = 14;      // extends under centre dot (R_LABEL=20) for seamless look
 const SPIRAL_R_MAX = 74;      // outer radius (just inside LED ring)
 const SPIRAL_TURNS = 5;       // visible spiral shape
 const SPIRAL_POINTS = 350;    // enough points for smooth curves
