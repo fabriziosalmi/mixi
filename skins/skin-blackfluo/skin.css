@@ -1,0 +1,138 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Black Fluo                                     */
+/* Aesthetic: Pitch black, Cyberpunk, Neon X-beams             */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────
+   VERA PROSPETTIVA: LUCI VERNICIATE SUL TELAIO E SOTTO I PANNELLI
+────────────────────────────────────────────────────────────── */
+
+.mixi-skin-blackfluo {
+  /* ── 1. STRUTTURA ESTERNA (Vetro affumicato scuro e telai aperti) ── */
+  /* Pannelli semitrasparenti per far passare le luci di fondo SOTTO i controlli */
+  --chassis:   transparent; 
+  --topbar:    rgba(3, 3, 3, 0.9);
+  --panel:     rgba(0, 0, 0, 0.6); /* Vetro fumè: si vedono i laser sotto */
+  --recess:    rgba(0, 0, 0, 0.95);
+  --surface:   rgba(5, 5, 5, 0.4);
+  --border:    rgba(255, 0, 255, 0.15); 
+  --noise-opacity: 0;
+
+  /* IL VERO SFONDO CHE METTE LA "X" SOTTO LA UI FISICA */
+  background-color: #000000 !important;
+  background-attachment: fixed !important;
+  background-image:
+    /* Core centrale sottile Magenta intenso */
+    linear-gradient(
+      to right,
+      transparent 45%,
+      rgba(255, 0, 255, 0.1) 48%,
+      rgba(255, 0, 255, 0.8) 50%,
+      rgba(255, 0, 255, 0.1) 52%,
+      transparent 55%
+    ),
+    /* Pilone monumentale Ciano largo che incornicia e sborderà dal mixer (Verticale) */
+    linear-gradient(
+      to right,
+      transparent 33%,
+      rgba(0, 255, 255, 0.05) 36%,
+      rgba(0, 255, 255, 0.5) 43%,
+      rgba(0, 255, 255, 0.8) 50%,
+      rgba(0, 255, 255, 0.5) 57%,
+      rgba(0, 255, 255, 0.05) 64%,
+      transparent 67%
+    ),
+    /* Raggio Perpendicolare Ciano largo (Orizzontale) per creare l'incrocio a croce dritta + */
+    linear-gradient(
+      to bottom,
+      transparent 30%,
+      rgba(0, 255, 255, 0.05) 35%,
+      rgba(0, 255, 255, 0.5) 45%,
+      rgba(0, 255, 255, 0.8) 50%,
+      rgba(0, 255, 255, 0.5) 55%,
+      rgba(0, 255, 255, 0.05) 65%,
+      transparent 70%
+    ),
+    /* Una glow radiale per dare il colpo luminoso profondo al centro */
+    radial-gradient(
+      ellipse at 50% 50%,
+      rgba(150, 0, 255, 0.15) 0%,
+      rgba(150, 0, 255, 0.05) 20%,
+      transparent 40%
+    ) !important;
+
+  /* ── 2. SUPERFICI INTERNE E COMPONENTI (Completamente opachi, coprono la luce) ── */
+  --srf-deep:   #000000;
+  --srf-base:   #040404;
+  --srf-inset:  #000000; 
+  --srf-mid:    #080808; 
+  --srf-raised: #0a0a0a;
+  --srf-light:  #111111;
+
+  /* ── 3. BORDI E LINEE ── */
+  --brd-subtle:  #1a1025;
+  --brd-default: #2a1142;
+  --brd-strong:  #ff00ff; 
+
+  /* ── 4. TESTI E ICONE (Fluorescenti Cyberpunk) ── */
+  --txt-dim:       #204040;
+  --txt-muted:     #306060;
+  --txt-secondary: #00aaaa;
+  --txt-tertiary:  #00cccc;
+  --txt-primary:   #00eeee;
+  --txt-bright:    #00ffff; 
+  --txt-white:     #ffffff; 
+
+  /* ── 5. ONDE E LUCI SPECIFICHE ── */
+  --wave-bg: #000000;
+  --wave-playhead: #ff00ff;
+  --led-off: #110011;
+}
+
+/* Facciamo fluo pure i pannelli */
+.mixi-skin-blackfluo .mixi-panel {
+  border: 1px solid rgba(0, 255, 255, 0.1) !important; 
+  box-shadow: inset 0px 0px 40px rgba(255, 0, 255, 0.03); 
+}
+
+/* Pulsanti opachi, coprono rigorosamente il laser, ma hanno un bordo neon */
+.mixi-skin-blackfluo .mixi-btn:not(:active),
+.mixi-skin-blackfluo .mixi-pad:not(:active),
+.mixi-skin-blackfluo .mixi-hud-group {
+  border: 1px solid rgba(255, 0, 255, 0.3) !important;
+  box-shadow: 
+    0 0 8px rgba(255, 0, 255, 0.1),
+    inset 0 0 5px rgba(0, 255, 255, 0.1);
+}
+
+.mixi-skin-blackfluo .mixi-btn:active,
+.mixi-skin-blackfluo .mixi-pad:active {
+  background: rgba(255, 0, 255, 0.2) !important;
+  border-color: rgba(255, 0, 255, 0.8) !important;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.5) !important;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-blackfluo {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-blackfluo .mixi-btn,
+.mixi-skin-blackfluo .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-blackfluo .mixi-btn:active,
+.mixi-skin-blackfluo .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

@@ -1,0 +1,142 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Phosphor CRT                                   */
+/* Aesthetic: Vintage Hacker Terminal, Phosphor Green          */
+/* ═══════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: CUSTOM TYPOGRAPHY & CURSOR OVERRIDES
+────────────────────────────────────────────────────────────── */
+.mixi-skin-matrix,
+.mixi-skin-matrix input,
+.mixi-skin-matrix button,
+.mixi-skin-matrix label,
+.mixi-skin-matrix .mixi-lbl,
+.mixi-skin-matrix .mixi-value {
+  font-family: 'VT323', monospace !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Custom Crosshair Cursor per tutto l'ambiente */
+body.mixi-skin-matrix {
+  cursor: crosshair !important;
+}
+
+/* Custom Cell Cursor per renderlo ancora più terminal-like sui bottoni */
+.mixi-skin-matrix .mixi-btn,
+.mixi-skin-matrix .mixi-pad {
+  cursor: cell !important;
+}
+
+.mixi-skin-matrix {
+  /* BACKGROUND & PANELS: Pure Black with subtle green tint */
+  --chassis:   #000200;
+  --topbar:    #000500;
+  --panel:     #000000;
+  --recess:    #000000;
+  --surface:   #000300;
+  --border:    rgba(51, 255, 0, 0.3); /* Green wireframe borders */
+  --noise-opacity: 0;
+
+  /* INNER SURFACES */
+  --srf-deep:   #000000;
+  --srf-base:   #000200;
+  --srf-inset:  #000000;
+  --srf-mid:    #000500;
+  --srf-raised: #000800;
+  --srf-light:  #001100;
+
+  /* BORDERS */
+  --brd-subtle:  #003300;
+  --brd-default: #005500;
+  --brd-strong:  #00aa00;
+
+  /* PHOSPHOR TEXT: Extreme green contrast */
+  --txt-dim:       #004400;
+  --txt-muted:     #006600;
+  --txt-secondary: #008800;
+  --txt-tertiary:  #00aa00;
+  --txt-primary:   #00cc00;
+  --txt-bright:    #00ee00;
+  --txt-white:     #33ff00; /* Pure Phosphor */
+
+  /* WAVEFORMS */
+  --wave-bg: #000200;
+  --wave-playhead: #33ff00;
+  --led-off: #002200;
+  --status-ok: #33ff00;
+}
+
+/* CRT SCANLINE AND VIGNETTE EFFECT */
+.mixi-skin-matrix::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    /* CRT Scanlines */
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.15) 1px,
+      transparent 1px,
+      transparent 2px
+    ),
+    /* Screen Glare Vignette */
+    radial-gradient(
+      ellipse at 50% 50%,
+      transparent 40%,
+      rgba(0, 5, 0, 0.5) 80%,
+      rgba(0, 20, 0, 0.9) 100%
+    );
+}
+
+/* Wireframe style elements */
+.mixi-skin-matrix .mixi-panel {
+  border: 1px dashed rgba(51, 255, 0, 0.4) !important;
+  box-shadow: 0 0 10px rgba(51, 255, 0, 0.05) !important;
+  border-radius: 0 !important;
+}
+
+.mixi-skin-matrix .mixi-btn:not(:active),
+.mixi-skin-matrix .mixi-pad:not(:active) {
+  border: 1px solid rgba(51, 255, 0, 0.6) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 8px rgba(51, 255, 0, 0.1) !important;
+  border-radius: 1px !important;
+}
+
+.mixi-skin-matrix .mixi-btn:active,
+.mixi-skin-matrix .mixi-pad:active {
+  background-color: rgba(51, 255, 0, 0.2) !important;
+  color: #33ff00 !important;
+  box-shadow: 0 0 15px rgba(51, 255, 0, 0.6), inset 0 0 15px rgba(51, 255, 0, 0.6) !important;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-matrix {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-matrix .mixi-btn,
+.mixi-skin-matrix .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-matrix .mixi-btn:active,
+.mixi-skin-matrix .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

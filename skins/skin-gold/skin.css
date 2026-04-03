@@ -1,0 +1,148 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-gold,
+.mixi-skin-gold input,
+.mixi-skin-gold button,
+.mixi-skin-gold label,
+.mixi-skin-gold .mixi-lbl,
+.mixi-skin-gold .mixi-value,
+.mixi-skin-gold .mixi-btn {
+  font-family: 'Cormorant Garamond', serif !important;
+}
+
+body.mixi-skin-gold {
+  cursor: default !important;
+}
+.mixi-skin-gold .mixi-btn, .mixi-skin-gold .mixi-pad {
+  cursor: pointer !important;
+}
+
+
+      .mixi-skin-gold .mixi-btn { font-size: 1.15em !important; font-weight: bold; letter-spacing: 1px; }
+      .mixi-skin-gold label { font-size: 1.1em !important; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Luxury Analog                                  */
+/* Aesthetic: Champagne Gold faceplate, rich mahogany recesses */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-gold-analog {
+  /* CHASSIS METALLICO CHAMPAGNE */
+  --chassis:   #dfd5c7;
+  --topbar:    #e8d8bd;
+  --panel:     #dfd5c7;
+  --recess:    #161210; /* Nero/marroncino profondissimo per i fessurini */
+  --surface:   #e8decf;
+  --border:    rgba(0, 0, 0, 0.1);
+  --noise-opacity: 0.05; /* Spazzolatura tangibile */
+
+  /* DEEP RICH INTERIORS */
+  --srf-deep:   #0f0c0a;
+  --srf-base:   #dfd5c7;
+  --srf-inset:  #161210;
+  --srf-mid:    #2a2420; /* Tasti hardware neri pastosi */
+  --srf-raised: #362f2a;
+  --srf-light:  #494039;
+
+  /* HIGHLIGHTS & BORDERS */
+  --brd-subtle:  #d5c5b0;
+  --brd-default: #beab92;
+  --brd-strong:  #a68c68;
+
+  /* CLASSIC SILKSCREEN TEXT (Nero puro su oro, oro metallico su bottoni oscuri) */
+  --txt-dim:       #8b7762;
+  --txt-muted:     #6b5b4a;
+  --txt-secondary: #4a3e30;
+  --txt-tertiary:  #2f271e;
+  --txt-primary:   #1a1510;
+  --txt-bright:    #0a0805;
+  --txt-white:     #000000;
+
+  /* TUBE AMP LIGHTS */
+  --wave-bg: #161210;
+  --wave-playhead: #ffcc55;
+  --led-off: #2a2420;
+  --status-ok: #ff9900; /* Warm amber bulbs */
+}
+
+/* L'effetto spazzolato orizzontale del faceplate Hi-Fi */
+.mixi-skin-gold-analog::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(0, 0, 0, 0.015) 1px,
+      rgba(0, 0, 0, 0.015) 2px
+    ),
+    linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.0) 0%,
+      rgba(255, 255, 255, 0.2) 35%,
+      rgba(0, 0, 0, 0.05) 60%,
+      rgba(0, 0, 0, 0.2) 100%
+    );
+}
+
+.mixi-skin-gold-analog .mixi-panel {
+  box-shadow: 
+    -2px -2px 5px rgba(255, 255, 255, 0.6),
+    3px 3px 6px rgba(100, 80, 60, 0.3) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-bottom: 1px solid rgba(130, 110, 80, 0.8) !important;
+}
+
+/* Tasti hardware dark espresso che emergono dall'oro */
+.mixi-skin-gold-analog .mixi-btn:not(:active),
+.mixi-skin-gold-analog .mixi-pad:not(:active) {
+  background-color: var(--srf-mid) !important;
+  border: 1px solid #111 !important;
+  color: #dfd5c7 !important; /* Testo in oro sui tasti scuri */
+  box-shadow: 
+    inset 0 1px 1px rgba(255, 255, 255, 0.1),
+    0 4px 6px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 2px; /* Tasti meno rotondi, più vintage */
+}
+
+.mixi-skin-gold-analog .mixi-btn:active,
+.mixi-skin-gold-analog .mixi-pad:active {
+  background-color: #1a1510 !important;
+  color: #ff9900 !important;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.9) !important;
+  transform: translateY(2px);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-gold-analog {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-gold-analog .mixi-btn,
+.mixi-skin-gold-analog .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-gold-analog .mixi-btn:active,
+.mixi-skin-gold-analog .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

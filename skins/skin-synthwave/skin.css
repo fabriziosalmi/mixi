@@ -1,0 +1,147 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   🎩 ADVANCED: THEMATIC IDENTITY (TYPOGRAPHY & GEOMETRY)
+────────────────────────────────────────────────────────────── */
+.mixi-skin-synthwave,
+.mixi-skin-synthwave input,
+.mixi-skin-synthwave button,
+.mixi-skin-synthwave label,
+.mixi-skin-synthwave .mixi-lbl,
+.mixi-skin-synthwave .mixi-value,
+.mixi-skin-synthwave .mixi-btn {
+  font-family: 'Orbitron', sans-serif !important;
+}
+
+body.mixi-skin-synthwave {
+  cursor: crosshair !important;
+}
+.mixi-skin-synthwave .mixi-btn, .mixi-skin-synthwave .mixi-pad {
+  cursor: crosshair !important;
+}
+
+
+      .mixi-skin-synthwave .mixi-btn { font-style: italic; letter-spacing: 1.5px; }
+    
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Outrun Miami                                   */
+/* Aesthetic: 80s Synthwave, Neon Purple & Cyan, Retrowave     */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-synthwave {
+  /* THE DEEP PURPLE OUTRUN NIGHT */
+  --chassis:   #1a0628;
+  --topbar:    #11031c;
+  --panel:     #230b35;
+  --recess:    #0c0214;
+  --surface:   #2e0d42;
+  --border:    rgba(0, 240, 255, 0.2); 
+  --noise-opacity: 0.1;
+
+  /* INNER SURFACES */
+  --srf-deep:   #09010e;
+  --srf-base:   #1a0628;
+  --srf-inset:  #11031c;
+  --srf-mid:    #2a0a38;
+  --srf-raised: #3b1050;
+  --srf-light:  #4f1869;
+
+  /* NEON BORDERS */
+  --brd-subtle:  #40135a;
+  --brd-default: #ff007f; /* Hot Pink */
+  --brd-strong:  #00f0ff; /* Bright Cyan */
+
+  /* RETRO TEXT (Cyan fading to Hot Pink emphasis) */
+  --txt-dim:       #4c3a5e;
+  --txt-muted:     #785994;
+  --txt-secondary: #00aeb8;
+  --txt-tertiary:  #00f0ff; /* Cyan texts */
+  --txt-primary:   #ff88c2; 
+  --txt-bright:    #ff007f; /* Pink titles */
+  --txt-white:     #ffffff;
+
+  /* NEON WAVE */
+  --wave-bg: #09010e;
+  --wave-playhead: #ff007f;
+  --led-off: #200530;
+  --status-ok: #00f0ff;
+}
+
+/* OUTRUN GRID PERSPECTIVE EFFECT */
+.mixi-skin-synthwave::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    /* Glow arancio / tramonto dal basso */
+    radial-gradient(ellipse at 50% 100%, rgba(255, 100, 0, 0.15) 0%, transparent 60%),
+    /* Griglia fucsia orizzontale in prospettiva... rudimentale ma efficace */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 100px,
+      rgba(255, 0, 127, 0.1) 100px,
+      rgba(255, 0, 127, 0.1) 101px
+    ),
+    /* Griglia fucsia verticale */
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 100px,
+      rgba(255, 0, 127, 0.05) 100px,
+      rgba(255, 0, 127, 0.05) 101px
+    );
+}
+
+.mixi-skin-synthwave .mixi-panel {
+  border-top: 2px solid rgba(0, 240, 255, 0.5) !important;
+  border-bottom: 2px solid rgba(255, 0, 127, 0.5) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Rounded, neon 80s buttons */
+.mixi-skin-synthwave .mixi-btn:not(:active),
+.mixi-skin-synthwave .mixi-pad:not(:active) {
+  border: 1px solid rgba(255, 0, 127, 0.4) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, #2a0a38 0%, #1a0628 100%) !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(0, 240, 255, 0.3) !important;
+}
+
+.mixi-skin-synthwave .mixi-btn:active,
+.mixi-skin-synthwave .mixi-pad:active {
+  background: rgba(255, 0, 127, 0.3) !important;
+  border-color: #ff007f !important;
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.5), inset 0 0 10px rgba(255, 0, 127, 0.5) !important;
+  transform: scale(0.96);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-synthwave {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-synthwave .mixi-btn,
+.mixi-skin-synthwave .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-synthwave .mixi-btn:active,
+.mixi-skin-synthwave .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}

@@ -1,0 +1,121 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* Custom Skin: Sci-Fi Hologram                                */
+/* Aesthetic: Iron Man HUD, Cyan wireframes, transparencies    */
+/* ═══════════════════════════════════════════════════════════ */
+
+.mixi-skin-hologram {
+  /* COMPLETE TRANSPARENCY */
+  --chassis:   transparent;
+  --topbar:    rgba(0, 50, 80, 0.4);
+  --panel:     rgba(0, 30, 50, 0.3);
+  --recess:    rgba(0, 10, 20, 0.5);
+  --surface:   rgba(0, 40, 70, 0.2);
+  --border:    rgba(0, 240, 255, 0.4);
+  --noise-opacity: 0;
+
+  /* DEEP SPACE BACKGROUND WITH RADAR GRID */
+  background-color: #00020a !important;
+  background-attachment: fixed !important;
+  
+  /* INNER SURFACES */
+  --srf-deep:   rgba(0, 0, 0, 0.8);
+  --srf-base:   rgba(0, 20, 40, 0.5);
+  --srf-inset:  rgba(0, 10, 20, 0.6);
+  --srf-mid:    rgba(0, 30, 60, 0.4);
+  --srf-raised: rgba(0, 50, 90, 0.5);
+  --srf-light:  rgba(0, 80, 120, 0.6);
+
+  /* GLOWING BORDERS */
+  --brd-subtle:  rgba(0, 240, 255, 0.2);
+  --brd-default: rgba(0, 240, 255, 0.5);
+  --brd-strong:  rgba(0, 240, 255, 0.8);
+
+  /* HOLO TEXT */
+  --txt-dim:       #206080;
+  --txt-muted:     #3080aa;
+  --txt-secondary: #00b0ff;
+  --txt-tertiary:  #00d0ff;
+  --txt-primary:   #00f0ff;
+  --txt-bright:    #80f8ff;
+  --txt-white:     #ffffff;
+
+  /* FX & WAVES */
+  --wave-bg: rgba(0, 10, 20, 0.8);
+  --wave-playhead: #00f0ff;
+  --led-off: rgba(0, 40, 60, 0.5);
+  --status-ok: #00f0ff;
+}
+
+/* ANIMATED RADAR EFFECTS SULLO SFONDO! */
+@keyframes radarSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.mixi-skin-hologram::before {
+  content: '';
+  position: fixed;
+  inset: -50%;
+  z-index: -1; 
+  pointer-events: none;
+  background: 
+    conic-gradient(from 0deg, transparent 70%, rgba(0, 240, 255, 0.1) 100%),
+    repeating-radial-gradient(circle at 50% 50%, transparent, transparent 50px, rgba(0, 240, 255, 0.05) 50px, rgba(0, 240, 255, 0.05) 51px);
+  animation: radarSpin 10s linear infinite;
+  mix-blend-mode: screen;
+}
+
+/* Mettiamo una finta scanline dritta nello sfondo body */
+body.mixi-skin-hologram {
+  background-image: repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.03), transparent 2px, transparent 4px) !important;
+}
+
+/* HUD PANELS */
+.mixi-skin-hologram .mixi-panel {
+  border: 1px solid rgba(0, 240, 255, 0.3) !important;
+  backdrop-filter: blur(5px);
+  box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05);
+  border-radius: 10px;
+}
+
+/* Wireframe buttons */
+.mixi-skin-hologram .mixi-btn:not(:active),
+.mixi-skin-hologram .mixi-pad:not(:active) {
+  border: 1px solid rgba(0, 240, 255, 0.5) !important;
+  background: rgba(0, 240, 255, 0.05) !important;
+  border-radius: 6px !important;
+  box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.1) !important;
+}
+
+/* Pulsing on click */
+.mixi-skin-hologram .mixi-btn:active,
+.mixi-skin-hologram .mixi-pad:active {
+  background: rgba(0, 240, 255, 0.4) !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.8) !important;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   UX/UI ELEVATION OVERRIDES (ENTERPRISE GRADE)
+────────────────────────────────────────────────────────────── */
+/* Hardware Acceleration & Compositor Offloading */
+body.mixi-skin-hologram {
+  transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Standardized Pro-Grade Tactile Feedback */
+.mixi-skin-hologram .mixi-btn,
+.mixi-skin-hologram .mixi-pad {
+  transition: transform 0.06s cubic-bezier(0.2, 0.8, 0.4, 1), box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.4, 1) !important;
+  will-change: transform;
+}
+
+/* Unified Exact Physical Down-click */
+.mixi-skin-hologram .mixi-btn:active,
+.mixi-skin-hologram .mixi-pad:active {
+  transform: translateY(2px) scale(0.97) translateZ(0) !important;
+  filter: brightness(1.2) contrast(1.1);
+}
