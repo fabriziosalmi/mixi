@@ -10,6 +10,7 @@
 import { useMixiStore } from '../store/mixiStore';
 import { useMidiStore } from '../store/midiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
+import { log } from '../utils/logger';
 import type { VoiceId } from '../groovebox/types';
 
 export type MidiMapping = {
@@ -66,12 +67,12 @@ export class MidiManager {
   async init() {
     // Bind the global interceptor for UI components to use
     (window as any).__MIXIMIDILEARN__ = (action: MidiAction) => {
-      console.log('[WebMIDI] UI component clicked for learn:', action);
+      log.debug('MIDI', `UI learn requested: ${action.type}`);
       useMidiStore.getState().setLearningAction(action);
     };
 
     if (!navigator.requestMIDIAccess) {
-      console.warn('[WebMIDI] API not supported');
+      log.warn('MIDI', 'WebMIDI API not supported in this browser');
       return;
     }
     try {
@@ -87,16 +88,16 @@ export class MidiManager {
         this.midiAccess.onstatechange = (e: MIDIConnectionEvent) => {
           const port = e?.port;
           if (!port) return;
-          console.log('[WebMIDI] State change:', port.name, port.state);
+          log.debug('MIDI', `State change: ${port.name} → ${port.state}`);
           if (port.type === 'input' && port.state === 'connected') {
             this.attachListener(port as MIDIInput);
           }
           this.notifyStatus();
         };
-        console.log('[WebMIDI] Initialized successfully');
+        log.info('MIDI', 'Initialized successfully');
       }
     } catch (err) {
-      console.error('[WebMIDI] Access denied or failed', err);
+      log.error('MIDI', `Access denied or failed: ${err}`);
     }
   }
 
@@ -198,7 +199,8 @@ export class MidiManager {
       }
       case 'DECK_PITCH': {
         if (action.deck) {
-          const pitchRange = 0.08;
+          // TODO(v0.1.2): Use settings.pitchRange when PitchRange selector is added to Settings
+          const pitchRange = 0.08; // ±8% default (matches PitchStrip.RANGE_8)
           const rate = (1 + pitchRange) - (norm * (pitchRange * 2));
           store.setDeckPlaybackRate(action.deck, rate);
         }

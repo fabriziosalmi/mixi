@@ -40,6 +40,7 @@ import { analyzeWaveform } from './WaveformAnalyzer';
 import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
+import { log } from '../utils/logger';
 
 // ── Per-deck transport state (not exposed to store) ──────────
 
@@ -163,7 +164,9 @@ export class MixiEngine {
     // Boot SampleManager
     const sm = SampleManager.getInstance();
     sm.setContext(this.ctx);
-    sm.boot(); // Fire and forget so we don't block the rest of engine boot
+    sm.boot().catch((err: unknown) => {
+      log.warn('Engine', `SampleManager boot failed (non-fatal): ${err}`);
+    });
 
     // Edge-case #21: Resume AudioContext when tab regains focus.
     this._visHandler = () => {

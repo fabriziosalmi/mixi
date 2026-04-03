@@ -34,6 +34,7 @@
 const BASE = 'font-weight:bold; padding:2px 6px; border-radius:3px;';
 
 const STYLES = {
+  debug:   `${BASE} background:#27272a; color:#71717a;`,  // zinc-600 / dim
   info:    `${BASE} background:#003d42; color:#00f0ff;`,  // cyan / engine
   success: `${BASE} background:#14532d; color:#4ade80;`,  // green
   warn:    `${BASE} background:#441400; color:#ff6a00;`,  // orange
@@ -72,7 +73,16 @@ function emit(
 
 export const log = {
   /**
-   * General info – engine lifecycle, state changes.
+   * Verbose debug output — ONLY emitted in development mode.
+   * No-op in production builds (zero I/O overhead).
+   * Shows as dim zinc badge.
+   */
+  debug(tag: string, message: string, ...data: unknown[]): void {
+    if (import.meta.env.DEV) emit('debug', tag, message, ...data);
+  },
+
+  /**
+   * General info — engine lifecycle, state changes.
    * Shows as cyan badge in the console.
    */
   info(tag: string, message: string, ...data: unknown[]): void {
@@ -80,7 +90,7 @@ export const log = {
   },
 
   /**
-   * Operation completed successfully – track loaded, stream ready.
+   * Operation completed successfully — track loaded, stream ready.
    * Shows as green badge.
    */
   success(tag: string, message: string, ...data: unknown[]): void {
@@ -88,7 +98,7 @@ export const log = {
   },
 
   /**
-   * Non-fatal issue – fallback triggered, deprecated usage.
+   * Non-fatal issue — fallback triggered, deprecated usage.
    * Shows as orange badge.
    */
   warn(tag: string, message: string, ...data: unknown[]): void {
@@ -96,7 +106,7 @@ export const log = {
   },
 
   /**
-   * Something broke – decode failure, network error, engine crash.
+   * Something broke — decode failure, network error, engine crash.
    * Shows as red badge with full stack trace.
    */
   error(tag: string, message: string, ...data: unknown[]): void {
