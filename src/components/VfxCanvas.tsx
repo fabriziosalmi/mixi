@@ -167,7 +167,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         ctx.save();
         ctx.globalAlpha = 0.6 + beat * 0.3;
         ctx.strokeStyle = deckColor;
-        ctx.lineWidth = 1.5 + beat * 1.5;
+        ctx.lineWidth = 2.5 + beat * 1.5;
         ctx.shadowColor = deckColor;
         ctx.shadowBlur = 6 + beat * 10;
         ctx.beginPath();
