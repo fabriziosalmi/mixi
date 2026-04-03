@@ -94,7 +94,6 @@ const App: FC = () => {
       } catch (e) {
         console.warn('[Mixi] Demo track load failed:', e);
       }
-      settings.setLoadDemoTrack(false);
     }
   }, [initEngine]);
 

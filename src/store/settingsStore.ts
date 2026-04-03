@@ -126,11 +126,17 @@ export const useSettingsStore = create<SettingsStore>()(
         skin: s.skin,
         customSkins: s.customSkins,
         showDebugPanel: s.showDebugPanel,
-        loadDemoTrack: s.loadDemoTrack,
         fpsLimit: s.fpsLimit,
         bpmRange: s.bpmRange,
         quantizeResolution: s.quantizeResolution,
       }),
+      merge: (persisted, current) => {
+        const p = persisted as Record<string, unknown> | undefined;
+        if (!p) return current;
+        // Strip stale loadDemoTrack — it should always default to true
+        const { loadDemoTrack: _, ...clean } = p;
+        return { ...current, ...clean };
+      },
     },
   ),
 );
