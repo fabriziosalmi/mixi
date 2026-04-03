@@ -155,7 +155,7 @@ src/
 
 | Layer | Technology |
 |-------|-----------|
-| UI | React 19, TypeScript (strict), Tailwind CSS |
+| UI | React 19, TypeScript (strict), vanilla CSS + CSS custom properties |
 | State | Zustand 5 with transient selectors |
 | Audio | Web Audio API — hand-wired graph, no wrappers |
 | Bundler | Vite |
@@ -179,6 +179,9 @@ src/
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
+| `npm test` | Run unit tests (Vitest) |
+| `npm run test:watch` | Watch mode for tests |
+| `npm run test:coverage` | Test coverage report |
 
 ---
 

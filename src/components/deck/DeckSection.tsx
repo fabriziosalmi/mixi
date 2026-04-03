@@ -142,11 +142,11 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
       {/* ── Content ───────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col px-3 pb-3 min-h-0 relative">
         {!isTrackLoaded && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md rounded-xl m-3 pointer-events-auto p-6">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-xl m-3 pointer-events-auto p-6">
             <TrackLoader deckId={deckId} color={color} onSwitchToGroovebox={() => setDeckMode(deckId, 'groovebox')} />
           </div>
         )}
-        <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-40 blur-[4px] scale-[0.98]' : 'opacity-100 blur-0 scale-100'}`}>
+        <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-60 blur-[2px]' : 'opacity-100 blur-0'}`}>
           {/* Waveform */}
           <div className="shrink-0 flex flex-col gap-1.5">
             <WaveformDisplay deckId={deckId} height={70} />

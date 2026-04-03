@@ -25,14 +25,17 @@ import {
   type BpmRangePreset,
   type QuantizeResolution,
 } from '../../store/settingsStore';
+import { useMidiStore } from '../../store/midiStore';
+import { AKAI_MIDI_MIX_PRESET } from '../../midi/presets/akaiMidiMix';
 
 // ── Tabs ─────────────────────────────────────────────────────
 
-type TabId = 'mixer' | 'audio' | 'perf' | 'system' | 'credits';
+type TabId = 'mixer' | 'audio' | 'midi' | 'perf' | 'system' | 'credits';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'mixer', label: 'Mixer' },
   { id: 'audio', label: 'Audio' },
+  { id: 'midi', label: 'MIDI' },
   { id: 'perf', label: 'Perf' },
   { id: 'system', label: 'System' },
   { id: 'credits', label: 'Credits' },
@@ -93,6 +96,7 @@ export const SettingsModal: FC = () => {
         <div className="p-5 space-y-3 min-h-[220px]">
           {tab === 'mixer' && <MixerTab />}
           {tab === 'audio' && <AudioTab />}
+          {tab === 'midi' && <MidiTab />}
           {tab === 'perf' && <PerfTab />}
           {tab === 'system' && <SystemTab />}
           {tab === 'credits' && <CreditsTab />}
@@ -100,7 +104,7 @@ export const SettingsModal: FC = () => {
 
         {/* Version */}
         <div className="text-center pb-3">
-          <span className="text-[9px] text-zinc-500">Mixi v0.1.0</span>
+          <span className="text-[9px] text-zinc-500">Mixi v{__APP_VERSION__}</span>
         </div>
       </div>
     </div>
@@ -170,6 +174,81 @@ const AudioTab: FC = () => {
       <SettingRow label="Demo Track" description="Load demo track on Deck A at startup">
         <ToggleSwitch checked={loadDemoTrack} onChange={() => setLoadDemoTrack(!loadDemoTrack)} />
       </SettingRow>
+    </>
+  );
+};
+
+// ── Tab: MIDI ───────────────────────────────────────────────
+
+const MIDI_PRESETS = [
+  { id: 'manual', label: 'Manual (MIDI Learn)' },
+  { id: 'akai-midimix', label: 'Akai MIDI Mix' },
+] as const;
+
+const MidiTab: FC = () => {
+  const mappings = useMidiStore((s) => s.mappings);
+  const activePreset = useMidiStore((s) => s.activePreset);
+  const loadPreset = useMidiStore((s) => s.loadPreset);
+  const clearMappings = useMidiStore((s) => s.clearMappings);
+
+  const handlePreset = (presetId: string) => {
+    if (presetId === 'akai-midimix') {
+      loadPreset('Akai MIDI Mix', AKAI_MIDI_MIX_PRESET);
+    } else {
+      clearMappings();
+    }
+  };
+
+  return (
+    <>
+      <SettingRow label="Controller Preset" description="Load a factory mapping for your controller">
+        <select
+          value={activePreset === 'Akai MIDI Mix' ? 'akai-midimix' : 'manual'}
+          onChange={(e) => handlePreset(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-300 font-mono"
+        >
+          {MIDI_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+      </SettingRow>
+
+      <Divider />
+
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            Mappings ({mappings.length})
+          </span>
+          {mappings.length > 0 && (
+            <button
+              type="button"
+              onClick={clearMappings}
+              className="text-[9px] text-red-400 hover:text-red-300 font-mono uppercase"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
+        {mappings.length === 0 ? (
+          <div className="text-[10px] text-zinc-600 py-2">
+            No mappings. Use MIDI Learn or load a preset.
+          </div>
+        ) : (
+          <div className="max-h-[120px] overflow-auto space-y-0.5">
+            {mappings.map((m, i) => (
+              <div key={i} className="flex justify-between text-[9px] font-mono py-0.5 border-b border-zinc-800/30">
+                <span className="text-zinc-400">
+                  {m.action.type}{'deck' in m.action ? ` ${(m.action as any).deck}` : ''}
+                </span>
+                <span className="text-zinc-600">
+                  {m.type.toUpperCase()} Ch{m.channel + 1} #{m.control}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
 };

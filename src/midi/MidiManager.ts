@@ -22,6 +22,9 @@ export type MidiMapping = {
 
 export type MidiAction = 
   | { type: 'CROSSFADER' }
+  | { type: 'MASTER_VOL' }
+  | { type: 'HEADPHONE_MIX' }
+  | { type: 'HEADPHONE_LEVEL' }
   | { type: 'DECK_GAIN'; deck: 'A' | 'B' }
   | { type: 'DECK_VOL'; deck: 'A' | 'B' }
   | { type: 'DECK_EQ_HIGH'; deck: 'A' | 'B' }
@@ -161,6 +164,15 @@ export class MidiManager {
       case 'CROSSFADER':
         store.setCrossfader(norm);
         break;
+      case 'MASTER_VOL':
+        store.setMasterVolume(norm);
+        break;
+      case 'HEADPHONE_MIX':
+        store.setHeadphoneMix(norm);
+        break;
+      case 'HEADPHONE_LEVEL':
+        store.setHeadphoneLevel(norm);
+        break;
       case 'DECK_VOL':
         if (action.deck) store.setDeckVolume(action.deck, norm);
         break;
@@ -186,9 +198,6 @@ export class MidiManager {
       }
       case 'DECK_PITCH': {
         if (action.deck) {
-          // Assume standard 8% range mapping for now.
-          // Some controllers might send inverted (where 127 = slowest).
-          // Let's go 0 = up (+8%), 127 = down (-8%). This resembles Pioneer.
           const pitchRange = 0.08;
           const rate = (1 + pitchRange) - (norm * (pitchRange * 2));
           store.setDeckPlaybackRate(action.deck, rate);

@@ -37,9 +37,9 @@ interface MyCustomDeckProps {
 
 export const MyCustomDeck: FC<MyCustomDeckProps> = ({ deckId }) => {
   // Hook into the global engine state!
-  const isPlaying = useMixiStore((state) => state.decks[deckId].playing);
-  const togglePlay = useMixiStore((state) => state.togglePlay);
-  const rate = useMixiStore((state) => state.decks[deckId].rate);
+  const isPlaying = useMixiStore((state) => state.decks[deckId].isPlaying);
+  const setDeckPlaying = useMixiStore((state) => state.setDeckPlaying);
+  const playbackRate = useMixiStore((state) => state.decks[deckId].playbackRate);
 
   return (
     <div className="w-full h-full bg-[var(--srf-mid)] p-4 rounded border border-[var(--brd-default)]">
@@ -48,13 +48,13 @@ export const MyCustomDeck: FC<MyCustomDeckProps> = ({ deckId }) => {
       </h3>
       
       <button 
-        onClick={() => togglePlay(deckId)}
+        onClick={() => setDeckPlaying(deckId, !isPlaying)}
         className="px-4 py-2 mt-4 bg-white text-black"
       >
         {isPlaying ? 'PAUSE' : 'PLAY'}
       </button>
 
-      <div>Tempo Multiplier: {rate.toFixed(2)}x</div>
+      <div>Tempo Multiplier: {playbackRate.toFixed(2)}x</div>
     </div>
   );
 };

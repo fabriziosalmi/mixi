@@ -90,15 +90,12 @@ const App: FC = () => {
         const buf = await res.arrayBuffer();
         await engine.loadTrack('A', buf);
         useMixiStore.getState().setDeckTrackName('A', 'Welcome to MIXI ^_^');
+        useMixiStore.getState().setDeckTrackLoaded('A', true);
       } catch (e) {
         console.warn('[Mixi] Demo track load failed:', e);
       }
       settings.setLoadDemoTrack(false);
     }
-
-    // Force both decks to "loaded" status so the UI is fully visible at startup
-    useMixiStore.getState().setDeckTrackLoaded('A', true);
-    useMixiStore.getState().setDeckTrackLoaded('B', true);
   }, [initEngine]);
 
   // ── Block browser default file-open on drag/drop ────────
