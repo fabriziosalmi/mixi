@@ -81,21 +81,24 @@ const App: FC = () => {
     // Init Web MIDI
     MidiManager.getInstance();
 
-    // Load demo track on Deck A if enabled
     const settings = useSettingsStore.getState();
+    const engine = MixiEngine.getInstance();
+    
     if (settings.loadDemoTrack) {
       try {
         const res = await fetch(new URL('../assets/v0.1.0.mp3', import.meta.url).href);
         const buf = await res.arrayBuffer();
-        const engine = MixiEngine.getInstance();
         await engine.loadTrack('A', buf);
         useMixiStore.getState().setDeckTrackName('A', 'Welcome to MIXI ^_^');
-        useMixiStore.getState().setDeckTrackLoaded('A', true);
       } catch (e) {
         console.warn('[Mixi] Demo track load failed:', e);
       }
       settings.setLoadDemoTrack(false);
     }
+
+    // Force both decks to "loaded" status so the UI is fully visible at startup
+    useMixiStore.getState().setDeckTrackLoaded('A', true);
+    useMixiStore.getState().setDeckTrackLoaded('B', true);
   }, [initEngine]);
 
   // ── Block browser default file-open on drag/drop ────────
