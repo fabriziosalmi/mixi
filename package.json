@@ -1,6 +1,13 @@
 {
   "name": "mixi",
   "version": "0.1.0",
+  "author": "Fabrizio Salmi <fabrizio.salmi@gmail.com>",
+  "description": "Deterministic Audio Workstation",
+  "homepage": "https://github.com/fabriziosalmi/mixi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fabriziosalmi/mixi.git"
+  },
   "private": true,
   "type": "module",
   "main": "electron/dist/main.cjs",
@@ -52,6 +59,7 @@
   "build": {
     "appId": "com.mixi.dj",
     "productName": "Mixi",
+    "copyright": "Copyright © 2026 Fabrizio Salmi",
     "directories": {
       "output": "release"
     },
