@@ -23,6 +23,7 @@ pub mod key;
 pub mod automix;
 pub mod drop_detect;
 pub mod metadata;
+pub mod ring_buffer;
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports

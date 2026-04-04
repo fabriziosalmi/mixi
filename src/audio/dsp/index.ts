@@ -19,3 +19,7 @@ export { DECK, DECK_A_BASE, DECK_B_BASE, MASTER, GLOBAL, PARAM_BUS_SIZE, deckPar
 // Native processors (WebAudio adapters)
 export { NativeDeckProcessor } from './NativeDeckProcessor';
 export { NativeMasterProcessor } from './NativeMasterProcessor';
+
+// Shared buffer bridge (Worklet communication)
+export { createDspBuffers, sendBuffersToWorklet, isSharedBufferSupported, MeteringReader } from './SharedBufferBridge';
+export type { DspSharedBuffers } from './SharedBufferBridge';
