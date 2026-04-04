@@ -27,8 +27,6 @@ import { logFrequency } from '../utils/mathUtils';
 import { DeckFx, type FxId } from './DeckFx';
 
 const EQ_LOW_FREQ = 250;
-const EQ_MID_FREQ = 1_000;
-const EQ_MID_Q = 1;
 const EQ_HIGH_FREQ = 4_000;
 const COLOR_OFF_FREQ = 20_000;
 
@@ -37,9 +35,24 @@ export class DeckChannel {
 
   // ── Audio Nodes ────────────────────────────────────────────
   readonly trimGain: GainNode;
-  readonly eqHigh: BiquadFilterNode;
-  readonly eqMid: BiquadFilterNode;
-  readonly eqLow: BiquadFilterNode;
+
+  // 3-band isolator EQ (parallel split, not series)
+  //
+  //   Trim → ┬─ LP (250Hz)     → lowGain  ──┐
+  //          ├─ BP (250-4kHz)  → midGain  ──┤→ eqMerge → ColorFX
+  //          └─ HP (4kHz)      → highGain ──┘
+  //
+  // Kill on any band = gain 0 → complete silence on that band only.
+  // Other bands are completely unaffected (parallel, not series).
+  private readonly eqLP: BiquadFilterNode;     // lowpass @ 250Hz
+  private readonly eqBPLow: BiquadFilterNode;  // highpass @ 250Hz (mid band lower edge)
+  private readonly eqBPHigh: BiquadFilterNode;  // lowpass @ 4kHz (mid band upper edge)
+  private readonly eqHP: BiquadFilterNode;     // highpass @ 4kHz
+  readonly eqLow: GainNode;
+  readonly eqMid: GainNode;
+  readonly eqHigh: GainNode;
+  private readonly eqMerge: GainNode;
+
   readonly colorFilter: BiquadFilterNode;
   readonly fx: DeckFx;
   readonly faderGain: GainNode;
@@ -81,21 +94,42 @@ export class DeckChannel {
     this.trimGain = ctx.createGain();
     this.trimGain.gain.value = 1;
 
-    this.eqHigh = ctx.createBiquadFilter();
-    this.eqHigh.type = 'highshelf';
-    this.eqHigh.frequency.value = EQ_HIGH_FREQ;
-    this.eqHigh.gain.value = 0;
+    // ── 3-band isolator (parallel crossover) ─────────────────
+    // Low band: LP @ 250Hz → lowGain
+    this.eqLP = ctx.createBiquadFilter();
+    this.eqLP.type = 'lowpass';
+    this.eqLP.frequency.value = EQ_LOW_FREQ;
+    this.eqLP.Q.value = 0.707; // Butterworth
 
-    this.eqMid = ctx.createBiquadFilter();
-    this.eqMid.type = 'peaking';
-    this.eqMid.frequency.value = EQ_MID_FREQ;
-    this.eqMid.Q.value = EQ_MID_Q;
-    this.eqMid.gain.value = 0;
+    this.eqLow = ctx.createGain();
+    this.eqLow.gain.value = 1;
 
-    this.eqLow = ctx.createBiquadFilter();
-    this.eqLow.type = 'lowshelf';
-    this.eqLow.frequency.value = EQ_LOW_FREQ;
-    this.eqLow.gain.value = 0;
+    // Mid band: HP @ 250Hz → LP @ 4kHz → midGain (bandpass)
+    this.eqBPLow = ctx.createBiquadFilter();
+    this.eqBPLow.type = 'highpass';
+    this.eqBPLow.frequency.value = EQ_LOW_FREQ;
+    this.eqBPLow.Q.value = 0.707;
+
+    this.eqBPHigh = ctx.createBiquadFilter();
+    this.eqBPHigh.type = 'lowpass';
+    this.eqBPHigh.frequency.value = EQ_HIGH_FREQ;
+    this.eqBPHigh.Q.value = 0.707;
+
+    this.eqMid = ctx.createGain();
+    this.eqMid.gain.value = 1;
+
+    // High band: HP @ 4kHz → highGain
+    this.eqHP = ctx.createBiquadFilter();
+    this.eqHP.type = 'highpass';
+    this.eqHP.frequency.value = EQ_HIGH_FREQ;
+    this.eqHP.Q.value = 0.707;
+
+    this.eqHigh = ctx.createGain();
+    this.eqHigh.gain.value = 1;
+
+    // Merge point
+    this.eqMerge = ctx.createGain();
+    this.eqMerge.gain.value = 1;
 
     this.colorFilter = ctx.createBiquadFilter();
     this.colorFilter.type = 'lowpass';
@@ -121,16 +155,30 @@ export class DeckChannel {
 
     // ── Wire the chain ───────────────────────────────────────
     //
-    // Source → Trim → HiShelf → MidPeak → LoShelf → ColorFX
-    //   ColorFX splits to:
-    //     1. Fader → Xfader  (Master path)
-    //     2. CueGain          (Headphone PFL path)
+    // 3-band parallel isolator EQ:
+    //   Trim → LP(250) → lowGain  → merge
+    //   Trim → HP(250) → LP(4k) → midGain → merge
+    //   Trim → HP(4k) → highGain → merge
+    //   merge → ColorFX → FX → Fader → Analyser → Xfader
 
-    this.trimGain
-      .connect(this.eqHigh)
-      .connect(this.eqMid)
-      .connect(this.eqLow)
-      .connect(this.colorFilter);
+    // Low band
+    this.trimGain.connect(this.eqLP);
+    this.eqLP.connect(this.eqLow);
+    this.eqLow.connect(this.eqMerge);
+
+    // Mid band (HP + LP in series = bandpass)
+    this.trimGain.connect(this.eqBPLow);
+    this.eqBPLow.connect(this.eqBPHigh);
+    this.eqBPHigh.connect(this.eqMid);
+    this.eqMid.connect(this.eqMerge);
+
+    // High band
+    this.trimGain.connect(this.eqHP);
+    this.eqHP.connect(this.eqHigh);
+    this.eqHigh.connect(this.eqMerge);
+
+    // Post-EQ chain
+    this.eqMerge.connect(this.colorFilter);
 
     // Master path: ColorFX → FX Chain → Fader → Analyser → Xfader
     this.colorFilter.connect(this.fx.input);
@@ -147,9 +195,12 @@ export class DeckChannel {
   setEq(band: 'low' | 'mid' | 'high', db: number, ctx: AudioContext, rangeMin?: number): void {
     const node =
       band === 'low' ? this.eqLow : band === 'mid' ? this.eqMid : this.eqHigh;
-    // When at the absolute minimum of the range, kill the band (-inf)
-    const effectiveDb = (rangeMin !== undefined && db <= rangeMin) ? -96 : db;
-    smoothParam(node.gain, effectiveDb, ctx);
+    const isKill = rangeMin !== undefined && db <= rangeMin;
+
+    // Parallel isolator EQ: gain nodes are linear (0..N), not dB.
+    // Convert dB → linear. Kill = 0 (complete silence on this band only).
+    const linear = isKill ? 0 : Math.pow(10, db / 20);
+    smoothParam(node.gain, linear, ctx);
   }
 
   setVolume(value: number, ctx: AudioContext): void {

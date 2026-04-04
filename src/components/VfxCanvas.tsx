@@ -306,7 +306,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       crossfader: audio.crossfader,
       colorFilter: audio.colorFilter,
       ringWritePos: frameRef.current % 64,
-      feedbackAmount: 0.7,   // #14: default feedback strength
+      feedbackAmount: 0.85,  // #14: aggressive feedback trails
       deckAColor: deckAColorRef.current,
       deckBColor: deckBColorRef.current,
       fftBins: audio.fftBins || new Uint8Array(128),
