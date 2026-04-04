@@ -1,5 +1,15 @@
-# Build stage for React frontend
+# Build stage for React frontend + Rust/Wasm
 FROM node:22-alpine AS frontend-builder
+
+# Install Rust toolchain + wasm-pack for mixi-core Wasm compilation
+RUN apk add --no-cache curl gcc musl-dev && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && \
+    source $HOME/.cargo/env && \
+    rustup target add wasm32-unknown-unknown && \
+    cargo install wasm-pack
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
