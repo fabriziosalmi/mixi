@@ -18,6 +18,8 @@ use wasm_bindgen::prelude::*;
 
 // ── Phase 2: DSP Analysis modules ──────────────────────────
 pub mod waveform;
+pub mod bpm;
+pub mod key;
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports

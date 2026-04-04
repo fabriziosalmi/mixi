@@ -40,6 +40,11 @@
 // ─────────────────────────────────────────────────────────────
 
 import { log } from '../utils/logger';
+import { isWasmReady } from '../wasm/wasmBridge';
+
+// Wasm module — imported dynamically
+let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
+import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -398,6 +403,36 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
   const bpmMax = opts?.bpmMax ?? DEFAULT_BPM_MAX;
   const t0 = performance.now();
   const { sampleRate } = lowBandBuffer;
+
+  // ── Rust fast path ──────────────────────────────────────
+  if (isWasmReady() && wasmModule) {
+    const ch0 = lowBandBuffer.getChannelData(0);
+    const numCh = lowBandBuffer.numberOfChannels;
+    const spc = lowBandBuffer.length;
+    let flat: Float32Array;
+    if (numCh === 1) {
+      flat = ch0;
+    } else {
+      flat = new Float32Array(spc * numCh);
+      for (let ch = 0; ch < numCh; ch++) {
+        flat.set(lowBandBuffer.getChannelData(ch), ch * spc);
+      }
+    }
+    const result = wasmModule.detect_bpm(flat, numCh, spc, sampleRate, bpmMin, bpmMax);
+    const bpm = result[0];
+    const firstBeatOffset = result[1];
+    const confidence = result[2];
+
+    const elapsed = (performance.now() - t0).toFixed(0);
+    log.success(
+      'BPM',
+      `[Rust] Detected ${bpm} BPM (confidence ${(confidence * 100).toFixed(0)}%) ` +
+      `— grid offset ${firstBeatOffset.toFixed(3)}s — ${elapsed} ms`,
+    );
+    return { bpm, firstBeatOffset, confidence };
+  }
+
+  // ── JS fallback ─────────────────────────────────────────
 
   // Mix to mono
   const ch0 = lowBandBuffer.getChannelData(0);

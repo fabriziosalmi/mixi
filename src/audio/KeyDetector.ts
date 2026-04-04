@@ -48,6 +48,11 @@
 // ─────────────────────────────────────────────────────────────
 
 import { log } from '../utils/logger';
+import { isWasmReady } from '../wasm/wasmBridge';
+
+// Wasm module — imported dynamically
+let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
+import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -197,6 +202,33 @@ const CAMELOT_MAJOR: Record<number, string> = {
 export function detectKey(buffer: AudioBuffer): KeyResult {
   const t0 = performance.now();
   const { sampleRate } = buffer;
+
+  // ── Rust fast path ──────────────────────────────────────
+  if (isWasmReady() && wasmModule) {
+    const numCh = buffer.numberOfChannels;
+    const spc = buffer.length;
+    let flat: Float32Array;
+    if (numCh === 1) {
+      flat = buffer.getChannelData(0);
+    } else {
+      flat = new Float32Array(spc * numCh);
+      for (let ch = 0; ch < numCh; ch++) {
+        flat.set(buffer.getChannelData(ch), ch * spc);
+      }
+    }
+    const resultStr = wasmModule.detect_key(flat, numCh, spc, sampleRate);
+    const [camelot, name, confStr] = resultStr.split('|');
+    const confidence = parseFloat(confStr) || 0;
+
+    const elapsed = (performance.now() - t0).toFixed(0);
+    log.success(
+      'KeyDetector',
+      `[Rust] Detected key: ${name} (${camelot}) — confidence ${(confidence * 100).toFixed(0)}% — ${elapsed} ms`,
+    );
+    return { camelot, name, confidence };
+  }
+
+  // ── JS fallback ─────────────────────────────────────────
 
   // ── Mix to mono ────────────────────────────────────────────
   const ch0 = buffer.getChannelData(0);
