@@ -1,555 +1,590 @@
-# MIXI Sync Protocol — Engineering Specification
+# MIXI Sync Protocol
 
-> Status: **DRAFT v2** — Hardened with 30 engineering directives.
-> This document defines the MIXI-to-MIXI (and MIXI-to-external) sync protocol.
-
-## Problem
-
-DJs and live performers need multiple MIXI instances (or MIXI + external gear) locked to the same tempo, phase, and bar position. Existing solutions:
-
-| Solution | Limitation |
-|----------|-----------|
-| MIDI Clock (24 ppqn) | BPM only, no phase/bar, no state, USB latency, no discovery |
-| Ableton Link | C++ library, complex integration, no deck state, no cue sync |
-| Pioneer Pro DJ Link | Proprietary, needs bridge software, CDJ-only ecosystem |
-
-MIXI Sync solves this with a **Rust-native protocol** that works at two levels:
-- **Local** (same machine): shared memory — zero copy, zero latency
-- **Remote** (LAN): UDP unicast — sub-millisecond, auto-discovery
+**A Low-Latency Dual-Transport Synchronization Protocol for Distributed Audio Workstations**
 
 ---
 
-## Architecture
-
-```
-┌─────────────────┐         ┌─────────────────┐
-│   MIXI Instance A│         │   MIXI Instance B│
-│                  │         │                  │
-│  MixiEngine ─────┤         ├───── MixiEngine  │
-│       │          │         │          │       │
-│  SyncPublisher   │         │   SyncSubscriber  │
-│       │          │         │          │       │
-│       ▼          │         │          ▼       │
-│  ┌──────────┐    │         │    ┌──────────┐  │
-│  │ Local:   │    │         │    │ Local:   │  │
-│  │ SHM ring │◄───┼─────────┼───►│ SHM ring │  │
-│  └──────────┘    │         │    └──────────┘  │
-│  ┌──────────┐    │  LAN    │    ┌──────────┐  │
-│  │ Remote:  │    │         │    │ Remote:  │  │
-│  │ UDP :4303│◄───┼─────────┼───►│ UDP :4303│  │
-│  └──────────┘    │         │    └──────────┘  │
-└─────────────────┘         └─────────────────┘
-```
-
-**Dynamic Dictatorship**: one Master, zero consensus. If Master dies, the playing Slave auto-promotes in <20ms.
+|   |   |
+|---|---|
+| **Document** | MIXI Sync Protocol Specification |
+| **Version** | 1.0-draft |
+| **Date** | 2026-04-05 |
+| **Authors** | Fabrizio Salmi |
+| **Status** | Pre-implementation draft |
+| **License** | PolyForm Noncommercial 1.0.0 |
+| **Repository** | github.com/fabriziosalmi/mixi |
 
 ---
 
-## Transport Layer
+## Abstract
 
-### Local: Shared Memory (same machine)
-
-- **Discovery file**: `/tmp/mixi-sync-discovery` (fixed, well-known name)
-  - Contains a routing table: `[InstanceA: /tmp/mixi-sync-A, InstanceB: /tmp/mixi-sync-B]`
-  - New instances read the discovery file, find others, connect to their ring buffers
-  - No collisions, no localhost UDP needed (#2)
-- **Implementation**: Rust `memmap2` crate via N-API addon
-- **Layout**: Fixed-size ring buffer with atomic read/write heads
-- **Latency**: ~0µs (direct memory access, no syscall)
-- **Fallback**: If shared memory unavailable (browser-only), fall back to UDP localhost
-
-### Remote: UDP (LAN)
-
-- **Port**: `4303` (UDP, `MIXI` in T9)
-- **Discovery**: UDP **broadcast** to `255.255.255.255:4303` every 1 second (ANNOUNCE only)
-- **Heartbeat**: UDP **unicast** to discovered peer IPs every 20ms (#7 — no broadcast storms)
-- **Latency**: <1ms on Ethernet, <5ms on WiFi
-- **Network binding**: Socket explicitly bound to primary interface (or user-selected in Settings) (#8)
+This document specifies **MIXI Sync**, a binary synchronization protocol designed for real-time tempo, phase, and state coordination between multiple instances of the MIXI audio workstation and external audiovisual equipment. The protocol operates over two transport layers — shared memory (intra-machine, ~0 µs latency) and UDP unicast (inter-machine, <1 ms LAN latency) — and defines a 64-byte fixed-size packet carrying BPM, beat phase, onset triggers, deck state, and clock synchronization data at 50 Hz. A PI-controller phase lock algorithm with hysteresis achieves sub-2 ms beat alignment without audible pitch artifacts. The protocol requires no central server, uses UDP broadcast for peer discovery, and elects a tempo master via a deterministic Dynamic Dictatorship model.
 
 ---
 
-## Packet Format (v1)
+## Table of Contents
 
-All values little-endian (`.to_le_bytes()` / `from_le_bytes()` always — #10).
-Every packet is exactly **64 bytes** (one cache line, one UDP datagram).
+1. [Introduction](#1-introduction)
+2. [Design Goals](#2-design-goals)
+3. [Related Work](#3-related-work)
+4. [System Architecture](#4-system-architecture)
+5. [Transport Layers](#5-transport-layers)
+6. [Packet Format](#6-packet-format)
+7. [Clock Synchronization](#7-clock-synchronization)
+8. [Phase Lock Algorithm](#8-phase-lock-algorithm)
+9. [Master Election](#9-master-election)
+10. [Network Resilience](#10-network-resilience)
+11. [Visual Synchronization](#11-visual-synchronization)
+12. [Web Platform Fallbacks](#12-web-platform-fallbacks)
+13. [Security](#13-security)
+14. [User Interface Integration](#14-user-interface-integration)
+15. [Validation and Testing](#15-validation-and-testing)
+16. [Comparison with Existing Protocols](#16-comparison-with-existing-protocols)
+17. [Implementation Roadmap](#17-implementation-roadmap)
+18. [References](#18-references)
+
+---
+
+## 1. Introduction
+
+### 1.1 Problem Statement
+
+Professional DJ performance and live electronic music production increasingly require synchronization across multiple software instances and hardware devices. A DJ may run two MIXI instances (one per laptop), a drum machine, and a VJ visual system — all locked to the same tempo, beat phase, and bar position.
+
+Existing synchronization standards suffer from significant limitations:
+
+- **MIDI Clock** (MIDI 1.0, 1983) transmits 24 pulses per quarter note with no phase, bar, or state information. It requires physical cabling and offers no peer discovery.
+- **Ableton Link** (Ableton, 2016) provides BPM and beat phase sync over IP but carries no deck state, cue points, or visual trigger data. Its consensus-based tempo model introduces complexity unsuited to DJ workflows where one deck is definitively "the master."
+- **Pioneer Pro DJ Link** (AlphaTheta, 2009) is a proprietary protocol embedded in CDJ hardware, requiring reverse-engineering efforts for interoperability and offering no web platform support.
+
+### 1.2 Contribution
+
+MIXI Sync addresses these limitations with a protocol that:
+
+1. Carries **tempo, phase, bar position, deck state, onset triggers, and crossfader position** in a single 64-byte packet
+2. Operates over **shared memory** (zero-copy, zero-latency) and **UDP** (<1 ms LAN)
+3. Provides **automatic peer discovery** via UDP broadcast
+4. Implements **deterministic master election** without distributed consensus
+5. Includes **onset trigger bits** (kick, snare, hi-hat) for direct VJ integration
+6. Supports **web browsers** via BroadcastChannel and WebRTC DataChannel fallbacks
+7. Offers **optional HMAC-SHA256 signing** for hostile network environments
+
+---
+
+## 2. Design Goals
+
+| ID | Goal | Constraint |
+|----|------|-----------|
+| G1 | Beat phase error < 2 ms after lock | PI controller convergence within 8 beats |
+| G2 | Zero configuration for LAN sync | UDP broadcast discovery, no manual IP entry |
+| G3 | Packet fits one cache line | 64 bytes, one UDP datagram |
+| G4 | Master failover < 20 ms | No distributed consensus, deterministic promotion |
+| G5 | No audible artifacts during sync | Pitch correction capped at ±2%, snap at >20% error |
+| G6 | Web platform support | BroadcastChannel (same-origin), WebRTC (cross-origin) |
+| G7 | VJ-ready onset data | Kick/snare/hi-hat trigger bits at 50 Hz |
+| G8 | Hostile network tolerance | HMAC signing, sequence numbers, jitter filtering |
+
+---
+
+## 3. Related Work
+
+### 3.1 MIDI Clock (MIDI 1.0 Specification, 1983)
+
+MIDI Clock transmits three system real-time messages: Start (`0xFA`), Stop (`0xFC`), and Timing Clock (`0xF8`, 24 per quarter note). At 120 BPM, this produces a tick every 20.83 ms. The protocol carries no phase information — a slave joining mid-song cannot determine where in the bar the master is. MIDI Clock also lacks discovery; devices must be physically connected.
+
+### 3.2 Ableton Link (Ableton, 2016)
+
+Link uses a peer-to-peer model where all participants converge on a shared tempo via averaging. While elegant for jam sessions, this model is problematic for DJ use cases where Deck A's tempo should override Deck B's. Link provides beat phase but not bar position, track identification, or visual trigger data. The C++ SDK has no web platform implementation.
+
+### 3.3 Pioneer Pro DJ Link (AlphaTheta Corporation)
+
+Pro DJ Link operates over Ethernet using a proprietary binary protocol. It carries BPM, beat position, waveform previews, and track metadata. The protocol is undocumented; the open-source `prolink-connect` project (GitHub: EvanPurkhiser/prolink-connect) provides a partial reverse-engineering. No web or non-Pioneer implementation exists.
+
+---
+
+## 4. System Architecture
 
 ```
-Offset  Size  Type     Field              Description
-──────────────────────────────────────────────────────────────
-0       4     u8[4]    magic              "MXS\0" (0x4D 0x58 0x53 0x00)
-4       1     u8       version            Protocol version (1)
-5       1     u8       type               Packet type (see below)
-6       2     u16      sequence           Packet sequence number (#14)
-8       8     f64      timestamp          Sender's audio clock mapped to network epoch (#1, #28)
-16      4     f32      bpm                Current BPM (0 = stopped)
-20      4     f32      beat_phase         Phase within current beat (0.0–1.0)
-24      4     u32      beat_count         Absolute beat counter since session epoch
-28      1     u8       time_sig_num       Time signature numerator (default 4)
-29      1     u8       time_sig_den       Time signature denominator (default 4)
-30      1     u8       deck_id            Source deck (0=A, 1=B, 0xFF=master)
-31      1     u8       flags              Bit flags (see below)
-32      4     f32      crossfader         Crossfader position (0.0–1.0)
-36      4     f32      master_volume      Master volume (0.0–1.0)
-40      1     u8       energy_rms         Audio RMS energy 0–255 (#4)
-41      1     u8       triggers           Onset triggers: bit0=kick, bit1=snare, bit2=hihat (#4)
-42      2     u16      sender_id          Unique sender ID (random on startup)
-44      4     f32      pitch_nudge        Current manual pitch bend state (#12)
-48      8     u8[8]    track_hash         Waveform/length hash, NOT filename (#13)
-56      4     f32      net_offset         NTP-style network clock offset (#1)
-60      4     u8[4]    reserved           Future use (zero-filled)
+┌─────────────────────┐              ┌─────────────────────┐
+│   MIXI Instance A    │              │   MIXI Instance B    │
+│                      │              │                      │
+│  AudioContext ───────┤              ├─────── AudioContext  │
+│       │              │              │              │       │
+│  SyncPublisher       │              │       SyncSubscriber │
+│       │              │              │              │       │
+│  ┌─────────────┐     │   Shared     │     ┌─────────────┐ │
+│  │ SHM Backend │◄────┼──Memory──────┼────►│ SHM Backend │ │
+│  └─────────────┘     │              │     └─────────────┘ │
+│  ┌─────────────┐     │    LAN       │     ┌─────────────┐ │
+│  │ UDP Backend │◄────┼──:4303───────┼────►│ UDP Backend │ │
+│  └─────────────┘     │              │     └─────────────┘ │
+│       │              │              │              │       │
+│  MidiClockBridge ────┤              │              │       │
+│       │              │              │              │       │
+│  MIDI Out → Hardware │              │              │       │
+└─────────────────────┘              └─────────────────────┘
 ```
 
-### Changes from v1 draft (#11, #12, #14):
-- `bar_phase` removed — derivable: `(beat_count % time_sig_num + beat_phase) / time_sig_num`
-- `pitch_nudge` added — master jog wheel state for slave phase tracking
-- `sequence` added — discard out-of-order packets (never compute time backwards)
-- `energy` split into `energy_rms` (u8) + `triggers` (3 onset bits) — VJ killer feature
-- `sender_id` moved to free up alignment for `pitch_nudge`
-- `net_offset` added for NTP-style clock synchronization
+**Roles.** Any instance may be a *Publisher* (tempo master), a *Subscriber* (tempo slave), or both (relay). Exactly one instance holds the `MASTER` flag at any time. Role transitions are governed by the Dynamic Dictatorship model (Section 9).
 
-### Packet Types (offset 5)
+---
 
-| Value | Name | Description |
-|-------|------|-------------|
-| 0x01 | `HEARTBEAT` | Sent every 20ms (unicast). Core sync data. |
-| 0x02 | `ANNOUNCE` | Sent every 1s (broadcast). "I exist" discovery. |
-| 0x03 | `TRANSPORT` | Play/stop/cue event (instant, not periodic). |
-| 0x04 | `CUE_POINT` | Hot cue set/delete (shares position with peers). |
-| 0x05 | `DECK_LOAD` | Track loaded (sends waveform hash). |
-| 0x06 | `NTP_REQ` | Clock sync request (mini-NTP, #1). |
-| 0x07 | `NTP_RESP` | Clock sync response with local timestamp. |
-| 0x08 | `DICTATOR` | Force Master claim (#24). All other masters yield. |
-| 0x10 | `CUSTOM` | User-defined payload in reserved bytes. |
+## 5. Transport Layers
 
-### Flags (offset 31)
+### 5.1 Shared Memory (Intra-Machine)
+
+For instances on the same operating system (e.g., two Electron windows):
+
+**Discovery.** A fixed, well-known file `/tmp/mixi-sync-discovery` contains a JSON routing table mapping instance IDs to their shared memory segment paths:
+
+```json
+{
+  "A2F3": "/tmp/mixi-sync-A2F3",
+  "7B01": "/tmp/mixi-sync-7B01"
+}
+```
+
+New instances read this file on startup, register themselves, and connect to existing peers' ring buffers.
+
+**Data transfer.** Each instance maintains a memory-mapped ring buffer (`memmap2` crate in Rust) with atomic `u32` read/write heads. The publisher writes 64-byte packets; subscribers read them. Latency is bounded by cache coherence (~100 ns on modern x86/ARM).
+
+### 5.2 UDP (Inter-Machine)
+
+**Port.** `4303/udp` — the digits of "MIXI" on a T9 telephone keypad.
+
+**Discovery.** `ANNOUNCE` packets are sent via UDP broadcast (`255.255.255.255:4303`) every 1000 ms. These are the *only* broadcast packets. A discovery table caches peer IP addresses; entries expire after 5000 ms without an ANNOUNCE.
+
+**Heartbeat.** `HEARTBEAT` packets are sent via UDP **unicast** to each known peer IP every 20 ms (50 Hz). This avoids broadcast storms on Wi-Fi networks where access points may throttle or drop high-frequency broadcast traffic.
+
+**Interface binding.** The UDP socket is bound to a specific network interface (auto-detected or user-selected in Settings) to prevent confusion on machines with multiple interfaces (Wi-Fi + Ethernet).
+
+---
+
+## 6. Packet Format
+
+All multi-byte fields are **little-endian**. Implementations MUST use explicit conversion functions (Rust: `.to_le_bytes()` / `from_le_bytes()`; JavaScript: `DataView` with `littleEndian = true`). The packet is exactly **64 bytes** — one CPU cache line, one minimal UDP payload.
+
+```
+Offset  Bytes  Type     Field            Description
+────────────────────────────────────────────────────────────
+ 0       4     u8[4]    magic            "MXS\0" (0x4D 0x58 0x53 0x00)
+ 4       1     u8       version          Protocol version (1)
+ 5       1     u8       type             Packet type (Table 1)
+ 6       2     u16      sequence         Monotonic packet counter
+ 8       8     f64      timestamp        Sender's audio clock, epoch-adjusted (§7)
+16       4     f32      bpm              Tempo in beats per minute (0.0 = stopped)
+20       4     f32      beat_phase       Position within current beat [0.0, 1.0)
+24       4     u32      beat_count       Beats elapsed since session epoch
+28       1     u8       time_sig_num     Time signature numerator (default 4)
+29       1     u8       time_sig_den     Time signature denominator (default 4)
+30       1     u8       deck_id          Source: 0x00=A, 0x01=B, 0xFF=master bus
+31       1     u8       flags            Bit field (Table 2)
+32       4     f32      crossfader       Position [0.0=A, 0.5=center, 1.0=B]
+36       4     f32      master_volume    Master output level [0.0, 1.0]
+40       1     u8       energy_rms       Audio RMS energy [0, 255]
+41       1     u8       triggers         Onset trigger bits (Table 3)
+42       2     u16      sender_id        Random instance identifier
+44       4     f32      pitch_nudge      Manual pitch bend offset [−1.0, +1.0]
+48       8     u8[8]    track_hash       Audio content fingerprint (§6.4)
+56       4     f32      net_offset       NTP-derived clock offset in seconds (§7)
+60       4     u8[4]    reserved         Zero-filled, future use
+```
+
+**Derived fields.** Bar phase is intentionally omitted to save 4 bytes. It is computed by receivers as:
+
+```
+bar_phase = (beat_count % time_sig_num + beat_phase) / time_sig_num
+```
+
+### Table 1: Packet Types
+
+| Value | Name | Rate | Transport | Description |
+|-------|------|------|-----------|-------------|
+| `0x01` | HEARTBEAT | 50 Hz | Unicast | Core sync data |
+| `0x02` | ANNOUNCE | 1 Hz | Broadcast | Peer discovery |
+| `0x03` | TRANSPORT | Event | Unicast | Play/stop/cue transitions |
+| `0x04` | CUE_POINT | Event | Unicast | Hot cue creation/deletion |
+| `0x05` | DECK_LOAD | Event | Unicast | Track loaded (sends hash) |
+| `0x06` | NTP_REQ | On connect | Unicast | Clock sync request (§7) |
+| `0x07` | NTP_RESP | On connect | Unicast | Clock sync response |
+| `0x08` | DICTATOR | Event | Broadcast | Force master claim (§9) |
+| `0x10` | CUSTOM | Variable | Unicast | User-defined extension |
+
+### Table 2: Flags Bit Field
 
 | Bit | Name | Description |
 |-----|------|-------------|
-| 0 | `PLAYING` | Deck is playing |
-| 1 | `MASTER` | This instance is the tempo master |
-| 2 | `SYNCED` | This instance is synced to external master |
-| 3 | `RECORDING` | Recording is active |
-| 4 | `VFX_ACTIVE` | VFX engine is running (for visual sync) |
-| 5 | `NUDGING` | Currently applying phase correction |
-| 6 | `FLYWHEEL` | Master lost, maintaining last known BPM (#9) |
-| 7 | `DICTATOR` | Force Master override active (#24) |
+| 0 | PLAYING | Deck transport is running |
+| 1 | MASTER | This instance is the tempo master |
+| 2 | SYNCED | Locked to an external master |
+| 3 | RECORDING | Disk recording is active |
+| 4 | VFX_ACTIVE | GPU visual engine is running |
+| 5 | NUDGING | PI controller is correcting phase |
+| 6 | FLYWHEEL | Master lost; free-running on last BPM |
+| 7 | DICTATOR | Force-master override is active |
+
+### Table 3: Trigger Bits
+
+| Bit | Instrument | Detection Method |
+|-----|-----------|-----------------|
+| 0 | Kick drum | FFT bins 1–2 (20–80 Hz), energy derivative > threshold |
+| 1 | Snare | FFT bins 6–17 (1–3 kHz), energy derivative > threshold |
+| 2 | Hi-hat | FFT bins 46–87 (8–15 kHz), energy derivative > threshold |
+| 3–7 | Reserved | |
+
+### 6.4 Track Fingerprint
+
+The `track_hash` field identifies the loaded audio content independently of file name or metadata. It is the first 8 bytes of a SHA-256 digest computed over:
+
+1. The total sample count as a `u64`
+2. The sample rate as a `u32`
+3. The first 4096 audio samples as `f32` values
+
+This produces a deterministic fingerprint that survives file renaming, re-encoding at the same sample rate, and metadata edits.
 
 ---
 
-## Clock Synchronization (#1, #28)
+## 7. Clock Synchronization
 
-### The Problem
+### 7.1 The Drift Problem
 
-`AudioContext.currentTime` drifts between machines (different audio hardware clocks).
-`performance.now()` drifts between machines (different OS clocks).
-Neither is directly comparable across a network.
+Digital audio clocks derive from hardware crystal oscillators. Two machines' `AudioContext.currentTime` values drift at rates of 1–50 ppm (parts per million), accumulating 0.06–3.0 ms of error per minute. For phase-lock accuracy of <2 ms, clock offset must be measured and compensated.
 
-### The Solution: Mini-NTP
+### 7.2 Mini-NTP Exchange
 
-Before sync begins, instances run a 4-round NTP exchange:
+On initial connection, the subscriber initiates a 4-round clock synchronization exchange:
 
 ```
-1. Slave sends NTP_REQ with local timestamp T1
-2. Master receives at T2, sends NTP_RESP with {T1, T2, T3=now}
-3. Slave receives at T4
-4. Round-trip: RTT = (T4 - T1) - (T3 - T2)
-5. Clock offset: offset = ((T2 - T1) + (T3 - T4)) / 2
+Round i:
+  1. Subscriber records local time T1, sends NTP_REQ{T1}
+  2. Master receives at local time T2, sends NTP_RESP{T1, T2, T3=now}
+  3. Subscriber receives at local time T4
+  4. Round-trip time:  RTT_i = (T4 - T1) - (T3 - T2)
+  5. Clock offset:     Θ_i = ((T2 - T1) + (T3 - T4)) / 2
 ```
 
-After 4 rounds, the median offset is stored. All subsequent `timestamp` fields are adjusted by this offset. The slave knows exactly where in its own `AudioContext.currentTime` the master's beat phase fell.
+The final offset is the **median** of {Θ₁, Θ₂, Θ₃, Θ₄}, rejecting outliers from network jitter. This offset is stored in the `net_offset` field of outgoing packets and used by receivers to translate timestamps into their local clock domain.
 
-### Session Epoch (#28)
+### 7.3 Session Epoch
 
-When the first instance starts publishing, it defines `epoch = AudioContext.currentTime`. All `beat_count` values are relative to this epoch. NTP offsets map the epoch across machines.
+The first instance to publish defines `epoch₀ = AudioContext.currentTime` at the moment of its first HEARTBEAT. All `beat_count` values are relative to this epoch. NTP offsets map the epoch across machines, establishing a shared linear time base.
 
 ---
 
-## Phase Lock Algorithm (#15–#18)
+## 8. Phase Lock Algorithm
 
-### PI Controller (not fixed nudge) (#16)
+### 8.1 PI Controller
 
-```rust
-struct PhaseLock {
-    kp: f32,           // Proportional gain (default 0.8)
-    ki: f32,           // Integral gain (default 0.05)
-    error_integral: f32,
-    locked: bool,
-    
-    // Hysteresis thresholds (#18)
-    lock_threshold: f32,   // 0.002 — below this = locked
-    unlock_threshold: f32, // 0.02  — above this = unlocked
-}
+The subscriber maintains a Proportional-Integral (PI) controller that computes a playback rate correction from the phase error:
 
-fn compute_correction(&mut self, phase_error: f32) -> f32 {
-    // Hysteresis: don't jitter between lock/unlock
-    if self.locked && phase_error.abs() > self.unlock_threshold {
-        self.locked = false;
-    }
-    if !self.locked && phase_error.abs() < self.lock_threshold {
-        self.locked = true;
-        self.error_integral = 0.0;
-    }
-    
-    if self.locked { return 0.0; }
-    
-    self.error_integral += phase_error;
-    self.error_integral = self.error_integral.clamp(-1.0, 1.0);
-    
-    let correction = (phase_error * self.kp) + (self.error_integral * self.ki);
-    
-    // Clamp to ±2% — beyond this, audio pitch shift is audible (#17)
-    correction.clamp(-0.02, 0.02)
-}
+```
+e[n]        = master_phase − local_phase        (phase error)
+I[n]        = I[n−1] + e[n]                     (integral accumulator)
+I[n]        = clamp(I[n], −1.0, +1.0)           (anti-windup)
+correction  = Kp · e[n] + Ki · I[n]             (PI output)
+correction  = clamp(correction, −0.02, +0.02)   (audibility limit, §8.3)
 ```
 
-### Snap Threshold (#17)
+Default gains: **Kp = 0.8**, **Ki = 0.05**. These converge within 4–8 beats for typical phase errors of 5–15%.
 
-If `|phase_error| > 0.20` (20% of a beat), don't nudge — it would take too long and sound wrong. Instead:
-- Use `AudioBufferSourceNode.start()` with offset to seek to correct position
-- Apply 10ms crossfade to mask the jump
-- Log: `"Phase snap: error was {x}%, jumped to lock"`
+### 8.2 Hysteresis
 
-### Flywheel Mode (#9)
+To prevent oscillation at the lock boundary:
 
-If no heartbeat received for 150ms:
-1. Declare master dead
-2. Maintain last known BPM (free-running)
-3. Set `FLYWHEEL` flag
-4. If this instance is playing: auto-promote to Master after 200ms
-5. UI: sync indicator turns yellow blinking (#23)
+- **Unlock threshold**: correction activates when `|e| > 0.02` (2% of a beat)
+- **Lock threshold**: correction deactivates when `|e| < 0.002` (0.2% of a beat)
+- **Dead zone**: between 0.002 and 0.02, the controller maintains its current state (locked or unlocked)
+
+This 10:1 hysteresis ratio eliminates jitter at the lock boundary caused by network timing variance.
+
+### 8.3 Audibility Limit
+
+Pitch correction of >2% is perceptible as key shift. If the phase error exceeds 20% of a beat (indicating a sync restart or large disruption), the controller does **not** attempt gradual nudging. Instead, it performs a **phase snap**: seeking the audio playback position with a 10 ms crossfade to mask the discontinuity.
+
+### 8.4 Flywheel Mode
+
+If no HEARTBEAT is received within 150 ms:
+
+| Elapsed | Action |
+|---------|--------|
+| 0–50 ms | Normal network jitter; no action |
+| 50–100 ms | Increase jitter filter smoothing (trust local clock) |
+| 100–150 ms | Set FLYWHEEL flag; UI warning (yellow blink) |
+| >150 ms | Declare master dead; maintain last BPM free-running |
+| >200 ms | Auto-promote to master if `PLAYING` flag is set |
+
+The flywheel ensures audio never stops or glitches due to network interruption.
 
 ---
 
-## Network Resilience (#6–#9)
+## 9. Master Election
 
-### Jitter Filter (#6)
+### 9.1 Dynamic Dictatorship
 
-Don't react to every heartbeat naively. Use a **Phase-Locked Loop** (PLL) or Kalman filter:
+MIXI Sync uses a non-consensus model:
 
-```rust
-struct JitterFilter {
-    filtered_phase: f32,
-    alpha: f32,  // 0.1 = heavy smoothing, 0.5 = responsive
-}
+1. The first instance to set `PLAYING` becomes master and sets the `MASTER` flag
+2. If the master stops playing, the subscriber with `PLAYING` and `volume > 0` auto-promotes within one heartbeat interval (20 ms)
+3. Tie-break: lowest `sender_id` wins
+4. No voting, no quorum, no split-brain — exactly one master at all times
 
-fn update(&mut self, raw_phase: f32) -> f32 {
-    self.filtered_phase = self.alpha * raw_phase + (1.0 - self.alpha) * self.filtered_phase;
-    self.filtered_phase
-}
-```
+### 9.2 Force Override
 
-The local clock acts as a **heavy flywheel**: follows the master, but ignores network micro-jitter.
-
-### Packet Ordering (#14)
-
-```rust
-fn should_process(last_seq: u16, incoming_seq: u16) -> bool {
-    // Handle u16 wraparound
-    let diff = incoming_seq.wrapping_sub(last_seq);
-    diff > 0 && diff < 32768  // forward, within half the range
-}
-```
-
-Never compute time backwards. Discard stale packets instantly.
-
-### Ghost Master Timeout (#9)
-
-```
-Master silent for:
-  0–50ms:    Normal jitter, ignore
-  50–100ms:  Increase jitter filter alpha (trust local clock more)
-  100–150ms: Set FLYWHEEL flag, warn UI
-  >150ms:    Declare master dead, auto-promote if playing
-```
-
-### Broadcast Storm Prevention (#7)
-
-- `ANNOUNCE` packets: **broadcast** `255.255.255.255:4303`, 1/second
-- `HEARTBEAT` packets: **unicast** to each discovered peer IP, 50/second
-- Discovery table caches peer IPs; expires after 5s without ANNOUNCE
-- On WiFi: optionally reduce heartbeat to 25/second (40ms) in Settings
-
-### Network Interface Binding (#8)
-
-```rust
-// Bind to specific interface, not 0.0.0.0
-let socket = UdpSocket::bind(SocketAddr::new(
-    selected_interface_ip,  // from Settings, or auto-detect primary
-    4303
-))?;
-```
-
-Settings UI: dropdown with available network interfaces.
+A user may press "Force Master" in the UI, which sends a `DICTATOR` packet (type `0x08`) via broadcast. All instances receiving this packet that currently hold `MASTER` must yield immediately — clearing their `MASTER` flag and transitioning to subscriber mode within one heartbeat.
 
 ---
 
-## Visual Sync — Energy & Triggers (#4)
+## 10. Network Resilience
 
-The `energy_rms` (u8) and `triggers` (u8) fields are the **VJ killer feature**.
+### 10.1 Jitter Filtering
 
-### energy_rms (offset 40)
-- `u8` 0–255 = total audio RMS mapped from 0.0–1.0
-- Updated every heartbeat (20ms = 50Hz, enough for smooth VFX)
-
-### triggers (offset 41)
-Bit field for onset detection — VJ software reads these directly:
-
-| Bit | Trigger | Source |
-|-----|---------|--------|
-| 0 | Kick onset | FFT bins 1-2 (20-80Hz) derivative > threshold |
-| 1 | Snare onset | FFT bins 6-17 (1-3kHz) derivative > threshold |
-| 2 | Hihat onset | FFT bins 46-87 (8-15kHz) derivative > threshold |
-| 3-7 | reserved | |
-
-External VJ software (Resolume, TouchDesigner, custom WGSL shaders) can listen on UDP :4303 and drive visuals from these triggers without any audio analysis of their own.
-
----
-
-## Track Identification (#13)
-
-The `track_hash` field (8 bytes) is NOT a hash of the filename (filenames change). It's:
-
-```rust
-fn compute_track_hash(samples: &[f32], sample_rate: u32) -> [u8; 8] {
-    // Hash the audio content, not the metadata
-    let length_samples = samples.len() as u64;
-    let mut hasher = Sha256::new();
-    hasher.update(length_samples.to_le_bytes());
-    hasher.update(sample_rate.to_le_bytes());
-    // Sample first 4096 samples (deterministic fingerprint)
-    for &s in samples.iter().take(4096) {
-        hasher.update(s.to_le_bytes());
-    }
-    let hash = hasher.finalize();
-    hash[..8].try_into().unwrap()
-}
-```
-
-This identifies the actual audio content regardless of filename or metadata changes.
-
----
-
-## Master Election
-
-### Dynamic Dictatorship (#3)
-
-1. The instance that **first starts playing** becomes master (sends `MASTER` flag)
-2. If master stops playing, the slave with `PLAYING` flag and `volume > 0` auto-promotes in <20ms
-3. **Force Master** (#24): user presses button → sends `DICTATOR` packet → all other masters yield immediately, zero negotiation
-4. Tie-break: lowest `sender_id` wins
-5. No consensus algorithm — simple, deterministic, fast
-
----
-
-## MIDI Clock Bridge (#5)
-
-MIXI Sync automatically generates MIDI Clock output as a separate module:
+Raw phase measurements from UDP packets contain network jitter (typically 0.5–5 ms on LAN, 10–50 ms on Wi-Fi). A first-order exponential moving average filter smooths the input:
 
 ```
-SyncSubscriber → receives HEARTBEAT at 50Hz
-  → MidiClockBridge → computes 24 ppqn timing
-    → navigator.requestMIDIAccess().outputs → 0xF8 ticks
+filtered_phase = α · raw_phase + (1 − α) · filtered_phase
 ```
 
-The bridge runs in the Node/Electron process. Any synth or drum machine connected via USB MIDI goes to tempo without any configuration in MIXI. The user just enables "MIDI Clock Out" in Settings — the sync protocol feeds it automatically.
+Default **α = 0.15** (heavy smoothing). This acts as a flywheel: the local clock free-runs between heartbeats, with periodic corrections from the master.
+
+### 10.2 Sequence Ordering
+
+Each packet carries a monotonic `u16` sequence number. The receiver discards packets where:
+
+```
+diff = incoming_seq − last_seq    (wrapping subtraction)
+discard if: diff == 0 OR diff ≥ 32768
+```
+
+This handles both duplicates and reordering within a half-sequence window (32768 packets ≈ 10.9 minutes at 50 Hz).
+
+### 10.3 Broadcast Storm Prevention
+
+Only `ANNOUNCE` packets use broadcast (1 Hz). All `HEARTBEAT` packets use unicast to discovered peer IPs. This prevents Wi-Fi access points from throttling or dropping high-frequency broadcast traffic.
 
 ---
 
-## Web Fallbacks (#19–#21)
+## 11. Visual Synchronization
+
+### 11.1 Energy and Triggers
+
+The `energy_rms` field (u8, 0–255) carries the master's audio RMS level at 50 Hz — sufficient for smooth VFX intensity modulation.
+
+The `triggers` field carries per-instrument onset detection bits, updated each heartbeat. External VJ software (Resolume, TouchDesigner, custom WebGPU shaders) can listen on UDP port 4303 and extract these bits to drive beat-reactive visuals **without performing any audio analysis**.
+
+### 11.2 VJ Integration Example
+
+```python
+# Resolume / TouchDesigner OSC bridge (example)
+import socket, struct
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(('0.0.0.0', 4303))
+
+while True:
+    data, addr = sock.recvfrom(64)
+    if data[:4] != b'MXS\0': continue
+    bpm      = struct.unpack_from('<f', data, 16)[0]
+    phase    = struct.unpack_from('<f', data, 20)[0]
+    energy   = data[40]
+    triggers = data[41]
+    kick     = bool(triggers & 0x01)
+    snare    = bool(triggers & 0x02)
+    hihat    = bool(triggers & 0x04)
+    # → Forward to OSC, MIDI, or GPU shader uniforms
+```
+
+---
+
+## 12. Web Platform Fallbacks
+
+When the Rust/N-API transport is unavailable (browser-only deployment), the protocol degrades gracefully:
 
 ### Priority Order
 
-`SharedMemory > UDP > BroadcastChannel > WebSocket > WebRTC`
+| Priority | Transport | Scope | Latency | Phase Lock |
+|----------|-----------|-------|---------|-----------|
+| 1 | Shared Memory | Same OS | ~0 µs | Full |
+| 2 | UDP Unicast | LAN | <1 ms | Full |
+| 3 | BroadcastChannel | Same origin | ~0 µs | Full |
+| 4 | WebRTC DataChannel | Cross-origin | 1–10 ms | Full |
+| 5 | WebSocket | Any | 30–50 ms | BPM-follow only |
 
-### BroadcastChannel (same machine, browser tabs) (#19)
+### BroadcastChannel (same-origin tabs)
 
 ```typescript
 const channel = new BroadcastChannel('mixi-sync');
-// Send raw ArrayBuffer — zero JSON serialization, zero GC pressure
-channel.postMessage(packetBuffer);  // ArrayBuffer, NOT JSON
+// Transfer raw ArrayBuffer — zero JSON serialization, zero GC pressure
+channel.postMessage(packet.buffer);
 ```
 
-### WebSocket Relay (#20)
+### WebRTC DataChannel (cross-origin browsers)
 
-Via Python sidecar (`ws://localhost:8000/ws/sync`):
-- **Only for** `TRANSPORT` (play/stop) and `CUE_POINT` packets
-- **Never for** `HEARTBEAT` — Python + TCP WebSocket adds 30-50ms jitter, useless for phase lock
-- Degrades to BPM-follow without phase lock
-
-### WebRTC DataChannel (#21)
-
-For two browsers on different machines:
 ```typescript
 const dc = peerConnection.createDataChannel('mixi-sync', {
-    ordered: false,        // like UDP
-    maxRetransmits: 0,     // fire and forget
+    ordered: false,     // UDP-like: no head-of-line blocking
+    maxRetransmits: 0,  // Fire and forget
 });
 ```
 
-This is the **only way** to do phase-lock quality sync between browsers without Electron.
+This is the only web-standard mechanism for cross-machine phase-lock quality sync without native code.
+
+### WebSocket (degraded mode)
+
+Via the Python sidecar (`ws://localhost:8000/ws/sync`). TCP + Python introduce 30–50 ms of jitter. Suitable **only** for `TRANSPORT` and `CUE_POINT` packets — never for `HEARTBEAT`.
 
 ---
 
-## UI Integration (#22–#25)
+## 13. Security
 
-### Sync Status Colors (#23)
+### 13.1 Threat Model
 
-| Color | State | Meaning |
-|-------|-------|---------|
-| Gray | OFF | Sync disabled |
-| Yellow blink | FLYWHEEL | Master lost, free-running on last BPM |
-| Cyan solid | LOCKED | Phase error < 0.002, perfectly synced |
-| Green pulse | NUDGING | PI controller actively correcting phase |
-| Red solid | DICTATOR | Force Master override active |
+In a club or festival environment, the LAN may be shared with untrusted devices. An attacker on the same network could:
 
-### Sync Radar (#22)
+- Inject `DICTATOR` packets to seize tempo master
+- Inject `TRANSPORT` packets to stop playback
+- Flood `HEARTBEAT` packets with incorrect BPM to desync the set
 
-Settings → System tab: circular radar display.
-- Center = this instance
-- Peer dots positioned by network latency (closer = lower ping)
-- Dot color = peer state (playing/stopped/master/synced)
-- Dot label = peer name + BPM
+### 13.2 HMAC-SHA256 Packet Signing
 
-### Network Offset Slider (#25)
-
-Settings → Sync → `Network Sync Offset: [-50ms ... +50ms]`
-
-For hardware latency compensation: if audio comes from another machine's speakers, the DJ can shift the phase by ear. Stored per-session.
-
----
-
-## Security (#26–#27)
-
-### HMAC-SHA256 Signing (#26)
-
-Optional (enabled in Settings with a shared passphrase):
+When enabled (Settings → Sync → Session Key), packets are extended to 96 bytes:
 
 ```
-Packet: [64 bytes payload] + [32 bytes HMAC-SHA256]
-Total: 96 bytes (still fits in one UDP datagram)
+[64 bytes: standard packet][32 bytes: HMAC-SHA256(packet, shared_secret)]
 ```
 
-- No encryption (unnecessary for BPM/phase data, saves CPU)
-- Prevents injection attacks (rogue script on club WiFi sending fake STOP packets)
-- Shared secret set in Settings → Sync → "Session Key"
+Receivers compute the HMAC over the first 64 bytes using the configured shared secret. Packets with invalid signatures are silently discarded. The shared secret is entered identically on all participating instances.
 
-### Sender ID (#27)
+**No encryption** is applied — sync data (BPM, phase, flags) is not sensitive, and AES would add unnecessary CPU overhead to the 50 Hz packet path.
 
-- v1: `u16` (65536 values) — sufficient for LAN
-- Future (MIXI Cloud/tunneling): extend to UUID-64 using the reserved bytes
+### 13.3 Identifier Collision
+
+The `sender_id` field is a random `u16` (65536 values), sufficient for LAN deployments. For future internet-tunneled deployments (MIXI Cloud), the `reserved` bytes may be repurposed to extend the identifier to 48 or 64 bits.
 
 ---
 
-## Protocol Versioning (#29)
+## 14. User Interface Integration
 
-The `version` byte (offset 4) enables backwards compatibility:
+### 14.1 Sync Status Indicator
 
-```rust
-fn parse_packet(data: &[u8]) -> Result<Packet, ParseError> {
-    if data.len() < 64 { return Err(ParseError::TooShort); }
-    if &data[0..4] != b"MXS\0" { return Err(ParseError::BadMagic); }
-    
-    let version = data[4];
-    match version {
-        1 => parse_v1(data),
-        2.. => {
-            // Unknown future version — extract only v1 fields
-            // Graceful degradation, not crash
-            parse_v1(data)  // v1 fields are always at the same offsets
-        }
-        0 => Err(ParseError::InvalidVersion),
-    }
-}
-```
+The SYNC button on the main interface uses color to communicate state:
 
-Future versions MUST keep v1 field offsets stable. New fields go in reserved bytes or extend the packet.
+| Color | Animation | State | Meaning |
+|-------|-----------|-------|---------|
+| Gray | None | OFF | Sync disabled |
+| Yellow | Blink 2 Hz | FLYWHEEL | Master lost, free-running |
+| Cyan | Solid | LOCKED | Phase error < 0.2%, perfectly synced |
+| Green | Pulse | NUDGING | PI controller actively correcting |
+| Red | Solid | DICTATOR | Force Master override active |
 
----
+### 14.2 Sync Radar
 
-## Testing: Chaos Monkey (#30)
+Settings → System → Sync panel displays a circular radar:
+- Center dot = this instance
+- Peer dots positioned by measured network latency (closer = lower RTT)
+- Dot color reflects peer state (playing, stopped, master, synced)
+- Dot label shows peer name + BPM
 
-Before v1 release, validate with:
+### 14.3 Network Offset Compensation
 
-```rust
-// chaos_monkey.rs — stress test
-fn main() {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let target = "127.0.0.1:4303";
-    
-    // 1. Corrupted magic bytes
-    send_garbage(socket, target, b"XXX\0...");
-    
-    // 2. Negative BPM
-    send_packet(socket, target, bpm: -500.0, ...);
-    
-    // 3. NaN timestamp
-    send_packet(socket, target, timestamp: f64::NAN, ...);
-    
-    // 4. Future version (v99)
-    send_packet(socket, target, version: 99, ...);
-    
-    // 5. Out-of-order sequence flood
-    for seq in (0..1000).rev() {
-        send_packet(socket, target, sequence: seq, ...);
-    }
-    
-    // 6. Rapid master election spam
-    for _ in 0..100 {
-        send_packet(socket, target, type: DICTATOR, ...);
-    }
-    
-    // 7. Maximum BPM (999)
-    send_packet(socket, target, bpm: 999.0, ...);
-    
-    // 8. Zero-length and oversized packets
-    socket.send_to(&[], target);
-    socket.send_to(&[0u8; 65535], target);
-}
-```
+Settings → Sync → `Network Sync Offset: [−50 ms ... +50 ms]`
 
-**Pass criteria**: The AudioWorklet continues playing without interruption. The sync engine logs warnings but does not crash, panic, or produce audio artifacts.
+Compensates for physical audio latency when playback is monitored from another machine's speakers. The offset shifts the phase lock target by the configured amount.
 
 ---
 
-## Comparison
+## 15. Validation and Testing
+
+### 15.1 Chaos Monkey
+
+Before release, the protocol implementation must survive a stress test that sends malformed packets to `127.0.0.1:4303`:
+
+| Test | Payload |
+|------|---------|
+| Corrupted magic | `"XXX\0"` + 60 random bytes |
+| Negative BPM | `bpm = −500.0` |
+| NaN timestamp | `timestamp = f64::NAN` |
+| Future version | `version = 99` |
+| Reversed sequence | Sequence numbers 1000, 999, 998, ... |
+| DICTATOR flood | 100 × DICTATOR packets in 100 ms |
+| Extreme BPM | `bpm = 999.0` |
+| Zero-length packet | 0 bytes |
+| Oversized packet | 65535 bytes |
+| All-zeros packet | 64 × `0x00` |
+
+**Pass criteria.** The AudioWorklet continues playback without interruption. The sync engine logs warnings but does not crash, panic, or produce audio artifacts.
+
+### 15.2 Phase Lock Accuracy
+
+Test with two instances on the same machine (shared memory transport):
+1. Instance A plays at 128 BPM
+2. Instance B subscribes with 500 ms initial phase offset
+3. Measure convergence time to `|error| < 0.002`
+4. Expected: <8 beats (3.75 seconds at 128 BPM)
+
+### 15.3 Failover Timing
+
+1. Instance A is master, playing at 140 BPM
+2. Kill Instance A's process (SIGKILL)
+3. Measure time until Instance B promotes to master
+4. Expected: <200 ms, with no audible tempo discontinuity
+
+---
+
+## 16. Comparison with Existing Protocols
 
 | Feature | MIDI Clock | Ableton Link | Pro DJ Link | **MIXI Sync** |
 |---------|-----------|--------------|-------------|---------------|
-| BPM sync | 24 ppqn | Yes | Yes | **Yes** |
-| Beat phase | No | Yes | Yes | **Yes (PI controller)** |
+| Tempo sync | 24 ppqn | Yes | Yes | **Yes** |
+| Beat phase | No | Yes | Yes | **Yes (PI lock)** |
 | Bar position | No | No | Yes | **Yes (derived)** |
-| Deck state | No | No | Partial | **Full (flags byte)** |
+| Deck state | No | No | Partial | **Full (8-bit flags)** |
 | Crossfader | No | No | No | **Yes** |
-| VFX triggers | No | No | No | **Yes (kick/snare/hihat)** |
-| Cue points | No | No | No | **Yes (packet type)** |
+| VFX triggers | No | No | No | **Yes (3 onsets)** |
+| Cue points | No | No | No | **Yes** |
 | Track ID | No | No | Yes | **Yes (audio hash)** |
-| Pitch nudge | No | No | No | **Yes** |
-| Discovery | Manual | mDNS | ProLink | **UDP broadcast** |
-| Latency (local) | ~1ms USB | ~1ms | ~5ms | **~0µs (SHM)** |
-| Latency (LAN) | N/A | ~1ms | ~5ms | **<1ms (UDP unicast)** |
-| Jitter handling | None | PLL | Unknown | **Kalman/PLL (#6)** |
-| Network resilience | N/A | Good | Good | **Flywheel + hysteresis** |
-| Language | Hardware | C++ | Proprietary | **Rust** |
-| Web support | WebMIDI | No | No | **Yes (3 fallbacks)** |
-| VJ integration | No | No | No | **Native (UDP triggers)** |
-| Security | None | None | None | **HMAC-SHA256 optional** |
+| Pitch nudge state | No | No | No | **Yes** |
+| Discovery | Manual | mDNS | Proprietary | **UDP broadcast** |
+| Latency (local) | ~1 ms | ~1 ms | ~5 ms | **~0 µs (SHM)** |
+| Latency (LAN) | N/A | ~1 ms | ~5 ms | **<1 ms (unicast)** |
+| Jitter handling | None | PLL | Unknown | **EMA + hysteresis** |
+| Master model | Fixed | Consensus | Fixed | **Dynamic Dictatorship** |
+| Web support | WebMIDI | No | No | **3 fallbacks** |
+| Security | None | None | None | **HMAC-SHA256** |
+| Implementation | Hardware | C++ | Proprietary | **Rust** |
+| Packet size | 1 byte | ~40 bytes | ~100 bytes | **64 bytes** |
 
 ---
 
-## Implementation Milestones
+## 17. Implementation Roadmap
 
-| Phase | What | Key Directives |
-|-------|------|----------------|
-| **v1** | UDP heartbeat + BPM/phase sync | #1 (NTP), #6 (jitter), #7 (unicast), #14 (sequence) |
-| **v1** | Discovery (announce/listen) | #2 (fixed SHM name), #8 (interface binding) |
-| **v1** | PI phase lock + flywheel | #15-18 (controller), #9 (timeout) |
-| **v1** | Settings UI (enable/master/peers) | #22 (radar), #23 (colors), #25 (offset) |
-| **v1** | Chaos Monkey test suite | #30 |
-| **v2** | Shared memory local backend | #2 (discovery file) |
-| **v2** | MIDI Clock bridge (auto) | #5 |
-| **v2** | Master election + DICTATOR | #3, #24 |
-| **v2** | HMAC signing | #26 |
-| **v3** | Cue point sharing | Packet type 0x04 |
-| **v3** | Web fallback (BroadcastChannel) | #19 |
-| **v3** | WebRTC DataChannel | #21 |
-| **v4** | MIXI Cloud tunneling | #27 (UUID-64) |
+| Phase | Deliverable | Key Requirements |
+|-------|-------------|-----------------|
+| **v1.0** | UDP heartbeat + phase lock | NTP sync, PI controller, jitter filter, sequence numbers |
+| **v1.0** | Peer discovery | UDP broadcast ANNOUNCE, discovery table, interface binding |
+| **v1.0** | Flywheel + failover | 150 ms timeout, auto-promote, BPM hold |
+| **v1.0** | Settings UI | Sync radar, status colors, offset slider |
+| **v1.0** | Chaos Monkey | All 10 test vectors passing |
+| **v1.1** | Shared memory backend | Discovery file, memmap2 ring buffer |
+| **v1.1** | MIDI Clock bridge | Auto-generate 24 ppqn from sync heartbeat |
+| **v1.1** | DICTATOR override | Force-master packet, immediate yield |
+| **v1.1** | HMAC signing | 96-byte signed packets, shared secret |
+| **v2.0** | Cue point sharing | Packet type 0x04, bidirectional |
+| **v2.0** | BroadcastChannel fallback | ArrayBuffer transfer, zero serialization |
+| **v2.0** | WebRTC DataChannel | Unordered, unreliable, peer-to-peer |
+| **v3.0** | MIXI Cloud tunneling | Extended sender_id, STUN/TURN relay |
+
+---
+
+## 18. References
+
+1. MIDI Manufacturers Association. *MIDI 1.0 Detailed Specification*. 1983.
+2. Ableton AG. *Link: A technology for synchronizing musical beat, tempo, and phase across multiple applications*. 2016. https://ableton.github.io/link/
+3. EvanPurkhiser. *prolink-connect: Library for communicating with Pioneer DJ equipment*. GitHub. https://github.com/EvanPurkhiser/prolink-connect
+4. Mills, D. *Network Time Protocol Version 4: Protocol and Algorithms Specification*. RFC 5905, IETF, 2010.
+5. Web Audio API. W3C Recommendation. https://www.w3.org/TR/webaudio/
+6. WebRTC 1.0: Real-Time Communication Between Browsers. W3C Recommendation. https://www.w3.org/TR/webrtc/
+7. WebMIDI API. W3C Working Draft. https://www.w3.org/TR/webmidi/
+
+---
+
+*Document generated from the MIXI project repository. For the latest version, see `MIXI_PROTOCOL.md` in the source tree.*
