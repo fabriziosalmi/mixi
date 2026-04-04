@@ -19,6 +19,7 @@ use mixi_core::dsp::flanger::Flanger;
 use mixi_core::dsp::phaser::Phaser;
 use mixi_core::dsp::gate::Gate;
 use mixi_core::dsp::waveshaper::Waveshaper;
+use mixi_core::dsp::smoother::ParamSmoother;
 
 const SR: f32 = 44100.0;
 const BLOCK_SIZE: usize = 128;
@@ -171,6 +172,22 @@ fn bench_all_dsp() {
         let mut ws = Waveshaper::new();
         ws.set_params(0.7, 0.8);
         results.push(bench("Waveshaper", |buf| ws.process_block(buf)));
+    }
+
+    // 13. ParamSmoother (settled — constant gain)
+    {
+        let mut sm = ParamSmoother::new(0.8, 5.0, SR);
+        results.push(bench("Smoother (settled)", |buf| sm.apply_gain(buf)));
+    }
+
+    // 14. ParamSmoother (ramping — per-sample interpolation)
+    {
+        let mut sm = ParamSmoother::new(0.0, 5.0, SR);
+        results.push(bench("Smoother (ramping)", |buf| {
+            sm.set_target(0.9);
+            sm.apply_gain(buf);
+            sm.set_target(0.1); // force ramp every block
+        }));
     }
 
     // ── Full Deck Chain (realistic) ────────────────────────

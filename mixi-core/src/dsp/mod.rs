@@ -14,4 +14,5 @@ pub mod flanger;
 pub mod phaser;
 pub mod gate;
 pub mod waveshaper;
+pub mod smoother;
 pub mod engine;

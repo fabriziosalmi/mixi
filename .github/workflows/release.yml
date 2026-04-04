@@ -96,6 +96,8 @@ jobs:
       - name: Build Wasm module
         run: wasm-pack build --target web --release --out-dir pkg
         working-directory: mixi-core
+        env:
+          RUSTFLAGS: '-C target-feature=+simd128'
 
       - name: Download mixi-engine binary
         uses: actions/download-artifact@v4

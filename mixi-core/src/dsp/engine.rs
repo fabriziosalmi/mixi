@@ -20,6 +20,7 @@ use crate::dsp::flanger::Flanger;
 use crate::dsp::phaser::Phaser;
 use crate::dsp::gate::Gate;
 use crate::dsp::waveshaper::Waveshaper;
+use crate::dsp::smoother::ParamSmoother;
 
 // ── ParamBus layout (must match ParamLayout.ts) ──────────────
 
@@ -78,16 +79,17 @@ fn read_bool(buf: &[u8], offset: usize) -> bool {
 // ── Per-Deck DSP Chain ──────────────────────────────────────
 
 struct DeckDsp {
-    trim: Gain,
     eq: ThreeBandEq,
     color: Biquad,
-    fader: Gain,
     // FX
     delay: Delay,
     reverb: Reverb,
     flanger: Flanger,
     phaser: Phaser,
     gate: Gate,
+    // Smoothed parameters (click-free)
+    trim_smooth: ParamSmoother,
+    fader_smooth: ParamSmoother,
     // State
     last_eq: [f32; 3],
     last_color_freq: f32,
@@ -96,15 +98,15 @@ struct DeckDsp {
 impl DeckDsp {
     fn new(sr: f32) -> Self {
         Self {
-            trim: Gain::new(1.0),
             eq: ThreeBandEq::new(sr),
             color: Biquad::new(),
-            fader: Gain::new(1.0),
             delay: Delay::new((sr * 0.5) as usize),  // max 500ms
             reverb: Reverb::new(sr),
             flanger: Flanger::new(sr),
             phaser: Phaser::new(sr),
             gate: Gate::new(),
+            trim_smooth: ParamSmoother::new(1.0, 5.0, sr),
+            fader_smooth: ParamSmoother::new(1.0, 5.0, sr),
             last_eq: [0.0; 3],
             last_color_freq: 0.0,
         }
@@ -121,8 +123,9 @@ impl DeckDsp {
         let color_freq = read_f32(params, base + DECK_COLOR_FREQ);
         let _color_res = read_f32(params, base + DECK_COLOR_RES);
 
-        // Update trim
-        self.trim.value = if trim_val == 0.0 { 1.0 } else { trim_val };
+        // Smoothed trim (click-free)
+        let trim_target = if trim_val == 0.0 { 1.0 } else { trim_val };
+        self.trim_smooth.set_target(trim_target);
 
         // Update EQ only if changed (avoid recalculating coefficients)
         let new_eq = [eq_low, eq_mid, eq_high];
@@ -137,8 +140,8 @@ impl DeckDsp {
             self.last_color_freq = color_freq;
         }
 
-        // Process chain
-        self.trim.process_block(samples);
+        // Process chain — smoothed trim gain
+        self.trim_smooth.apply_gain(samples);
         self.eq.process_block(samples);
 
         if self.last_color_freq > 20.0 {
@@ -180,17 +183,17 @@ impl DeckDsp {
             self.gate.process_block(samples, 0.01); // ~120 BPM default
         }
 
-        // Fader + crossfader
+        // Smoothed fader × crossfader (click-free)
         let total_gain = fader_val * xfader_gain;
-        self.fader.value = if total_gain == 0.0 { 0.0 } else { total_gain };
-        self.fader.process_block(samples);
+        self.fader_smooth.set_target(total_gain);
+        self.fader_smooth.apply_gain(samples);
     }
 }
 
 // ── Master DSP Chain ────────────────────────────────────────
 
 struct MasterDsp {
-    gain: Gain,
+    gain_smooth: ParamSmoother,
     filter: Biquad,
     distortion: Waveshaper,
     punch: Compressor,
@@ -201,7 +204,7 @@ struct MasterDsp {
 impl MasterDsp {
     fn new(sr: f32) -> Self {
         Self {
-            gain: Gain::new(1.0),
+            gain_smooth: ParamSmoother::new(1.0, 5.0, sr),
             filter: Biquad::new(),
             distortion: Waveshaper::new(),
             punch: Compressor::new(-12.0, 4.0, 5.0, 100.0, sr),
@@ -219,9 +222,10 @@ impl MasterDsp {
         let punch_active = read_bool(params, MASTER_PUNCH_ACTIVE);
         let limiter_active = read_bool(params, MASTER_LIMITER_ACTIVE);
 
-        // Master gain
-        self.gain.value = if gain_val == 0.0 { 1.0 } else { gain_val };
-        self.gain.process_block(samples);
+        // Smoothed master gain (click-free)
+        let gain_target = if gain_val == 0.0 { 1.0 } else { gain_val };
+        self.gain_smooth.set_target(gain_target);
+        self.gain_smooth.apply_gain(samples);
 
         // Master filter (bipolar: -1 = lowpass, +1 = highpass, 0 = bypass)
         if filter_val.abs() > 0.05 {

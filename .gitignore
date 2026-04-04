@@ -36,6 +36,7 @@ WHITE_PAPER.md
 SAAS.md
 ROADMAP.md
 coverage/
+OMNIDECK.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/
