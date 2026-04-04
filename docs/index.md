@@ -737,4 +737,147 @@ onMounted(() => {
   color: #ff6a00;
   background: rgba(255, 106, 0, 0.06);
 }
+
+/* ═══════════════════════════════════════
+   MOBILE RESPONSIVE (≤ 640px)
+   ═══════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Hero: allow subtitle to wrap ── */
+  .VPHero .main .text {
+    white-space: normal !important;
+    font-size: 1.2rem !important;
+    line-height: 1.5 !important;
+  }
+
+  .VPHero .main .tagline {
+    font-size: 0.9rem;
+    padding: 0 0.5rem;
+  }
+
+  /* ── GET bar: 2 rows of 3 icons ── */
+  .get-bar-inner {
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .get-label {
+    width: 100%;
+    text-align: center;
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .get-divider {
+    display: none;
+  }
+
+  .get-item {
+    flex: 0 0 calc(33.33% - 0.2rem);
+    padding: 0.4rem 0.3rem;
+  }
+
+  .get-item svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .get-plat {
+    font-size: 0.5rem;
+  }
+
+  /* ── Install cmd: horizontal scroll ── */
+  .install-inner {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .install-inner code {
+    font-size: 0.62rem;
+  }
+
+  /* ── Stats: 2-column grid ── */
+  .stats-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem 0;
+    padding: 1.2rem 1rem;
+    margin: 2rem auto;
+  }
+
+  .stat-divider {
+    display: none;
+  }
+
+  .stat-item:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .stat-number {
+    font-size: 1.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.65rem;
+  }
+
+  /* ── Showcase: tighter margins ── */
+  .hero-showcase {
+    margin-top: -1rem;
+    padding: 0 0.5rem;
+  }
+
+  .showcase-caption {
+    font-size: 0.7rem;
+  }
+
+  /* ── Manifesto: stack buttons ── */
+  .manifesto-inner {
+    padding: 2rem 1.2rem;
+  }
+
+  .manifesto-title {
+    font-size: 1.15rem;
+  }
+
+  .manifesto-text {
+    font-size: 0.85rem;
+  }
+
+  .manifesto-links {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .manifesto-link {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ═══════════ Tablet (641–960px) ═══════════ */
+@media (min-width: 641px) and (max-width: 960px) {
+  .stats-row {
+    gap: 0;
+    padding: 1.4rem 1rem;
+  }
+
+  .stat-number {
+    font-size: 1.4rem;
+  }
+
+  .stat-label {
+    font-size: 0.6rem;
+  }
+
+  .get-item {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .get-item svg {
+    width: 26px;
+    height: 26px;
+  }
+}
 </style>
