@@ -92,7 +92,13 @@ pub struct Reverb {
     combs: [CombFilter; 4],
     allpasses: [AllpassFilter; 2],
     wet: f32,
+    /// Internal energy tracker for auto-sleep
+    energy: f32,
+    sleeping: bool,
 }
+
+/// Auto-sleep threshold: -90dB RMS² = 1e-9
+const SLEEP_THRESHOLD: f32 = 1e-9;
 
 // Comb filter delay lengths (in samples at 44.1kHz)
 // Tuned to be coprime to avoid metallic resonances
@@ -118,6 +124,8 @@ impl Reverb {
                 AllpassFilter::new((AP_LENGTHS[1] as f32 * scale) as usize, AP_FEEDBACK),
             ],
             wet: 0.0,
+            energy: 0.0,
+            sleeping: true,
         }
     }
 
@@ -130,6 +138,20 @@ impl Reverb {
     #[inline]
     pub fn process_block(&mut self, samples: &mut [f32]) {
         let dry = 1.0 - self.wet;
+
+        // Auto-sleep: check if input has energy
+        let input_energy: f32 = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
+
+        // Wake up if input has energy
+        if input_energy > SLEEP_THRESHOLD {
+            self.sleeping = false;
+        }
+
+        // If sleeping (no input, tail decayed), skip processing
+        if self.sleeping {
+            // Output is just dry signal (no reverb tail)
+            return;
+        }
 
         for s in samples.iter_mut() {
             let input = *s;
@@ -149,11 +171,22 @@ impl Reverb {
 
             *s = input * dry + ap_out * self.wet;
         }
+
+        // Track internal energy for sleep detection
+        let output_energy: f32 = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
+        self.energy = self.energy * 0.95 + output_energy * 0.05;
+
+        // Go to sleep if both input and internal energy are silent
+        if input_energy < SLEEP_THRESHOLD && self.energy < SLEEP_THRESHOLD {
+            self.sleeping = true;
+        }
     }
 
     pub fn reset(&mut self) {
         for c in &mut self.combs { c.reset(); }
         for a in &mut self.allpasses { a.reset(); }
+        self.energy = 0.0;
+        self.sleeping = true;
     }
 }
 
