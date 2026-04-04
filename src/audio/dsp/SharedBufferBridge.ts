@@ -33,8 +33,8 @@ const CHANNELS = 2;
 /** SPSC header size in bytes (write_idx u32 + read_idx u32). */
 const SPSC_HEADER = 8;
 
-/** Metering bus size: 2 channels × (peak + rms) + master peak + master rms = 24 bytes. */
-const METERING_BUS_SIZE = 6 * 4; // 6 floats × 4 bytes
+/** Metering bus size: 2ch × (peak+rms) + master peak + master rms + limiter GR = 28 bytes. */
+const METERING_BUS_SIZE = 7 * 4; // 7 floats × 4 bytes
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ export function sendBuffersToWorklet(
 
 /**
  * Read metering values from the metering bus.
- * Layout: [peakL, rmsL, peakR, rmsR, masterPeak, masterRms]
+ * Layout: [peakL, rmsL, peakR, rmsR, masterPeak, masterRms, limiterGR]
  */
 export class MeteringReader {
   private readonly view: Float32Array;
@@ -134,5 +134,16 @@ export class MeteringReader {
   /** Get stereo RMS as a single value (max of L/R). */
   get rms(): number {
     return Math.max(this.view[1], this.view[3]);
+  }
+
+  /**
+   * Limiter gain reduction in dB (0 = idle, positive = reducing).
+   * Use to animate the LIM badge:
+   *   - 0 dB: idle (green/off)
+   *   - 0.1-2 dB: gentle compression (amber glow)
+   *   - >3 dB: hard limiting (red flash)
+   */
+  get limiterGR(): number {
+    return this.view[6] || 0;
   }
 }

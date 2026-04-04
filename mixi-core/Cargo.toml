@@ -24,6 +24,7 @@ opt-level = 3          # Optimize for speed (fastest DSP processing)
 lto = true             # Link-Time Optimization
 strip = true           # Strip debug symbols
 codegen-units = 1      # Single codegen unit for max optimization
+panic = "abort"        # Remove stack-unwinding code (saves ~5-10KB)
 
 # wasm-opt is disabled because the version bundled with wasm-pack 0.14
 # doesn't support bulk-memory ops emitted by Rust 1.94+.

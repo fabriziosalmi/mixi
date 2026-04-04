@@ -115,6 +115,11 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       this.meteringView[3] = rmsR;
       this.meteringView[4] = Math.max(peakL, peakR);
       this.meteringView[5] = Math.max(rmsL, rmsR);
+
+      // Slot 6: Limiter Gain Reduction (dB, 0 = idle, negative = limiting)
+      // For visual feedback: detect clipping conditions from peak level
+      const masterPeak = Math.max(peakL, peakR);
+      this.meteringView[6] = masterPeak > 0.89 ? -20 * Math.log10(0.89 / Math.max(masterPeak, 0.001)) : 0;
     }
 
     return true;

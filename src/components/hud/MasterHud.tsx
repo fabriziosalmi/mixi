@@ -207,26 +207,41 @@ const LimiterDot: FC = () => {
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized || !dotRef.current) return;
       const reduction = engine.getLimiterReduction();
-      const compressing = reduction < -0.3;
-      const intensity = Math.min(1, Math.abs(reduction) / 3);
+      const absGR = Math.abs(reduction);
       const el = dotRef.current;
       const glow = glowRef.current;
-      if (compressing) {
-        const flicker = 0.7 + Math.random() * 0.3;
-        const brightness = intensity * flicker;
-        el.style.backgroundColor = `rgba(220,38,38,${0.4 + brightness * 0.6})`;
-        el.style.boxShadow = `0 0 ${3 + brightness * 10}px rgba(220,38,38,${0.3 + brightness * 0.5}), inset 0 0 3px rgba(255,100,100,${brightness * 0.3})`;
-        if (glow) glow.style.opacity = String(brightness * 0.4);
+
+      // 3-level visual feedback:
+      //   idle:       absGR < 0.3  → dark (off)
+      //   gentle:     0.3-3 dB    → amber glow (RMS compression, musical)
+      //   emergency:  >3 dB       → red flash (peak rescue, safety)
+
+      if (absGR > 3.0) {
+        // ── EMERGENCY: Red flash (Hermite peak rescue) ──
+        const intensity = Math.min(1, absGR / 8);
+        const pulse = 0.8 + Math.random() * 0.2;
+        el.style.backgroundColor = `rgba(220,38,38,${0.6 + intensity * 0.4})`;
+        el.style.boxShadow = `0 0 ${4 + intensity * 14}px rgba(220,38,38,${0.5 + intensity * 0.5}), inset 0 0 4px rgba(255,120,120,${intensity * 0.5})`;
+        if (glow) glow.style.opacity = String(pulse * intensity * 0.6);
         const clip = document.getElementById('mixi-clip-flash');
-        if (clip && intensity > 0.3) clip.style.opacity = String(intensity * 0.15);
+        if (clip) clip.style.opacity = String(intensity * 0.15);
+      } else if (absGR > 0.3) {
+        // ── GENTLE: Amber glow (RMS compression, musical) ──
+        const intensity = Math.min(1, (absGR - 0.3) / 2.7);
+        el.style.backgroundColor = `rgba(245,158,11,${0.3 + intensity * 0.5})`;
+        el.style.boxShadow = `0 0 ${2 + intensity * 6}px rgba(245,158,11,${0.2 + intensity * 0.3}), inset 0 0 2px rgba(255,200,100,${intensity * 0.2})`;
+        if (glow) glow.style.opacity = String(intensity * 0.25);
+        const clip = document.getElementById('mixi-clip-flash');
+        if (clip) clip.style.opacity = '0';
       } else {
+        // ── IDLE: Dark/off ──
         el.style.backgroundColor = 'var(--clr-limiter-bg)';
         el.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.5)';
         if (glow) glow.style.opacity = '0';
         const clip = document.getElementById('mixi-clip-flash');
         if (clip) clip.style.opacity = '0';
       }
-    }, 60);
+    }, 50); // 20Hz update rate (smooth enough, low CPU)
     const cleanupDot = dotRef.current;
     const cleanupGlow = glowRef.current;
     return () => {
@@ -249,8 +264,8 @@ const LimiterDot: FC = () => {
         className="absolute rounded-full pointer-events-none"
         style={{
           width: 24, height: 24, top: '50%', right: -3, transform: 'translateY(-50%)',
-          background: 'radial-gradient(circle, rgba(220,38,38,0.4) 0%, transparent 70%)',
-          opacity: 0, transition: 'opacity 0.08s',
+          background: 'radial-gradient(circle, rgba(245,158,11,0.35) 0%, rgba(220,38,38,0.2) 50%, transparent 70%)',
+          opacity: 0, transition: 'opacity 0.05s',
         }}
       />
       <button

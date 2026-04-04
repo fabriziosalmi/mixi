@@ -379,6 +379,14 @@ impl DspEngine {
         self.master.process(&mut output_r[..len], params, self.sr);
     }
 
+    /// Get the current limiter gain reduction in dB (for metering).
+    /// Returns 0.0 when idle, negative values when limiting.
+    /// Use this to drive the LIM badge intensity in the UI.
+    #[wasm_bindgen(js_name = "getLimiterGainReduction")]
+    pub fn get_limiter_gain_reduction(&self) -> f32 {
+        self.master.predictive.gain_reduction_db()
+    }
+
     /// Reset all DSP state (on track change, etc.)
     #[wasm_bindgen]
     pub fn reset(&mut self) {

@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "mixi-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
