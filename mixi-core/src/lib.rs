@@ -21,6 +21,7 @@ pub mod waveform;
 pub mod bpm;
 pub mod key;
 pub mod automix;
+pub mod drop_detect;
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports

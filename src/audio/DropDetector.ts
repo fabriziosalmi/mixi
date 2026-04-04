@@ -39,6 +39,11 @@
 
 import { log } from '../utils/logger';
 import type { WaveformPoint } from './WaveformAnalyzer';
+import { isWasmReady } from '../wasm/wasmBridge';
+
+// Wasm module — imported dynamically
+let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
+import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
 
 /** A detected drop with its beat position and strength. */
 export interface DropMarker {
@@ -69,6 +74,28 @@ export function detectDrops(
   if (bpm <= 0 || waveform.length < PPS * 4) return [];
 
   const t0 = performance.now();
+
+  // ── Wasm fast path ──────────────────────────────────────────
+  if (isWasmReady() && wasmModule) {
+    const lowBand = new Float32Array(waveform.length);
+    for (let i = 0; i < waveform.length; i++) {
+      lowBand[i] = waveform[i].low;
+    }
+    const flat = wasmModule.detect_drops(lowBand, bpm, firstBeatOffset);
+    const markers: DropMarker[] = [];
+    for (let i = 0; i < flat.length; i += 2) {
+      markers.push({ beat: flat[i], strength: flat[i + 1] });
+    }
+    const elapsed = (performance.now() - t0).toFixed(0);
+    log.success(
+      'DropDetector',
+      `[Rust] Found ${markers.length} drops in ${elapsed} ms` +
+      (markers.length > 0 ? ` — main drop at beat ${markers[0].beat}` : ''),
+    );
+    return markers;
+  }
+
+  // ── JS fallback ──────────────────────────────────────────────
   const beatPeriod = 60 / bpm;
   const samplesPerBeat = Math.round(beatPeriod * PPS);
 
