@@ -35,6 +35,11 @@ import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import { timeToBeat, calcMixOutBeat } from '../automixer/beatUtils';
 import { isHarmonicMatch } from '../audio/KeyDetector';
+import { isWasmReady } from '../wasm/wasmBridge';
+
+// Wasm module — imported dynamically
+let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
+import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
 
 // ── The Blackboard Data Structure ────────────────────────────
 
@@ -189,6 +194,80 @@ export function computeBlackboard(): Blackboard {
     ? engine.getCurrentTime(masterDeck) : 0;
   const incomingTime = engine.isInitialized
     ? engine.getCurrentTime(incomingDeck) : 0;
+
+  // ── Wasm fast path (20 Hz tick) ─────────────────────────────
+  // Pack raw deck state into Float64Array, compute all derived
+  // metrics in Rust, then hydrate the remaining JS-only fields.
+  if (isWasmReady() && wasmModule) {
+    const raw = new Float64Array([
+      masterTime, ms.bpm, ms.firstBeatOffset, ms.duration,
+      ms.volume, ms.eq.low, ms.eq.mid, ms.colorFx,
+      incomingTime, is.bpm, is.firstBeatOffset, is.eq.low,
+      is.volume, is.colorFx, is.eq.mid, store.crossfader,
+      ms.isPlaying ? 1.0 : 0.0, is.isPlaying ? 1.0 : 0.0,
+    ]);
+    const bb = wasmModule.compute_blackboard(raw);
+    const masterBpm = ms.bpm > 0 ? ms.bpm : 120;
+    const bothPlaying = ms.isPlaying && is.isPlaying;
+    const incomingBeat = bb[5];
+
+    // Bass-killed ticks (stateful, must stay in JS)
+    for (const d of ['A', 'B'] as const) {
+      _bassKilledTicks[d] = store.decks[d].eq.low < -15
+        ? _bassKilledTicks[d] + 1 : 0;
+    }
+
+    // Drop & key (need JS object access)
+    const masterDropBeat = ms.dropBeats.length > 0 ? ms.dropBeats[0] : null;
+    const incomingDropBeat = is.dropBeats.length > 0 ? is.dropBeats[0] : null;
+    const beatsToIncomingDrop = incomingDropBeat !== null && is.bpm > 0
+      ? incomingDropBeat - incomingBeat : null;
+    const masterKey = ms.musicalKey || '';
+    const incomingKey = is.musicalKey || '';
+    const harmonicMatch = masterKey && incomingKey
+      ? isHarmonicMatch(masterKey, incomingKey) : false;
+
+    return {
+      tick, timestamp: performance.now(),
+      masterDeck, incomingDeck,
+      masterState: ms,
+      masterCurrentTime: masterTime,
+      masterCurrentBeat: bb[0],
+      masterTotalBeats: bb[1],
+      beatsToOutroMaster: bb[3],
+      beatsToEndMaster: bb[4],
+      masterBpm,
+      masterBeatPeriod: bb[19],
+      incomingState: is,
+      incomingCurrentTime: incomingTime,
+      incomingCurrentBeat: incomingBeat,
+      incomingBpm: is.bpm,
+      incomingIsReady: is.isTrackLoaded && is.bpm > 0,
+      bothPlaying,
+      isPhaseAligned: bb[7] > 0.5,
+      phaseDeltaMs: bb[6],
+      bassClash: bb[8] > 0.5,
+      midClash: bb[9] > 0.5,
+      masterHasLoop: ms.activeLoop !== null,
+      deadAirImminent: bb[18] > 0.5,
+      masterBeatInPhrase: bb[10],
+      masterBeatsToPhrase: bb[11],
+      incomingBeatInPhrase: bb[12],
+      masterOnDownbeat: bb[13] > 0.5,
+      isBlending: bb[14] > 0.5,
+      incomingBassKilled: bb[15] > 0.5,
+      masterBassKilled: bb[16] > 0.5,
+      masterBassKilledTicks: _bassKilledTicks[masterDeck],
+      incomingBassKilledTicks: _bassKilledTicks[incomingDeck],
+      masterHasFilter: bb[17] > 0.5,
+      masterDropBeat, incomingDropBeat, beatsToIncomingDrop,
+      masterKey, incomingKey, isHarmonicMatch: harmonicMatch,
+      crossfader: store.crossfader,
+      masterVolume: store.master.volume,
+    };
+  }
+
+  // ── JS fallback ─────────────────────────────────────────────
 
   const masterBpm = ms.bpm > 0 ? ms.bpm : 120;
   const masterBeatPeriod = 60 / masterBpm;

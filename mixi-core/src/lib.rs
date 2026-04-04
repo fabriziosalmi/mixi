@@ -20,6 +20,7 @@ use wasm_bindgen::prelude::*;
 pub mod waveform;
 pub mod bpm;
 pub mod key;
+pub mod automix;
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports
