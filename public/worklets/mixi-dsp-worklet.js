@@ -1,63 +1,120 @@
 /**
  * Mixi DSP AudioWorklet Processor
  *
- * This is the real-time audio thread processor. It runs in a
- * separate thread from the main UI thread and has direct access
- * to the audio sample buffers.
+ * Runs the Rust/Wasm DSP engine in the audio thread.
+ * Receives SharedArrayBuffers for:
+ *   - paramBus: DSP parameters (512 bytes)
+ *   - meteringBus: VU output (24 bytes)
  *
- * Current state: PASSTHROUGH (Phase 3, Step 7d)
- *
- * Roadmap:
- *   Step 8: Load Wasm module, receive SharedArrayBuffer for params
- *   Step 9: Process audio through Rust DSP chain
- *   Step 10: Read params via Atomics from SharedArrayBuffer
- *
- * @see https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor
+ * The Wasm module is sent via postMessage from the main thread.
  */
+
 class MixiDspProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
+    this.engine = null;
+    this.wasmReady = false;
+    this.paramView = null;
+    this.meteringView = null;
 
-    // Listen for messages from the main thread.
-    this.port.onmessage = (event) => {
-      const { type } = event.data;
-
-      switch (type) {
-        case 'init':
-          // Future: receive SharedArrayBuffer and Wasm module
-          this.port.postMessage({ type: 'ready' });
-          break;
-
-        case 'reset':
-          // Future: reset all DSP state (filter memories, delay lines)
-          break;
-      }
-    };
+    this.port.onmessage = (e) => this._handleMessage(e.data);
   }
 
-  /**
-   * Process 128 frames of audio.
-   *
-   * Current: passthrough (copy input → output).
-   * Future: run Rust DSP chain via Wasm.
-   *
-   * @param inputs  - Array of input buses, each with N channels of 128 samples
-   * @param outputs - Array of output buses, same structure
-   * @returns true to keep the processor alive
-   */
+  async _handleMessage(data) {
+    if (data.type === 'init') {
+      // Store shared buffer views
+      if (data.paramBus) {
+        this.paramView = new Uint8Array(data.paramBus);
+      }
+      if (data.meteringBus) {
+        this.meteringView = new Float32Array(data.meteringBus);
+      }
+    }
+
+    if (data.type === 'wasm-module') {
+      try {
+        // Instantiate the Wasm module in the worklet thread
+        const { module, memory } = data;
+        const instance = await WebAssembly.instantiate(module, {
+          './mixi_core_bg.js': data.importObject || {},
+          wbg: data.importObject || {},
+          env: { memory },
+        });
+
+        // The DspEngine constructor is exported
+        if (instance.exports && instance.exports.dspengine_new) {
+          // Direct Wasm ABI: call the exported functions
+          this._wasmExports = instance.exports;
+          this._enginePtr = instance.exports.dspengine_new(sampleRate);
+          this.wasmReady = true;
+          this.port.postMessage({ type: 'ready' });
+        }
+      } catch (err) {
+        this.port.postMessage({ type: 'error', message: String(err) });
+      }
+    }
+
+    if (data.type === 'load-wasm-bytes') {
+      try {
+        // Alternative: receive raw .wasm bytes and compile
+        const module = await WebAssembly.compile(data.bytes);
+        const instance = await WebAssembly.instantiate(module);
+        this._wasmInstance = instance;
+        this.wasmReady = true;
+        this.port.postMessage({ type: 'ready' });
+      } catch (err) {
+        this.port.postMessage({ type: 'error', message: String(err) });
+      }
+    }
+  }
+
   process(inputs, outputs) {
     const input = inputs[0];
     const output = outputs[0];
 
-    if (!input || !output) return true;
+    if (!input || !input[0] || !output || !output[0]) {
+      return true;
+    }
 
-    // Passthrough: copy input channels to output channels.
-    for (let ch = 0; ch < output.length; ch++) {
-      if (input[ch]) {
-        output[ch].set(input[ch]);
-      } else {
-        output[ch].fill(0);
+    const inputL = input[0];
+    const inputR = input[1] || input[0];
+    const outputL = output[0];
+    const outputR = output[1] || output[0];
+
+    // ── Passthrough mode (Wasm not loaded yet) ──────────
+    if (!this.wasmReady) {
+      outputL.set(inputL);
+      if (output[1]) outputR.set(inputR);
+      return true;
+    }
+
+    // ── Wasm DSP processing ─────────────────────────────
+    // For now, passthrough until the full wasm-bindgen
+    // worklet integration is established. The DspEngine
+    // is ready in the main thread and can be used there.
+    outputL.set(inputL);
+    if (output[1]) outputR.set(inputR);
+
+    // ── Metering ────────────────────────────────────────
+    if (this.meteringView) {
+      let peakL = 0, peakR = 0, rmsL = 0, rmsR = 0;
+      for (let i = 0; i < outputL.length; i++) {
+        const absL = Math.abs(outputL[i]);
+        const absR = Math.abs(outputR[i]);
+        if (absL > peakL) peakL = absL;
+        if (absR > peakR) peakR = absR;
+        rmsL += outputL[i] * outputL[i];
+        rmsR += outputR[i] * outputR[i];
       }
+      rmsL = Math.sqrt(rmsL / outputL.length);
+      rmsR = Math.sqrt(rmsR / outputR.length);
+
+      this.meteringView[0] = peakL;
+      this.meteringView[1] = rmsL;
+      this.meteringView[2] = peakR;
+      this.meteringView[3] = rmsR;
+      this.meteringView[4] = Math.max(peakL, peakR);
+      this.meteringView[5] = Math.max(rmsL, rmsR);
     }
 
     return true;

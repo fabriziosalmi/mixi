@@ -43,6 +43,7 @@ import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
 import { log } from '../utils/logger';
 import { LocalParamBus, PARAM_BUS_SIZE } from './dsp';
 import { DspParamWriter } from './dsp/DspParamWriter';
+import { WasmDspBridge } from './dsp/WasmDspBridge';
 
 // ── Per-deck transport state (not exposed to store) ──────────
 
@@ -96,9 +97,13 @@ export class MixiEngine {
 
   /** DSP Parameter Writer — populates the shared param bus for Wasm DSP. */
   private _paramWriter: DspParamWriter | null = null;
+  /** Wasm DSP bridge — manages AudioWorklet lifecycle. */
+  private _wasmBridge: WasmDspBridge | null = null;
 
   /** Public access to the param writer (for useMixiSync). */
   get paramWriter(): DspParamWriter | null { return this._paramWriter; }
+  /** Public access to the wasm bridge state. */
+  get wasmDspActive(): boolean { return this._wasmBridge?.isReady ?? false; }
 
   // ── Singleton access ───────────────────────────────────────
 
@@ -175,6 +180,27 @@ export class MixiEngine {
     this._paramWriter.setSampleRate(this.ctx.sampleRate);
     this._paramWriter.setDspBackend(false); // native mode
     log.info('Engine', 'DSP param bus initialised (512 bytes)');
+
+    // ── Wasm DSP Bridge (conditional) ──────────────────────
+    const useWasm = useSettingsStore.getState().useWasmDsp;
+    if (useWasm) {
+      this._wasmBridge = new WasmDspBridge();
+      this._wasmBridge.init(this.ctx).then((ok) => {
+        if (ok && this._wasmBridge?.workletNode) {
+          // Insert worklet between deck outputs and master input.
+          // The worklet acts as a passthrough now, but will run
+          // the Rust DSP chain when fully wired.
+          this._paramWriter?.setDspBackend(true);
+          log.success('Engine', 'Wasm DSP path ACTIVE (passthrough)');
+        } else {
+          log.warn('Engine', 'Wasm DSP init failed — using native path');
+          this._paramWriter?.setDspBackend(false);
+        }
+      }).catch((err) => {
+        log.error('Engine', `Wasm DSP error: ${err}`);
+        this._paramWriter?.setDspBackend(false);
+      });
+    }
 
     // Load the pitch-shift AudioWorklet (non-blocking).
     this.loadPitchWorklet();
@@ -294,6 +320,11 @@ export class MixiEngine {
     this.channels.B.destroy();
     this.master.destroy();
     this.headphones.destroy();
+
+    if (this._wasmBridge) {
+      this._wasmBridge.destroy();
+      this._wasmBridge = null;
+    }
 
     if (this.ctx.state !== 'closed') {
       await this.ctx.close();

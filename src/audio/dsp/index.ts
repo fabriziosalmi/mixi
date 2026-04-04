@@ -26,3 +26,6 @@ export type { DspSharedBuffers } from './SharedBufferBridge';
 
 // Parameter writer
 export { DspParamWriter } from './DspParamWriter';
+
+// Wasm DSP bridge
+export { WasmDspBridge } from './WasmDspBridge';
