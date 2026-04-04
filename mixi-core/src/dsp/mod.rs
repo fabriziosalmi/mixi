@@ -8,3 +8,9 @@
 
 pub mod biquad;
 pub mod dynamics;
+pub mod delay;
+pub mod reverb;
+pub mod flanger;
+pub mod phaser;
+pub mod gate;
+pub mod waveshaper;
