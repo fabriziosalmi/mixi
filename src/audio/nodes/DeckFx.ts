@@ -88,8 +88,6 @@ export class DeckFx {
 
   get isGateActive(): boolean { return this.gateActive; }
   private gateDivision = 2; // index into GATE_DIVISIONS
-  private gateLastScheduled = 0;
-  private gateLastBpm = 0;
 
   constructor(private ctx: AudioContext) {
     this.input = ctx.createGain();
@@ -336,16 +334,16 @@ export class DeckFx {
     smoothParam(this.flgFeedback.gain, 0.4 + amount * 0.4, ctx);
   }
 
-  // ── GATE (beat-locked AudioParam scheduling) ───────────────
+  // ── GATE (beat-locked volume chop) ──────────────────────────
   //
-  // Uses setValueAtTime / linearRampToValueAtTime to schedule
-  // precise on/off transitions on the audio thread.
-  // Duty cycle: 70% open / 30% closed — punchy, not mechanical.
-  // Ramp time: 1ms — sharp but click-free.
+  // Simple approach: updateGate() is called every ~50ms.
+  // It computes where we are in the current beat cycle and sets
+  // gain to 1 (open) or 0 (closed) based on the duty cycle.
+  // No complex look-ahead scheduling — just immediate state.
+  // The smoothParam ramp (12ms) prevents clicks.
 
   private static readonly GATE_BEAT_DIVS = [1/32, 1/16, 1/8, 1/4, 1/2];
-  private static readonly GATE_DUTY = 0.7;  // 70% open
-  private static readonly GATE_RAMP = 0.001; // 1ms attack/release
+  private static readonly GATE_DUTY = 0.7;  // 70% open / 30% closed
 
   private setGate(amount: number, active: boolean, _ctx: AudioContext): void {
     if (!active) {
@@ -354,80 +352,37 @@ export class DeckFx {
     }
     this.gateActive = true;
     this.gateDivision = Math.round(Math.min(4, Math.max(0, amount)));
-    this.gateLastScheduled = 0;
-    // Ensure gate starts at unity (open) — scheduling takes over from next cycle
-    const t = this.ctx.currentTime;
-    this.gateGain.gain.cancelScheduledValues(0);
-    this.gateGain.gain.setValueAtTime(1, t);
   }
 
   /**
    * Call every ~50ms from the engine.
-   * Quantized gate: volume drops to 0 for the closed portion of each
-   * beat subdivision, then ramps back to 1 for the open portion.
-   * All transitions are beat-grid-locked via firstBeatOffset.
+   * Computes current position in the beat grid and sets gain
+   * to 1 (open phase) or 0 (closed phase) of the gate cycle.
    */
   updateGate(bpm: number, _currentTime: number, gridOffset: number): void {
     if (!this.gateActive || bpm <= 0) return;
 
-    // BPM change: cancel stale events and re-lock
-    if (bpm !== this.gateLastBpm) {
-      this.gateGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.gateGain.gain.setValueAtTime(1, this.ctx.currentTime);
-      this.gateLastScheduled = 0;
-      this.gateLastBpm = bpm;
-    }
-
     const beatSec = 60 / bpm;
     const divSec = Math.max(0.01, beatSec * DeckFx.GATE_BEAT_DIVS[this.gateDivision]);
-    const duty = DeckFx.GATE_DUTY;
-    const ramp = DeckFx.GATE_RAMP;
-    const lookAhead = 0.2;
     const now = this.ctx.currentTime;
-    const scheduleEnd = now + lookAhead;
 
-    const gain = this.gateGain.gain;
-
-    // Find current position in beat grid
+    // Where are we in the current gate cycle? (0..1)
     const elapsed = now - gridOffset;
-    const currentCycle = Math.floor(elapsed / divSec);
-    let cycleStart = gridOffset + currentCycle * divSec;
+    const phase = ((elapsed / divSec) % 1 + 1) % 1;
 
-    // Start from the current cycle (not next) so we don't miss the open phase
-    if (cycleStart <= this.gateLastScheduled) {
-      cycleStart = this.gateLastScheduled;
-    }
+    // Open (gain=1) during first 70% of cycle, closed (gain=0) for last 30%
+    const target = phase < DeckFx.GATE_DUTY ? 1 : 0;
 
-    while (cycleStart < scheduleEnd) {
-      const openStart = cycleStart;
-      const closeStart = cycleStart + divSec * duty;
-      const cycleEnd = cycleStart + divSec;
-
-      // Open phase: gain = 1 (volume up)
-      if (openStart > now && openStart > this.gateLastScheduled) {
-        gain.setValueAtTime(0, openStart);
-        gain.linearRampToValueAtTime(1, openStart + ramp);
-      }
-
-      // Close phase: gain = 0 (volume chop)
-      if (closeStart > now && closeStart > this.gateLastScheduled) {
-        gain.setValueAtTime(1, closeStart);
-        gain.linearRampToValueAtTime(0, closeStart + ramp);
-      }
-
-      this.gateLastScheduled = cycleEnd;
-      cycleStart = cycleEnd;
-    }
+    // Use fast ramp (2ms) — snappy chop, no click
+    this.gateGain.gain.cancelScheduledValues(now);
+    this.gateGain.gain.setTargetAtTime(target, now, 0.002);
   }
 
   private stopGate(): void {
     this.gateActive = false;
-    this.gateLastScheduled = 0;
-    this.gateLastBpm = 0;
-    // Cancel all scheduled events and restore unity gain immediately
-    const t = this.ctx.currentTime + 0.005;
-    this.gateGain.gain.cancelScheduledValues(0);
-    this.gateGain.gain.setValueAtTime(1, t);
+    const now = this.ctx.currentTime;
+    this.gateGain.gain.cancelScheduledValues(now);
+    this.gateGain.gain.setTargetAtTime(1, now, 0.005);
   }
 
   /** Reset all FX to off/zero without destroying nodes. */
