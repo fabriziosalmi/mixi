@@ -72,7 +72,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
       style={{ opacity: !isTrackLoaded && !isPlaying ? 0.6 : 1 }}
     >
       {/* ── Unified Header — flush with top border ────────────── */}
-      <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 border-b border-zinc-800/30">
+      <div className="mixi-deck-header flex items-center gap-2 px-3 pt-2.5 pb-1 border-b border-zinc-800/30">
         {/* Status dot */}
         <div
           className={`h-2 w-2 shrink-0 rounded-full ${isPlaying ? 'mixi-dot-pulse' : ''}`}
@@ -140,7 +140,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
       </div>
 
       {/* ── Content ───────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col px-3 pb-3 min-h-0 relative">
+      <div className="mixi-deck-content flex flex-1 flex-col px-3 pb-3 min-h-0 relative">
         {!isTrackLoaded && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-xl m-3 pointer-events-auto p-6">
             <TrackLoader deckId={deckId} color={color} onSwitchToGroovebox={() => setDeckMode(deckId, 'groovebox')} />
@@ -148,7 +148,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         )}
         <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-60 blur-[2px]' : 'opacity-100 blur-0'}`}>
           {/* Waveform */}
-          <div className="shrink-0 flex flex-col gap-1.5">
+          <div className="mixi-waveform-area shrink-0 flex flex-col gap-1.5">
             <WaveformDisplay deckId={deckId} height={70} />
             <WaveformOverview deckId={deckId} height={22} />
           </div>
@@ -159,7 +159,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
             <div className="flex flex-col items-center justify-center flex-1">
               <PremiumJogWheel deckId={deckId} color={color} size={320} />
               {/* Transport buttons — tight under wheel */}
-              <div className="flex items-center justify-center gap-14 mt-4">
+              <div className="mixi-transport flex items-center justify-center gap-14 mt-4">
                 <NeonPlayButton isPlaying={isPlaying} onToggle={togglePlay} color={color} size={72} midiAction={{ type: 'DECK_PLAY', deck: deckId }} />
                 <NeonSyncButton isSynced={isSynced} canSync={canSync} onToggle={toggleSync} color={color} size={72} midiAction={{ type: 'DECK_SYNC', deck: deckId }} />
               </div>
@@ -174,7 +174,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
           </div>
 
           {/* Performance Pads */}
-          <div className="shrink-0">
+          <div className="mixi-pads-section shrink-0">
             <PerformancePads deckId={deckId} color={color} />
           </div>
         </div>
@@ -251,7 +251,7 @@ const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
 
   return (
     <div
-      className="flex flex-col items-center justify-center gap-1.5 shrink-0 py-2 px-1 rounded-md bg-zinc-900/50"
+      className="mixi-fx-strip flex flex-col items-center justify-center gap-1.5 shrink-0 py-2 px-1 rounded-md bg-zinc-900/50"
       style={{
         width: 48,
         border: '1px solid rgba(255,255,255,0.04)',

@@ -1,28 +1,47 @@
 import { useEffect, useState, type FC, type ReactNode } from 'react';
 
-// Force an absolute minimum virtual resolution for the DAW.
-// On screens smaller than this, the entire interface will scale down proportionally.
-const MIN_DESKTOP_WIDTH = 1100;
-const MIN_DESKTOP_HEIGHT = 700;
+// ─────────────────────────────────────────────────────────────
+// MobileScaleWrapper — Adaptive virtual resolution
+//
+// Desktop (≥1100×700):      no scaling, passthrough
+// Portrait mobile:           scale to fit 1100×700 virtual canvas
+// Landscape mobile (≤500h):  scale to fit 1100×540 compact canvas
+//                            + adds .mixi-compact CSS class
+// ─────────────────────────────────────────────────────────────
+
+const DESKTOP_W = 1100;
+const DESKTOP_H = 700;
+
+// Compact mode: reduced virtual height for landscape mobile
+const COMPACT_H = 540;
+// Activate compact when: landscape ratio AND height ≤ threshold
+const COMPACT_MAX_HEIGHT = 500;
 
 export const MobileScaleWrapper: FC<{ children: ReactNode }> = ({ children }) => {
   const [scale, setScale] = useState(1);
   const [needsScaling, setNeedsScaling] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      
-      if (w < MIN_DESKTOP_WIDTH || h < MIN_DESKTOP_HEIGHT) {
+
+      // Determine if we should use compact (landscape mobile) mode
+      const landscapeMobile = w > h && h <= COMPACT_MAX_HEIGHT && w >= 640;
+
+      const virtualW = DESKTOP_W;
+      const virtualH = landscapeMobile ? COMPACT_H : DESKTOP_H;
+
+      if (w < virtualW || h < virtualH) {
         setNeedsScaling(true);
-        // Calculate the scale needed to fit both dimensions
-        const scaleW = w / MIN_DESKTOP_WIDTH;
-        const scaleH = h / MIN_DESKTOP_HEIGHT;
-        // Use the smaller scale to ensure it fits entirely on screen
+        setIsCompact(landscapeMobile);
+        const scaleW = w / virtualW;
+        const scaleH = h / virtualH;
         setScale(Math.min(scaleW, scaleH));
       } else {
         setNeedsScaling(false);
+        setIsCompact(false);
         setScale(1);
       }
     };
@@ -39,6 +58,7 @@ export const MobileScaleWrapper: FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <div
+      className={isCompact ? 'mixi-compact' : ''}
       style={{
         width: '100vw',
         height: '100vh',
@@ -51,8 +71,8 @@ export const MobileScaleWrapper: FC<{ children: ReactNode }> = ({ children }) =>
     >
       <div
         style={{
-          width: MIN_DESKTOP_WIDTH,
-          height: MIN_DESKTOP_HEIGHT,
+          width: DESKTOP_W,
+          height: isCompact ? COMPACT_H : DESKTOP_H,
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
           position: 'relative',

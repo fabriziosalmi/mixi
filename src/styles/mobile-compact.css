@@ -1,0 +1,95 @@
+/* ═══════════════════════════════════════════════════════════
+   Mobile Compact Mode — Landscape Mobile Overrides
+   
+   All rules scoped under .mixi-compact ancestor.
+   This class is ONLY applied by MobileScaleWrapper when:
+     - viewport height ≤ 500px
+     - viewport width > height (landscape)
+     - viewport width ≥ 640px
+   
+   Desktop users NEVER see these overrides.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Top bar: minimize vertical footprint ───────────────── */
+.mixi-compact .mixi-topbar {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+  gap: 2px !important;
+}
+
+.mixi-compact .mixi-topbar svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.mixi-compact .mixi-topbar button {
+  padding: 1px !important;
+}
+
+/* ── Main grid: reduce gap and padding ─────────────────── */
+.mixi-compact main {
+  gap: 4px !important;
+  padding: 2px 4px !important;
+}
+
+/* ── Deck header: compress vertical padding ────────────── */
+.mixi-compact .mixi-deck-header {
+  padding-top: 2px !important;
+  padding-bottom: 0 !important;
+  gap: 4px !important;
+}
+
+/* ── Waveform area: reduce height ──────────────────────── */
+.mixi-compact .mixi-waveform-area {
+  gap: 2px !important;
+}
+
+/* ── Performance pads: hide on mobile landscape ────────── */
+.mixi-compact .mixi-pads-section {
+  display: none !important;
+}
+
+/* ── FX strip: slimmer ─────────────────────────────────── */
+.mixi-compact .mixi-fx-strip {
+  width: 36px !important;
+  padding: 1px !important;
+  gap: 1px !important;
+}
+
+/* ── Deck content area: tighter ────────────────────────── */
+.mixi-compact .mixi-deck-content {
+  padding: 1px 2px 2px !important;
+  gap: 2px !important;
+}
+
+/* ── Transport buttons: closer to jog wheel ────────────── */
+.mixi-compact .mixi-transport {
+  margin-top: 4px !important;
+  gap: 8px !important;
+}
+
+/* ── Mixer: tighter internal spacing ───────────────────── */
+.mixi-compact .mixi-mixer-glow {
+  gap: 2px !important;
+  padding: 2px 4px !important;
+}
+
+/* ── Mixer LED screen: smaller ─────────────────────────── */
+.mixi-compact .mixi-led-screen {
+  height: 40px !important;
+}
+
+/* ── Mixer crossfader area: compact ────────────────────── */
+.mixi-compact .mixi-crossfader-area {
+  padding: 2px 4px !important;
+}
+
+/* ── Touch optimization ────────────────────────────────── */
+.mixi-compact * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mixi-compact button,
+.mixi-compact [role="slider"] {
+  touch-action: manipulation;
+}

@@ -293,7 +293,7 @@ export const MixerSection: FC = () => {
     <div className="flex flex-col items-center gap-2 mixi-mixer-glow px-3 py-3 h-full overflow-hidden">
       {/* ── LED Screen (top of mixer column) ─────────────────── */}
       <div
-        className="w-full flex flex-col items-center justify-center shrink-0"
+        className="mixi-led-screen w-full flex flex-col items-center justify-center shrink-0"
         style={{
           height: 64,
           borderRadius: 8,
@@ -419,7 +419,7 @@ export const MixerSection: FC = () => {
       <HeadphoneStrip />
 
       {/* Crossfader */}
-      <div className="w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/50 px-3 py-2 border border-zinc-800/40">
+      <div className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/50 px-3 py-2 border border-zinc-800/40">
         <Fader value={crossfader} min={0} max={1} onChange={onCrossfaderChange} orientation="horizontal" length={260} color="#fff" ghost={isGhost('crossfader')} capSize={[40, 14]} midiAction={{ type: 'CROSSFADER' }} />
         <div className="flex w-full items-center justify-between px-1 mt-0.5">
           <span className="text-[11px] font-black" style={{ color: CYAN }}>A</span>
