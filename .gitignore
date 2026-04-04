@@ -39,6 +39,7 @@ coverage/
 OMNIDECK.md
 LIMITER.md
 ZEROLATENCY.md
+IO.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/
