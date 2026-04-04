@@ -3,11 +3,16 @@
 //! Uses 4 parallel comb filters + 2 series allpass filters.
 //! Simple, efficient, and good enough for DJ use.
 //!
+//! All internal buffers use power-of-2 sizes with bitmask wrapping.
+//!
 //! Reference: Schroeder, M.R. (1961) "Natural Sounding Artificial Reverberation"
+
+use super::delay::next_power_of_2;
 
 /// Comb filter (feedback delay).
 struct CombFilter {
     buffer: Vec<f32>,
+    mask: usize,
     pos: usize,
     feedback: f32,
     damp: f32,
@@ -16,8 +21,10 @@ struct CombFilter {
 
 impl CombFilter {
     fn new(size: usize, feedback: f32, damp: f32) -> Self {
+        let sz = next_power_of_2(size.max(2));
         Self {
-            buffer: vec![0.0; size.max(1)],
+            buffer: vec![0.0; sz],
+            mask: sz - 1,
             pos: 0,
             feedback,
             damp,
@@ -34,7 +41,7 @@ impl CombFilter {
         self.damp_prev = filtered;
 
         self.buffer[self.pos] = input + filtered * self.feedback;
-        self.pos = (self.pos + 1) % self.buffer.len();
+        self.pos = (self.pos + 1) & self.mask;
 
         output
     }
@@ -49,14 +56,17 @@ impl CombFilter {
 /// Allpass filter.
 struct AllpassFilter {
     buffer: Vec<f32>,
+    mask: usize,
     pos: usize,
     feedback: f32,
 }
 
 impl AllpassFilter {
     fn new(size: usize, feedback: f32) -> Self {
+        let sz = next_power_of_2(size.max(2));
         Self {
-            buffer: vec![0.0; size.max(1)],
+            buffer: vec![0.0; sz],
+            mask: sz - 1,
             pos: 0,
             feedback,
         }
@@ -67,7 +77,7 @@ impl AllpassFilter {
         let buf_out = self.buffer[self.pos];
         let output = -input + buf_out;
         self.buffer[self.pos] = input + buf_out * self.feedback;
-        self.pos = (self.pos + 1) % self.buffer.len();
+        self.pos = (self.pos + 1) & self.mask;
         output
     }
 
@@ -159,7 +169,6 @@ mod tests {
         rev.set_wet(0.0);
         let mut buf = [0.5f32; 128];
         rev.process_block(&mut buf);
-        // Fully dry = passthrough
         assert!((buf[0] - 0.5).abs() < 0.01);
     }
 
@@ -168,13 +177,12 @@ mod tests {
         let mut rev = Reverb::new(44100.0);
         rev.set_wet(1.0);
 
-        // Feed an impulse
-        let mut buf = vec![0.0f32; 4096];
+        // Power-of-2 comb buffers are 2048 samples — need larger test buffer
+        let mut buf = vec![0.0f32; 8192];
         buf[0] = 1.0;
         rev.process_block(&mut buf);
 
-        // Reverb tail should produce non-zero samples after impulse
-        let tail_energy: f32 = buf[1000..2000].iter().map(|s| s * s).sum();
+        let tail_energy: f32 = buf[2048..4096].iter().map(|s| s * s).sum();
         assert!(tail_energy > 0.0001, "Reverb should produce tail, energy: {}", tail_energy);
     }
 
@@ -183,13 +191,12 @@ mod tests {
         let mut rev = Reverb::new(44100.0);
         rev.set_wet(1.0);
 
-        let mut buf = vec![0.0f32; 8192];
+        let mut buf = vec![0.0f32; 16384];
         buf[0] = 1.0;
         rev.process_block(&mut buf);
 
-        // Later tail should be quieter than early tail
-        let early: f32 = buf[1000..1500].iter().map(|s| s * s).sum();
-        let late: f32 = buf[6000..6500].iter().map(|s| s * s).sum();
+        let early: f32 = buf[2048..4096].iter().map(|s| s * s).sum();
+        let late: f32 = buf[12000..14000].iter().map(|s| s * s).sum();
         assert!(late < early, "Reverb should decay: early={}, late={}", early, late);
     }
 
@@ -199,7 +206,6 @@ mod tests {
         rev.set_wet(1.0);
         rev.process_block(&mut [1.0; 512]);
         rev.reset();
-        // After reset, processing silence should produce silence
         let mut silence = [0.0f32; 128];
         rev.process_block(&mut silence);
         let energy: f32 = silence.iter().map(|s| s * s).sum();

@@ -37,6 +37,7 @@ SAAS.md
 ROADMAP.md
 coverage/
 OMNIDECK.md
+LIMITER.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

@@ -20,7 +20,7 @@ js-sys = "0.3"
 wasm-bindgen-test = "0.3"
 
 [profile.release]
-opt-level = "z"        # Optimize for size (smallest .wasm)
+opt-level = 3          # Optimize for speed (fastest DSP processing)
 lto = true             # Link-Time Optimization
 strip = true           # Strip debug symbols
 codegen-units = 1      # Single codegen unit for max optimization

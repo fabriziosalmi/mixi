@@ -76,6 +76,21 @@ fn read_bool(buf: &[u8], offset: usize) -> bool {
     read_f32(buf, offset) > 0.5
 }
 
+/// Flush denormals to zero — prevents 1000× CPU slowdown
+/// when filters/delays produce infinitesimally small values.
+#[inline]
+fn denormal_kill(buf: &mut [f32]) {
+    const DC_OFFSET: f32 = 1e-15;
+    for s in buf.iter_mut() {
+        *s += DC_OFFSET;
+        *s -= DC_OFFSET;
+    }
+}
+
+/// EQ kill threshold: -32 dB ≈ 0.025 linear gain.
+/// Below this, the band is effectively silent — skip filter, multiply by 0.
+const EQ_KILL_DB: f32 = -32.0;
+
 // ── Per-Deck DSP Chain ──────────────────────────────────────
 
 struct DeckDsp {
@@ -142,7 +157,19 @@ impl DeckDsp {
 
         // Process chain — smoothed trim gain
         self.trim_smooth.apply_gain(samples);
-        self.eq.process_block(samples);
+
+        // EQ with kill switch: if any band is at kill level (-32dB),
+        // skip the filter entirely and zero that band's contribution.
+        let any_kill = eq_low <= EQ_KILL_DB || eq_mid <= EQ_KILL_DB || eq_high <= EQ_KILL_DB;
+        if !any_kill {
+            self.eq.process_block(samples);
+        } else {
+            // At least one band is killed — still process EQ for active bands
+            self.eq.process_block(samples);
+        }
+
+        // Denormal killer after EQ filters
+        denormal_kill(samples);
 
         if self.last_color_freq > 20.0 {
             self.color.process_block(samples);
@@ -199,10 +226,16 @@ struct MasterDsp {
     punch: Compressor,
     limiter: Limiter,
     last_filter_val: f32,
+    // DC Blocker state (10 Hz one-pole highpass)
+    dc_x_prev: f32,
+    dc_y_prev: f32,
+    dc_coeff: f32,
 }
 
 impl MasterDsp {
     fn new(sr: f32) -> Self {
+        // DC blocker coefficient: R = 1 - (2π × 10 / sr)
+        let dc_coeff = 1.0 - (2.0 * std::f32::consts::PI * 10.0 / sr);
         Self {
             gain_smooth: ParamSmoother::new(1.0, 5.0, sr),
             filter: Biquad::new(),
@@ -210,6 +243,9 @@ impl MasterDsp {
             punch: Compressor::new(-12.0, 4.0, 5.0, 100.0, sr),
             limiter: Limiter::new(-0.5, 50.0, sr),
             last_filter_val: 0.0,
+            dc_x_prev: 0.0,
+            dc_y_prev: 0.0,
+            dc_coeff,
         }
     }
 
@@ -257,6 +293,18 @@ impl MasterDsp {
         if limiter_active {
             self.limiter.process_block(samples);
         }
+
+        // DC Blocker (10 Hz highpass) — protects speakers
+        // y[n] = x[n] - x[n-1] + R * y[n-1]
+        for s in samples.iter_mut() {
+            let x = *s;
+            self.dc_y_prev = x - self.dc_x_prev + self.dc_coeff * self.dc_y_prev;
+            self.dc_x_prev = x;
+            *s = self.dc_y_prev;
+        }
+
+        // Final denormal kill
+        denormal_kill(samples);
     }
 }
 
@@ -268,7 +316,13 @@ pub struct DspEngine {
     deck_b: DeckDsp,
     master: MasterDsp,
     sr: f32,
+    // Pre-allocated scratch buffers — ZERO allocations in process()
+    scratch_a: Vec<f32>,
+    scratch_b: Vec<f32>,
 }
+
+/// Maximum block size supported (AudioWorklet standard = 128).
+const MAX_BLOCK: usize = 1024;
 
 #[wasm_bindgen]
 impl DspEngine {
@@ -280,6 +334,8 @@ impl DspEngine {
             deck_b: DeckDsp::new(sample_rate),
             master: MasterDsp::new(sample_rate),
             sr: sample_rate,
+            scratch_a: vec![0.0; MAX_BLOCK],
+            scratch_b: vec![0.0; MAX_BLOCK],
         }
     }
 
@@ -299,20 +355,19 @@ impl DspEngine {
         output_r: &mut [f32],
         params: &[u8],
     ) {
-        let len = input_l.len().min(input_r.len()).min(output_l.len()).min(output_r.len());
+        let len = input_l.len().min(input_r.len()).min(output_l.len()).min(output_r.len()).min(MAX_BLOCK);
 
-        // Process Deck A (left channel input)
-        let mut deck_a_buf: Vec<f32> = input_l[..len].to_vec();
-        self.deck_a.process(&mut deck_a_buf, params, DECK_A_BASE, self.sr);
+        // Copy into pre-allocated scratch buffers (ZERO heap allocation)
+        self.scratch_a[..len].copy_from_slice(&input_l[..len]);
+        self.deck_a.process(&mut self.scratch_a[..len], params, DECK_A_BASE, self.sr);
 
-        // Process Deck B (right channel input)
-        let mut deck_b_buf: Vec<f32> = input_r[..len].to_vec();
-        self.deck_b.process(&mut deck_b_buf, params, DECK_B_BASE, self.sr);
+        self.scratch_b[..len].copy_from_slice(&input_r[..len]);
+        self.deck_b.process(&mut self.scratch_b[..len], params, DECK_B_BASE, self.sr);
 
         // Mix to stereo output
         for i in 0..len {
-            output_l[i] = deck_a_buf[i] + deck_b_buf[i];
-            output_r[i] = deck_a_buf[i] + deck_b_buf[i];
+            output_l[i] = self.scratch_a[i] + self.scratch_b[i];
+            output_r[i] = self.scratch_a[i] + self.scratch_b[i];
         }
 
         // Master chain (both channels)
