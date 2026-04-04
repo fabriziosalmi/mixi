@@ -137,7 +137,13 @@ export const GLOBAL = {
   SAMPLE_RATE:    400,
   /** DSP backend active (0.0 = native, 1.0 = wasm). */
   DSP_BACKEND:    404,
+  /** H2: Layout version magic (must match Rust). Written on init, checked by Rust. */
+  LAYOUT_VERSION: 508,
 } as const;
+
+/** H2: ParamBus layout version. Increment when changing ANY offset above.
+ *  Must match PARAM_LAYOUT_VERSION in mixi-core/src/dsp/engine.rs. */
+export const PARAM_LAYOUT_VERSION = 2;
 
 // ── Total Layout Size ────────────────────────────────────────
 

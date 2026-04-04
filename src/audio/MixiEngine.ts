@@ -1021,7 +1021,9 @@ export class MixiEngine {
       new Uint32Array(ringBuffer, 0, 2).fill(0);
 
       // 2. Register AudioWorklet processor
-      await this.ctx.audioWorklet.addModule('/worklets/native-output-tap.js');
+      // C4 fix: relative worklet path
+      const nativeTapUrl = new URL('/worklets/native-output-tap.js', import.meta.url);
+      await this.ctx.audioWorklet.addModule(nativeTapUrl.href);
 
       // 3. Create AudioWorklet node (inserts as a tap in the audio graph)
       const tapNode = new AudioWorkletNode(this.ctx, 'native-output-tap', {

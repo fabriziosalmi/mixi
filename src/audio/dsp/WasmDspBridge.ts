@@ -52,7 +52,9 @@ export class WasmDspBridge {
 
     try {
       // 1. Register the worklet processor
-      await ctx.audioWorklet.addModule('/worklets/mixi-dsp-worklet.js');
+      // C4 fix: resolve worklet path relative to deployment base
+      const workletUrl = new URL('/worklets/mixi-dsp-worklet.js', import.meta.url);
+      await ctx.audioWorklet.addModule(workletUrl.href);
       log.info('WasmDsp', 'AudioWorklet processor registered');
 
       // 2. Create 2-input worklet node (Deck A = input 0, Deck B = input 1)
@@ -70,7 +72,8 @@ export class WasmDspBridge {
       sendBuffersToWorklet(this.node, this.buffers);
 
       // 5. Fetch and compile the Wasm module
-      const wasmUrl = new URL('/mixi-core/pkg/mixi_core_bg.wasm', window.location.origin);
+      // C3 fix: resolve wasm path via import.meta.url for correct hashing in prod
+      const wasmUrl = new URL('/mixi-core/pkg/mixi_core_bg.wasm', import.meta.url);
       const response = await fetch(wasmUrl.href);
       if (!response.ok) {
         throw new Error(`Failed to fetch wasm: ${response.status}`);

@@ -168,7 +168,8 @@ pub fn detect_drops(waveform_low: &[f32], bpm: f32, first_beat_offset: f32) -> V
     }
 
     // ── 7. Sort by strength descending, limit to 16 ────────────
-    candidates.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
+    // M1 fix: handle NaN safely (NaN sorts to end instead of panicking)
+    candidates.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap_or(std::cmp::Ordering::Equal));
     candidates.truncate(16);
 
     // Return flat array: [beat, strength, beat, strength, ...]

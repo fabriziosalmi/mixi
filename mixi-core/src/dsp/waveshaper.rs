@@ -40,7 +40,8 @@ impl Waveshaper {
     pub fn set_params(&mut self, amount: f32, wet: f32) {
         let amount = amount.clamp(0.0, 1.0);
         self.drive = amount * amount * 79.0 + 1.0; // quadratic scaling 1–80
-        self.norm = 1.0 / self.drive.tanh(); // normalize so tanh(drive * 1.0) ≈ 1.0
+        // M6 fix: guard against tanh(0) = 0 which would produce Inf
+        self.norm = 1.0 / self.drive.tanh().max(1e-10);
         self.wet = wet.clamp(0.0, 1.0);
     }
 

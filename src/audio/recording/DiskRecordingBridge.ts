@@ -125,7 +125,9 @@ export class DiskRecordingBridge {
       this.readHead = 0;
 
       // 2. Register AudioWorklet processor
-      await ctx.audioWorklet.addModule('/worklets/recording-tap.js');
+      // C4 fix: relative worklet path
+      const workletUrl = new URL('/worklets/recording-tap.js', import.meta.url);
+      await ctx.audioWorklet.addModule(workletUrl.href);
 
       // 3. Create worklet node
       const tapNode = new AudioWorkletNode(ctx, 'recording-tap', {

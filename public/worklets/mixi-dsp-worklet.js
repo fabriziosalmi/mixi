@@ -50,11 +50,19 @@ class MixiDspProcessor extends AudioWorkletProcessor {
         const { module } = data;
 
         // Minimal import object — processRaw uses direct memory, no wasm-bindgen glue
+        const self = this;
         const importObject = {
           wbg: {
+            // H4 fix: Extract actual panic message from Wasm memory
             __wbindgen_throw: (ptr, len) => {
-              // Read error string from Wasm memory and log it
-              console.error('[mixi-dsp] Wasm panic');
+              try {
+                const bytes = new Uint8Array(self._memory.buffer, ptr, len);
+                const message = new TextDecoder().decode(bytes);
+                console.error('[mixi-dsp] Wasm panic:', message);
+                self.port.postMessage({ type: 'error', message: 'Wasm panic: ' + message });
+              } catch {
+                console.error('[mixi-dsp] Wasm panic (could not read message)');
+              }
             },
           },
         };
@@ -63,19 +71,22 @@ class MixiDspProcessor extends AudioWorkletProcessor {
         this._exports = instance.exports;
         this._memory = instance.exports.memory;
 
-        // Create DspEngine (constructor exported by wasm-bindgen)
-        if (this._exports.dspengine_new) {
-          this._enginePtr = this._exports.dspengine_new(sampleRate);
-        } else if (this._exports.__wbg_dspengine_new) {
-          this._enginePtr = this._exports.__wbg_dspengine_new(sampleRate);
+        // M4 fix: Create DspEngine — explicit error if export not found
+        const engineNew = this._exports.dspengine_new || this._exports.__wbg_dspengine_new;
+        if (!engineNew) {
+          this.port.postMessage({ type: 'error', message: 'dspengine_new export not found — wasm-bindgen ABI mismatch. Available: ' + Object.keys(this._exports).join(', ') });
+          return;
+        }
+        this._enginePtr = engineNew(sampleRate);
+
+        // H5 fix: Allocate buffers — explicit error if malloc not found
+        const malloc = this._exports.__wbindgen_export_0 || this._exports.__wbindgen_malloc || this._exports.wasm_malloc;
+        if (!malloc) {
+          this.port.postMessage({ type: 'error', message: 'Wasm malloc export not found — wasm-bindgen version mismatch? Available: ' + Object.keys(this._exports).filter(k => k.includes('export') || k.includes('malloc')).join(', ') });
+          return;
         }
 
-        // Allocate persistent buffers in Wasm memory (via __wbindgen_export_0 = malloc)
-        const malloc = this._exports.__wbindgen_export_0 ||
-                       this._exports.__wbindgen_malloc ||
-                       this._exports.wasm_malloc;
-
-        if (malloc && this._enginePtr) {
+        if (this._enginePtr) {
           // 4 audio buffers × 128 samples × 4 bytes = 2048 bytes
           // 1 param buffer × 512 bytes
           this._inL = malloc(512, 4);    // 128 f32
@@ -138,13 +149,18 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       }
 
       // Call Rust DSP engine via raw memory offsets
-      const processRaw = this._exports.processRaw ||
-                         this._exports.dspengine_processRaw;
-      if (processRaw) {
-        processRaw.call(null, this._enginePtr,
-          this._inL, this._inR, this._outL, this._outR,
-          this._params, len);
+      // M7 fix: cache export lookup once, log if missing
+      if (!this._processRaw) {
+        this._processRaw = this._exports.processRaw || this._exports.dspengine_processRaw;
+        if (!this._processRaw) {
+          console.error('[mixi-dsp] processRaw export not found — Wasm DSP disabled');
+          this.wasmReady = false;
+          return true;
+        }
       }
+      this._processRaw(this._enginePtr,
+        this._inL, this._inR, this._outL, this._outR,
+        this._params, len);
 
       // Copy processed output from Wasm memory to JS output buffers
       outputL.set(mem.subarray(outLOff, outLOff + len));

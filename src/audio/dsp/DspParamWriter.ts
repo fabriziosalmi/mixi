@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import type { DspParamBus } from './DspProcessor';
-import { DECK, MASTER, GLOBAL, deckParam } from './ParamLayout';
+import { DECK, MASTER, GLOBAL, PARAM_LAYOUT_VERSION, deckParam } from './ParamLayout';
 import type { DeckId, EqBand } from '../../types';
 import type { FxId } from '../nodes/DeckFx';
 
@@ -135,6 +135,8 @@ export class DspParamWriter {
 
   setSampleRate(sr: number): void {
     this.bus.setFloat(GLOBAL.SAMPLE_RATE, sr);
+    // H2: Write layout version so Rust can verify offset parity
+    this.bus.setFloat(GLOBAL.LAYOUT_VERSION, PARAM_LAYOUT_VERSION);
   }
 
   setDspBackend(isWasm: boolean): void {

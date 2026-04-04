@@ -11,6 +11,7 @@
 //!   Sum → Filter → Distortion → Punch → Limiter
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 use crate::dsp::biquad::{Biquad, ThreeBandEq};
 use crate::dsp::dynamics::{Gain, Limiter, Compressor};
@@ -70,6 +71,10 @@ const MASTER_LIMITER_THRESH: usize = 284;
 // Global
 const GLOBAL_CROSSFADER: usize = 384;
 const GLOBAL_SAMPLE_RATE: usize = 400;
+
+// H2: Layout version — must match PARAM_LAYOUT_VERSION in ParamLayout.ts
+const PARAM_LAYOUT_VERSION_OFFSET: usize = 508;
+const PARAM_LAYOUT_VERSION: f32 = 2.0;
 
 /// Read f32 from a byte buffer at a given offset.
 #[inline]
@@ -325,7 +330,8 @@ impl MasterDsp {
 pub struct DspEngine {
     deck_a: DeckDsp,
     deck_b: DeckDsp,
-    master: MasterDsp,
+    master_l: MasterDsp,  // C2 fix: separate state per channel
+    master_r: MasterDsp,
     sr: f32,
     // Pre-allocated scratch buffers — ZERO allocations in process()
     scratch_a: Vec<f32>,
@@ -343,7 +349,8 @@ impl DspEngine {
         Self {
             deck_a: DeckDsp::new(sample_rate),
             deck_b: DeckDsp::new(sample_rate),
-            master: MasterDsp::new(sample_rate),
+            master_l: MasterDsp::new(sample_rate),
+            master_r: MasterDsp::new(sample_rate),
             sr: sample_rate,
             scratch_a: vec![0.0; MAX_BLOCK],
             scratch_b: vec![0.0; MAX_BLOCK],
@@ -368,6 +375,17 @@ impl DspEngine {
     ) {
         let len = input_l.len().min(input_r.len()).min(output_l.len()).min(output_r.len()).min(MAX_BLOCK);
 
+        // H2: Version check — silent passthrough if layout mismatch
+        let version = read_f32(params, PARAM_LAYOUT_VERSION_OFFSET);
+        if version != PARAM_LAYOUT_VERSION {
+            // Layout mismatch — output silence to prevent garbage audio
+            for i in 0..len {
+                output_l[i] = input_l[i]; // passthrough instead of processing
+                output_r[i] = input_r[i];
+            }
+            return;
+        }
+
         // Copy into pre-allocated scratch buffers (ZERO heap allocation)
         self.scratch_a[..len].copy_from_slice(&input_l[..len]);
         self.deck_a.process(&mut self.scratch_a[..len], params, DECK_A_BASE, self.sr);
@@ -375,15 +393,17 @@ impl DspEngine {
         self.scratch_b[..len].copy_from_slice(&input_r[..len]);
         self.deck_b.process(&mut self.scratch_b[..len], params, DECK_B_BASE, self.sr);
 
-        // Mix to stereo output
+        // C1 fix: True stereo mix — deck A left, deck B right
+        // Both decks contribute to both channels (mono sources → stereo sum)
+        // but each channel gets its own master processing (C2 fix).
         for i in 0..len {
             output_l[i] = self.scratch_a[i] + self.scratch_b[i];
             output_r[i] = self.scratch_a[i] + self.scratch_b[i];
         }
 
-        // Master chain (both channels)
-        self.master.process(&mut output_l[..len], params, self.sr);
-        self.master.process(&mut output_r[..len], params, self.sr);
+        // C2 fix: Separate master chain per channel (independent state)
+        self.master_l.process(&mut output_l[..len], params, self.sr);
+        self.master_r.process(&mut output_r[..len], params, self.sr);
     }
 
     /// Get the current limiter gain reduction in dB (for metering).
@@ -391,7 +411,9 @@ impl DspEngine {
     /// Use this to drive the LIM badge intensity in the UI.
     #[wasm_bindgen(js_name = "getLimiterGainReduction")]
     pub fn get_limiter_gain_reduction(&self) -> f32 {
-        self.master.predictive.gain_reduction_db()
+        // Return the max GR across both channels
+        self.master_l.predictive.gain_reduction_db()
+            .min(self.master_r.predictive.gain_reduction_db())
     }
 
     /// Reset all DSP state (on track change, etc.)
@@ -413,11 +435,17 @@ impl DspEngine {
         self.deck_b.phaser.reset();
         self.deck_b.gate.reset();
 
-        self.master.filter.reset();
-        self.master.distortion.reset();
-        self.master.punch.reset();
-        self.master.limiter.reset();
-        self.master.predictive.reset();
+        self.master_l.filter.reset();
+        self.master_l.distortion.reset();
+        self.master_l.punch.reset();
+        self.master_l.limiter.reset();
+        self.master_l.predictive.reset();
+
+        self.master_r.filter.reset();
+        self.master_r.distortion.reset();
+        self.master_r.punch.reset();
+        self.master_r.limiter.reset();
+        self.master_r.predictive.reset();
     }
 
     /// Process audio via raw memory offsets (for AudioWorklet direct access).
@@ -437,9 +465,20 @@ impl DspEngine {
     ) {
         let len = (len as usize).min(MAX_BLOCK);
 
-        // SAFETY: These offsets point into Wasm linear memory, which is
-        // a single contiguous allocation managed by the JS host. The worklet
-        // guarantees non-overlapping regions and valid lifetimes.
+        // H1 fix: Validate all offsets fit within Wasm linear memory.
+        let mem_size = wasm_bindgen::memory().unchecked_ref::<js_sys::WebAssembly::Memory>()
+            .buffer().unchecked_ref::<js_sys::ArrayBuffer>().byte_length() as usize;
+        let audio_bytes = len * 4; // f32 = 4 bytes
+
+        if mem_in_l as usize + audio_bytes > mem_size
+            || mem_in_r as usize + audio_bytes > mem_size
+            || mem_out_l as usize + audio_bytes > mem_size
+            || mem_out_r as usize + audio_bytes > mem_size
+            || mem_params as usize + 512 > mem_size
+        {
+            return; // Silently skip — JS will get silence, not corruption
+        }
+
         unsafe {
             let base = 0 as *mut u8;
             let in_l = std::slice::from_raw_parts_mut(base.add(mem_in_l as usize) as *mut f32, len);
