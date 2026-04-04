@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — TurboKick Deck
+
+**TurboKick** — Real-time kick drum synthesizer + 16-step sequencer deck mode.
+
+- **Kick Synthesis**: Pitch (30-100Hz), decay (50-600ms), click (noise transient), drive (tanh distortion)
+- **THUMP macro**: Single knob maps pitch + decay + click for intuitive control (0 = clicky psychedelic → 1 = deep industrial sub)
+- **16-step sequencer**: Quantized to 16th notes, swing support (0-50%), sync to master BPM or free-run
+- **Dual valve distortion**: Valve A (TUBE, smooth tanh saturation) + Valve B (PUNCH, hard asymmetric clipper)
+- **Filter + LFO**: Lowpass 60-20kHz with resonance up to 18, LFO modulation 0.1-20Hz
+- **RUMBLE effect**: Berghain-style dark reverb (2.5s synthetic IR, 250Hz sub-only) + rhythmic 1/16th delay + sidechain pump
+- **Speaker pad**: Visual touchpad with hit detection, shockwave animations, beat flash
+- **Quantized engage**: Snap-to-downbeat when syncing to playing track
+- **Pluggable deck system**: Registered via `src/decks/index.ts`, occupies standard deck slot A or B
+
+New files: `src/decks/turbokick/` (TurboKickDeck.tsx, TurboKickEngine.ts, TurboKickBus.ts, kickSynth.ts, types.ts)
+
 ## [0.2.6] - 2026-04-04
 
 ### Added — SOTA Mixer + Audit Fixes + Test Gate

@@ -30,11 +30,16 @@ It ships as a static site. It also packages as an Electron desktop app for macOS
 ## Signal Chain
 
 ```
-Deck A/B:
+Deck A/B (Track mode):
   BufferSource → Trim → 3-Band Parallel Isolator EQ (LR4 24dB/oct)
     → ColorFX → DeckFX [FLT|DLY|REV|PHA|FLG|GATE]
       ├── Fader → Crossfader → MasterBus
       └── CueGain → HeadphoneBus
+
+Deck A/B (TurboKick mode):
+  KickSynth (pitch/decay/click/drive) → ValveA (tube) → ValveB (punch)
+    → Filter+LFO → Delay → Rumble (dark reverb + sidechain pump)
+      → DeckChannel.input → EQ → Fader → MasterBus
 
   EQ Crossover (Linkwitz-Riley):
     Trim → LP₁→LP₂(250Hz) → lowGain  → merge
@@ -121,13 +126,14 @@ python main.py --port 7779
 
 | Module | What It Does |
 |--------|-------------|
-| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Timeline-scheduled via AudioContext. |
+| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Timeline-scheduled via AudioContext. Pluggable deck modes: Track, Groovebox, TurboKick. |
+| **TurboKick Deck** | Real-time kick drum synthesizer + 16-step sequencer. Pitch/decay/click/drive synthesis, THUMP macro, dual valve distortion (tube + punch), filter with LFO, Berghain-style RUMBLE (dark reverb + rhythmic delay + sidechain pump). Syncs to master BPM. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | Filter, Delay, Reverb, Phaser, Flanger, Gate. BPM-synced where applicable. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
 | **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
-| **Groovebox** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
+| **Groovebox Deck** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
 | **BPM/Key Detection** | Adaptive spectral-flux onset detection for BPM (multi-hop IOI histogram, octave resolution, ±2.5 BPM refinement). Goertzel chromagram for key (Camelot notation). Rust/Wasm fast path. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter — decks, mixer, groovebox, transport. |
 | **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
@@ -156,6 +162,7 @@ src/
     native/       Native audio output bridge (cpal/N-API)
   gpu/            WebGPU VFX renderer, WGSL shaders, GPU detection
   ai/             AutoMixEngine, Blackboard, Ghost Mutations, intents
+  decks/          Pluggable deck modes (TurboKick synth, future instruments)
   groovebox/      Step sequencer engine, drum synthesis, UI
   automixer/      AutoMixer panel, beat utilities
   midi/           WebMIDI manager, controller mapping
