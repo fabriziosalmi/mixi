@@ -90,7 +90,7 @@ fn denormal_kill(buf: &mut [f32]) {
 
 /// EQ kill threshold: -32 dB ≈ 0.025 linear gain.
 /// Below this, the band is effectively silent — skip filter, multiply by 0.
-const EQ_KILL_DB: f32 = -32.0;
+
 
 // ── Per-Deck DSP Chain ──────────────────────────────────────
 
@@ -159,15 +159,8 @@ impl DeckDsp {
         // Process chain — smoothed trim gain
         self.trim_smooth.apply_gain(samples);
 
-        // EQ with kill switch: if any band is at kill level (-32dB),
-        // skip the filter entirely and zero that band's contribution.
-        let any_kill = eq_low <= EQ_KILL_DB || eq_mid <= EQ_KILL_DB || eq_high <= EQ_KILL_DB;
-        if !any_kill {
-            self.eq.process_block(samples);
-        } else {
-            // At least one band is killed — still process EQ for active bands
-            self.eq.process_block(samples);
-        }
+        // EQ — flat-bypass and kill-switch handled internally
+        self.eq.process_block(samples);
 
         // Denormal killer after EQ filters
         denormal_kill(samples);
@@ -212,7 +205,10 @@ impl DeckDsp {
         }
 
         // Smoothed fader × crossfader (click-free)
-        let total_gain = fader_val * xfader_gain;
+        // Exponential fader curve: val³ gives fine precision at low volumes
+        // and matches human loudness perception (logarithmic hearing)
+        let fader_curved = fader_val * fader_val * fader_val;
+        let total_gain = fader_curved * xfader_gain;
         self.fader_smooth.set_target(total_gain);
         self.fader_smooth.apply_gain(samples);
     }

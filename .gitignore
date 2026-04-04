@@ -38,6 +38,7 @@ ROADMAP.md
 coverage/
 OMNIDECK.md
 LIMITER.md
+ZEROLATENCY.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

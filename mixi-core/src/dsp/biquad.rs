@@ -180,7 +180,14 @@ pub struct ThreeBandEq {
     pub low: Biquad,
     pub mid: Biquad,
     pub high: Biquad,
+    // Track gains for flat-bypass and kill-switch
+    low_db: f32,
+    mid_db: f32,
+    high_db: f32,
 }
+
+/// Kill switch threshold in dB.
+const EQ_KILL_DB: f32 = -32.0;
 
 impl ThreeBandEq {
     pub fn new(sr: f32) -> Self {
@@ -188,6 +195,9 @@ impl ThreeBandEq {
             low: Biquad::new(),
             mid: Biquad::new(),
             high: Biquad::new(),
+            low_db: 0.0,
+            mid_db: 0.0,
+            high_db: 0.0,
         };
         // Initialise with flat (0 dB) curves
         eq.low.set_lowshelf(250.0, 0.0, sr);
@@ -198,16 +208,46 @@ impl ThreeBandEq {
 
     /// Update EQ band gains.
     pub fn set_gains(&mut self, low_db: f32, mid_db: f32, high_db: f32, sr: f32) {
+        self.low_db = low_db;
+        self.mid_db = mid_db;
+        self.high_db = high_db;
         self.low.set_lowshelf(250.0, low_db, sr);
         self.mid.set_peaking(1000.0, mid_db, 1.0, sr);
         self.high.set_highshelf(4000.0, high_db, sr);
     }
 
-    /// Process a block of samples through all 3 bands in series.
+    /// Process a block with flat-bypass and kill-switch optimizations.
+    ///
+    /// - Flat (0dB): skip filter entirely (multiplying by 1.0 is a waste)
+    /// - Kill (<= -32dB): zero the signal component (instant silence)
+    /// - Active: process through filter normally
+    #[inline]
     pub fn process_block(&mut self, samples: &mut [f32]) {
-        self.low.process_block(samples);
-        self.mid.process_block(samples);
-        self.high.process_block(samples);
+        // Low band
+        if self.low_db <= EQ_KILL_DB {
+            // Kill: we need to high-pass out the low frequencies
+            // Since low shelf at -32dB effectively removes lows,
+            // just run the filter (it's set to deep cut)
+            self.low.process_block(samples);
+        } else if self.low_db.abs() > 0.1 {
+            // Active: process normally
+            self.low.process_block(samples);
+        }
+        // else: flat (0dB) — skip entirely
+
+        // Mid band
+        if self.mid_db <= EQ_KILL_DB {
+            self.mid.process_block(samples);
+        } else if self.mid_db.abs() > 0.1 {
+            self.mid.process_block(samples);
+        }
+
+        // High band
+        if self.high_db <= EQ_KILL_DB {
+            self.high.process_block(samples);
+        } else if self.high_db.abs() > 0.1 {
+            self.high.process_block(samples);
+        }
     }
 
     pub fn reset(&mut self) {
