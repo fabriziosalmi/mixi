@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-04-04
+
+### Added -- Phase 3: Rust DSP Engine Foundation
+
+**DSP Abstraction Layer** (Layer 0)
+- DspProcessor / DspChain / DspParamBus interfaces for backend-agnostic audio processing
+- Parameter Bus Layout: 512-byte shared memory map (40+ parameter offsets)
+- LocalParamBus (native mode) and SharedParamBus (Wasm mode with Atomics)
+- NativeDeckProcessor / NativeMasterProcessor: WebAudio node wrappers
+- AudioWorklet shell (passthrough, public/worklets/mixi-dsp-worklet.js)
+- Feature flag: useWasmDsp in Settings (default: off, persisted)
+
+**Lock-Free Ring Buffer** (Layer 2)
+- SPSC ring buffer in Rust (ring_buffer.rs) with Acquire/Release atomic ordering
+- SharedArrayBuffer bridge: audio ring (93ms), param bus (512B), metering bus (24B)
+- Feature detection and MessagePort worklet communication
+
+**8 DSP Primitives in Rust** (Layer 3)
+- Biquad filter: lowpass, highpass, lowshelf, highshelf, peaking (Audio EQ Cookbook)
+- ThreeBandEq: 250 Hz / 1 kHz / 4 kHz matching DeckChannel EQ
+- Gain: simple multiply + click-free ramp
+- Limiter: brick-wall peak limiter with instant attack
+- Compressor: parallel compression with auto-makeup gain
+- Delay: variable delay line with linear interpolation and feedback
+- Reverb: Schroeder algorithm (4 comb + 2 allpass, rate-scaled)
+- Flanger: LFO-modulated short delay with feedback
+- Phaser: 4-stage allpass chain with LFO frequency sweep
+- Gate: beat-locked amplitude gate with smoothed envelope
+- Waveshaper: tanh soft-clip distortion with quadratic drive scaling
+
+### Changed
+- mixi-core crate: 3,987 lines of Rust across 17 source files
+- .wasm binary: 120 KB (unchanged from v0.1.3 -- DSP not yet FFI-exported)
+
+### Stats
+- 176 total tests (103 Rust + 73 JavaScript)
+- Zero behavioral change (DSP modules ready but not wired to audio graph)
+- Full JS fallback preserved on all paths
+
 ## [0.1.3] - 2026-04-04
 
 ### Added — 🦀 Rust/Wasm Integration (Phase 2 Complete)
