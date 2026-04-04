@@ -25,6 +25,9 @@ pub mod drop_detect;
 pub mod metadata;
 pub mod ring_buffer;
 
+// ── Phase 3: Real-time DSP primitives ──────────────────────
+pub mod dsp;
+
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports
 // Validates that Rust → Wasm → JS pipeline works end-to-end.
