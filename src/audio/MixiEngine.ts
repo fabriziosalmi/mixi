@@ -44,6 +44,7 @@ import { log } from '../utils/logger';
 import { LocalParamBus, PARAM_BUS_SIZE } from './dsp';
 import { DspParamWriter } from './dsp/DspParamWriter';
 import { WasmDspBridge } from './dsp/WasmDspBridge';
+import { NativeAudioBridge } from './native/NativeAudioBridge';
 
 // ── Per-deck transport state (not exposed to store) ──────────
 
@@ -100,10 +101,23 @@ export class MixiEngine {
   /** Wasm DSP bridge — manages AudioWorklet lifecycle. */
   private _wasmBridge: WasmDspBridge | null = null;
 
+  // ── Native Audio I/O ──────────────────────────────────────
+  private _nativeOutputActive = false;
+  private _nativeOutputTap: AudioWorkletNode | null = null;
+  private _nativeOutputRing: SharedArrayBuffer | null = null;
+  /** Ring buffer capacity in frames for native output. */
+  private static NATIVE_RING_FRAMES = 4096; // ~93ms at 44.1kHz
+  /** Number of output channels for native ring buffer. */
+  private static NATIVE_RING_CHANNELS = 2; // stereo master
+
   /** Public access to the param writer (for useMixiSync). */
   get paramWriter(): DspParamWriter | null { return this._paramWriter; }
   /** Public access to the wasm bridge state. */
   get wasmDspActive(): boolean { return this._wasmBridge?.isReady ?? false; }
+  /** Whether native (cpal) audio output is active. */
+  get nativeOutputActive(): boolean { return this._nativeOutputActive; }
+  /** The shared ring buffer for native output (null when inactive). */
+  get nativeOutputRing(): SharedArrayBuffer | null { return this._nativeOutputRing; }
 
   // ── Singleton access ───────────────────────────────────────
 
@@ -324,6 +338,11 @@ export class MixiEngine {
     if (this._wasmBridge) {
       this._wasmBridge.destroy();
       this._wasmBridge = null;
+    }
+
+    // Cleanup native audio output
+    if (this._nativeOutputActive) {
+      await this.switchToWebOutput();
     }
 
     if (this.ctx.state !== 'closed') {
@@ -928,6 +947,139 @@ export class MixiEngine {
       const rate = this.transports[deck].playbackRate;
       shifter.port.postMessage({ type: 'setPitchRatio', value: 1 / rate });
     }
+  }
+
+  // ── Native Audio Output ─────────────────────────────────────
+
+  /**
+   * Switch audio output to native cpal (zero-copy via SharedArrayBuffer).
+   *
+   * Creates an AudioWorklet "tap" that captures the MasterBus output
+   * and writes it into a SPSC ring buffer. The native cpal addon reads
+   * from this ring buffer on its real-time audio thread.
+   *
+   * WebAudio destination continues to receive audio (the tap is
+   * transparent — it passes samples through unchanged). To mute
+   * WebAudio output, set the master volume to 0 separately.
+   *
+   * @param deviceIndex — device from NativeAudioBridge.getDevices()
+   */
+  async switchToNativeOutput(deviceIndex = 0): Promise<boolean> {
+    this.assertReady();
+
+    if (this._nativeOutputActive) {
+      log.warn('Engine', 'Native output already active');
+      return true;
+    }
+
+    const bridge = NativeAudioBridge.getInstance();
+    if (!(await bridge.isAvailable())) {
+      log.warn('Engine', 'Native audio not available — staying on WebAudio');
+      return false;
+    }
+
+    try {
+      // 1. Create SharedArrayBuffer ring buffer
+      const channels = MixiEngine.NATIVE_RING_CHANNELS;
+      const capacity = MixiEngine.NATIVE_RING_FRAMES;
+      const headerBytes = 8; // write_head (u32) + read_head (u32)
+      const dataBytes = capacity * channels * 4; // float32
+      const ringBuffer = new SharedArrayBuffer(headerBytes + dataBytes);
+
+      // Zero the header (write_head = 0, read_head = 0)
+      new Uint32Array(ringBuffer, 0, 2).fill(0);
+
+      // 2. Register AudioWorklet processor
+      await this.ctx.audioWorklet.addModule('/worklets/native-output-tap.js');
+
+      // 3. Create AudioWorklet node (inserts as a tap in the audio graph)
+      const tapNode = new AudioWorkletNode(this.ctx, 'native-output-tap', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+      });
+
+      // 4. Send ring buffer to worklet
+      tapNode.port.postMessage({
+        type: 'init',
+        ringBuffer,
+        ringCapacityFrames: capacity,
+      });
+
+      // Wait for worklet ready signal
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Worklet init timeout')), 3000);
+        tapNode.port.onmessage = (e) => {
+          if (e.data.type === 'ready') {
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+      });
+
+      // 5. Insert tap between master output and destination
+      //    master.output → tapNode → (continues to destination via HeadphoneBus wiring)
+      //    The tap reads samples and writes to the ring buffer, passing audio through.
+      this.master.output.connect(tapNode);
+      tapNode.connect(this.ctx.destination);
+
+      // 6. Open native cpal stream
+      await bridge.openStream(
+        deviceIndex,
+        this.ctx.sampleRate,
+        128, // buffer size (frames per callback)
+        ringBuffer,
+        capacity,
+        channels,
+      );
+
+      this._nativeOutputTap = tapNode;
+      this._nativeOutputRing = ringBuffer;
+      this._nativeOutputActive = true;
+
+      const hostName = await bridge.getHostName();
+      log.success('Engine', `Native output ACTIVE → device ${deviceIndex} (${hostName})`);
+      return true;
+    } catch (err) {
+      log.error('Engine', `Native output failed: ${err}`);
+      // Cleanup partial state
+      if (this._nativeOutputTap) {
+        this._nativeOutputTap.disconnect();
+        this._nativeOutputTap = null;
+      }
+      this._nativeOutputRing = null;
+      this._nativeOutputActive = false;
+      return false;
+    }
+  }
+
+  /**
+   * Switch back to standard WebAudio output.
+   * Tears down the native cpal stream and removes the tap worklet.
+   */
+  async switchToWebOutput(): Promise<void> {
+    if (!this._nativeOutputActive) return;
+
+    const bridge = NativeAudioBridge.getInstance();
+
+    // 1. Close the native cpal stream
+    try {
+      await bridge.closeStream();
+    } catch (err) {
+      log.warn('Engine', `Error closing native stream: ${err}`);
+    }
+
+    // 2. Remove the tap worklet from audio graph
+    if (this._nativeOutputTap) {
+      this._nativeOutputTap.port.postMessage({ type: 'stop' });
+      this._nativeOutputTap.disconnect();
+      this._nativeOutputTap = null;
+    }
+
+    this._nativeOutputRing = null;
+    this._nativeOutputActive = false;
+
+    log.info('Engine', 'Switched to WebAudio output');
   }
 
   private assertReady(): void {

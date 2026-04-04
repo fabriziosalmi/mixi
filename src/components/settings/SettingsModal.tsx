@@ -27,6 +27,7 @@ import {
 } from '../../store/settingsStore';
 import { useMidiStore } from '../../store/midiStore';
 import { AKAI_MIDI_MIX_PRESET } from '../../midi/presets/akaiMidiMix';
+import { MixiEngine } from '../../audio/MixiEngine';
 
 // ── Tabs ─────────────────────────────────────────────────────
 
@@ -394,6 +395,8 @@ const SystemTab: FC = () => {
   const [nativeAvailable, setNativeAvailable] = useState(false);
   const [nativeHost, setNativeHost] = useState('');
   const [nativeDevices, setNativeDevices] = useState<Array<{id: string; name: string; isDefault: boolean}>>([]);
+  const [nativeOutputActive, setNativeOutputActive] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState('0');
 
   useEffect(() => {
     setSysInfo({
@@ -460,14 +463,51 @@ const SystemTab: FC = () => {
               Native Audio I/O
             </span>
             <InfoRow label="Backend" value={nativeHost} />
-            <InfoRow
-              label="Devices"
-              value={nativeDevices.length > 0
-                ? nativeDevices.map(d => `${d.name}${d.isDefault ? ' ★' : ''}`).join(', ')
-                : 'Scanning...'}
-            />
-            <div className="text-[9px] text-emerald-400/70 px-1">
-              ✓ Zero-copy audio path available (cpal → {nativeHost})
+            <SettingRow
+              label="Native Output"
+              description={nativeOutputActive
+                ? `Active → ${nativeHost} (low latency)`
+                : 'WebAudio (compatible)'}
+            >
+              <ToggleSwitch
+                checked={nativeOutputActive}
+                onChange={async () => {
+                  const engine = MixiEngine.getInstance();
+                  if (nativeOutputActive) {
+                    await engine.switchToWebOutput();
+                    setNativeOutputActive(false);
+                  } else {
+                    const selectedIdx = parseInt(selectedDevice, 10) || 0;
+                    const ok = await engine.switchToNativeOutput(selectedIdx);
+                    setNativeOutputActive(ok);
+                  }
+                }}
+              />
+            </SettingRow>
+            {nativeDevices.length > 0 && (
+              <SettingRow label="Output Device" description="">
+                <select
+                  className="bg-zinc-800 text-zinc-300 text-[10px] rounded px-1.5 py-0.5 border border-zinc-700 outline-none focus:border-zinc-500"
+                  value={selectedDevice}
+                  disabled={nativeOutputActive}
+                  onChange={(e) => setSelectedDevice(e.target.value)}
+                >
+                  {nativeDevices.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}{d.isDefault ? ' ★' : ''}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
+            )}
+            <div className={`text-[9px] px-1 ${
+              nativeOutputActive
+                ? 'text-emerald-400/80'
+                : 'text-zinc-500'
+            }`}>
+              {nativeOutputActive
+                ? `✓ Zero-copy path: Wasm → SAB → cpal → ${nativeHost}`
+                : `○ Available: cpal → ${nativeHost}`}
             </div>
           </div>
         </>
