@@ -6,35 +6,44 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// Mixi – VFX Visual Engine
+// Mixi – VFX Visual Engine (Dual-Mode: WebGPU + Canvas 2D)
 //
-// Audio-reactive visual layer. When VFX is active:
-//   1. Beat flash — screen-wide glow on kick hits
-//   2. Neon grid — Tron-style perspective floor
-//   3. Scanlines — retro CRT aesthetic
-//   4. Circular oscilloscopes around each jog wheel
+// WebGPU path (Chrome, Firefox, Electron):
+//   Full-screen GPU shader with 6 audio-reactive effects
+//   + Canvas 2D overlay for circular oscilloscopes
+//
+// Canvas 2D fallback (Safari, web):
+//   Beat flash, oscilloscopes, scanlines, vignette
 //
 // Performance:
-//   - requestAnimationFrame at display refresh
-//   - Jog positions cached (updated every 60 frames)
+//   - Single draw call per frame (WebGPU: 560 bytes uploaded)
 //   - Audio buffers reused (zero GC pressure)
-//   - pointer-events:none, mix-blend-mode:screen
+//   - pointer-events:none + mix-blend-mode:screen
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useCallback, type FC } from 'react';
+import { useEffect, useRef, useCallback, useState, type FC } from 'react';
 import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
+import { detectGpuBackend, type GpuBackend } from '../gpu/detectGpu';
+import { WebGpuRenderer, type VfxFrameParams } from '../gpu/WebGpuRenderer';
 import type { DeckId } from '../types';
 
 interface JogPos { cx: number; cy: number; r: number }
 
 export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gpuCanvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const beatEnergyRef = useRef(0);
   const prevLevelRef = useRef(0);
   const hueRef = useRef(0);
   const frameRef = useRef(0);
+  const beatCountRef = useRef(0);
+  const startTimeRef = useRef(0);
+
+  // GPU state
+  const rendererRef = useRef<WebGpuRenderer | null>(null);
+  const [backend, setBackend] = useState<GpuBackend>('canvas2d');
 
   // Reusable buffers — allocated once
   const freqBufRef = useRef<Uint8Array | null>(null);
@@ -43,7 +52,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
   // Cached jog positions — updated every 60 frames
   const jogCacheRef = useRef<JogPos[]>([]);
-  // Cached vignette gradient — rebuilt on resize only
+  // Cached vignette gradient — rebuilt on resize only (Canvas 2D fallback)
   const vignetteRef = useRef<CanvasGradient | null>(null);
 
   const updateJogPositions = useCallback(() => {
@@ -62,7 +71,229 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     jogCacheRef.current = positions;
   }, []);
 
-  const render = useCallback(function renderLoop() {
+  // ── Shared audio analysis (VJ Secrets #4, #5, #6) ──────────
+  //
+  // Secret #4: Isolated stems — kick (20-80Hz), snare (1-3kHz), hihat (8-15kHz)
+  // Secret #5: BPM phase sync — 0→1 sawtooth
+  // Secret #6: Energy derivative — dEnergy/dt
+  //
+  // Frequency bin mapping (fftSize=256, SR=44100, 128 bins):
+  //   bin_freq = bin * (44100 / 256) = bin * 172.27 Hz
+  //   kick  (20-80Hz):    bins 0-0   → bin 0 (172Hz width covers range)
+  //   snare (1-3kHz):     bins 6-17  (1034-2929Hz)
+  //   hihat (8-15kHz):    bins 46-87 (7930-14990Hz)
+
+  interface AudioFrame {
+    level: number;
+    isBeat: boolean;
+    kick: number;
+    snare: number;
+    hihat: number;
+    beatPhase: number;
+    energyDeriv: number;
+    totalEnergy: number;
+    crossfader: number;
+    fftBins: Uint8Array | null;
+  }
+
+  const prevEnergyRef = useRef(0);
+
+  const analyzeAudio = useCallback((): AudioFrame => {
+    const result: AudioFrame = {
+      level: 0, isBeat: false, kick: 0, snare: 0, hihat: 0,
+      beatPhase: 0, energyDeriv: 0, totalEnergy: 0, crossfader: 0.5, fftBins: null,
+    };
+    const engine = MixiEngine.getInstance();
+    if (!engine.isInitialized) return result;
+
+    const state = useMixiStore.getState();
+    result.crossfader = state.crossfader;
+
+    let analyser: AnalyserNode | null = null;
+    if (state.decks.A.isPlaying) analyser = engine.channels.A.analyser;
+    else if (state.decks.B.isPlaying) analyser = engine.channels.B.analyser;
+
+    if (!analyser) return result;
+
+    if (!freqBufRef.current || freqBufRef.current.length !== analyser.frequencyBinCount) {
+      freqBufRef.current = new Uint8Array(analyser.frequencyBinCount);
+    }
+    analyser.getByteFrequencyData(freqBufRef.current as Uint8Array<ArrayBuffer>);
+    const data = freqBufRef.current;
+    result.fftBins = data;
+
+    // Secret #4: Isolated stems (precise frequency ranges)
+    // Kick (20-80Hz → bins 0-2, ~0-516Hz at 172Hz/bin resolution)
+    // Skip bin 0 (DC component), use bins 1-2 for actual kick energy
+    result.kick = Math.max(data[1], data[2]) / 255;
+
+    // Snare (1-3kHz → bins 6-17)
+    let snareSum = 0;
+    for (let i = 6; i <= 17; i++) snareSum += data[i] * data[i];
+    result.snare = Math.sqrt(snareSum / 12) / 255;
+
+    // Hihat (8-15kHz → bins 46-87)
+    let hihatSum = 0;
+    for (let i = 46; i <= 87; i++) hihatSum += data[i] * data[i];
+    result.hihat = Math.sqrt(hihatSum / 42) / 255;
+
+    // Overall level + total energy
+    let fullSum = 0;
+    for (let i = 0; i < data.length; i++) fullSum += data[i];
+    result.level = fullSum / (data.length * 255);
+    result.totalEnergy = result.level;
+
+    // Secret #6: Energy derivative (dEnergy/dt) — tracks overall energy change
+    result.energyDeriv = Math.max(0, result.totalEnergy - prevEnergyRef.current);
+    prevEnergyRef.current = result.totalEnergy;
+
+    // Beat detection (kick threshold + rate-of-change)
+    result.isBeat = result.kick > 0.4 && result.energyDeriv > 0.15;
+    prevLevelRef.current = result.kick;
+
+    // Secret #5: BPM phase sync (0→1 sawtooth)
+    const activeDeck = state.decks.A.isPlaying ? state.decks.A : state.decks.B;
+    if (activeDeck.bpm > 0) {
+      const beatPeriod = 60 / activeDeck.bpm;
+      const ctx = engine.getAudioContext();
+      const currentTime = ctx.currentTime;
+      result.beatPhase = (((currentTime - activeDeck.firstBeatOffset) / beatPeriod) % 1 + 1) % 1;
+    }
+
+    return result;
+  }, []);
+
+  // ── Oscilloscope drawing (shared between both paths) ──────
+
+  const drawOscilloscopes = useCallback((ctx: CanvasRenderingContext2D, beat: number) => {
+    const engine = MixiEngine.getInstance();
+    if (!engine.isInitialized) return;
+
+    const jogPositions = jogCacheRef.current;
+    const deckIds: DeckId[] = ['A', 'B'];
+
+    jogPositions.forEach((jog, idx) => {
+      const deckId = deckIds[idx] || 'A';
+      const state = useMixiStore.getState();
+      if (!state.decks[deckId].isPlaying) return;
+
+      const analyser = engine.channels[deckId].analyser;
+      const bufRef = idx === 0 ? waveBufA : waveBufB;
+      if (!bufRef.current || bufRef.current.length !== analyser.frequencyBinCount) {
+        bufRef.current = new Uint8Array(analyser.frequencyBinCount);
+      }
+      analyser.getByteTimeDomainData(bufRef.current as Uint8Array<ArrayBuffer>);
+      const waveData = bufRef.current;
+
+      const oscR = jog.r + 2;
+      const bandWidth = 13;
+      const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
+
+      // Bass-reactive band
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.arc(jog.cx, jog.cy, oscR + bandWidth / 2, 0, Math.PI * 2);
+      const r = Math.floor(beat * 255);
+      const g = Math.floor(beat * 230);
+      const b2 = Math.floor(beat * 10);
+      ctx.strokeStyle = `rgb(${r},${g},${b2})`;
+      ctx.lineWidth = bandWidth;
+      if (beat > 0.3) {
+        ctx.shadowColor = `rgba(255, 230, 0, ${beat * 0.4})`;
+        ctx.shadowBlur = beat * 15;
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // Oscilloscope waveform
+      ctx.save();
+      ctx.globalAlpha = 0.6 + beat * 0.3;
+      ctx.strokeStyle = deckColor;
+      ctx.lineWidth = 2.5 + beat * 1.5;
+      ctx.shadowColor = deckColor;
+      ctx.shadowBlur = 6 + beat * 10;
+      ctx.beginPath();
+
+      const len = waveData.length;
+      for (let i = 0; i < len; i++) {
+        const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
+        const amplitude = (waveData[i] - 128) / 128;
+        const rad = oscR + amplitude * 9;
+        const x = jog.cx + Math.cos(angle) * rad;
+        const y = jog.cy + Math.sin(angle) * rad;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    });
+  }, []);
+
+  // ── WebGPU render loop ────────────────────────────────────
+
+  const renderGpu = useCallback(function gpuLoop() {
+    const renderer = rendererRef.current;
+    if (!renderer || renderer.destroyed) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    const frame = frameRef.current++;
+
+    // Audio analysis
+    const audio = analyzeAudio();
+
+    if (audio.isBeat) {
+      beatEnergyRef.current = 1;
+      beatCountRef.current++;
+    } else {
+      beatEnergyRef.current *= 0.92;
+    }
+
+    hueRef.current = (hueRef.current + 0.5 + audio.level * 2) % 360;
+
+    // GPU render (full-screen effects)
+    const params: VfxFrameParams = {
+      width: w,
+      height: h,
+      time: (performance.now() - startTimeRef.current) / 1000,
+      beatEnergy: beatEnergyRef.current,
+      kick: audio.kick,
+      snare: audio.snare,
+      hihat: audio.hihat,
+      hue: hueRef.current,
+      beatCount: beatCountRef.current,
+      beatPhase: audio.beatPhase,
+      energyDeriv: audio.energyDeriv,
+      totalEnergy: audio.totalEnergy,
+      crossfader: audio.crossfader,
+      fftBins: audio.fftBins || new Uint8Array(128),
+    };
+    renderer.render(params);
+
+    // Canvas 2D overlay: oscilloscopes only
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    if (frame % 60 === 0) updateJogPositions();
+    drawOscilloscopes(ctx, beatEnergyRef.current);
+
+    ctx.restore();
+    rafRef.current = requestAnimationFrame(gpuLoop);
+  }, [analyzeAudio, drawOscilloscopes, updateJogPositions]);
+
+  // ── Canvas 2D fallback render loop ─────────────────────────
+
+  const renderCanvas2d = useCallback(function canvasLoop() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -76,122 +307,30 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // ── Audio analysis (reused buffer) ───────────────────────
-    const engine = MixiEngine.getInstance();
-    let level = 0;
-    let isBeat = false;
+    // Audio analysis
+    const audio = analyzeAudio();
 
-    if (engine.isInitialized) {
-      const state = useMixiStore.getState();
-      let analyser: AnalyserNode | null = null;
-      if (state.decks.A.isPlaying) analyser = engine.channels.A.analyser;
-      else if (state.decks.B.isPlaying) analyser = engine.channels.B.analyser;
-
-      if (analyser) {
-        if (!freqBufRef.current || freqBufRef.current.length !== analyser.frequencyBinCount) {
-          freqBufRef.current = new Uint8Array(analyser.frequencyBinCount);
-        }
-        analyser.getByteFrequencyData(freqBufRef.current as Uint8Array<ArrayBuffer>);
-        const data = freqBufRef.current;
-        const bassEnd = Math.floor(data.length * 0.15);
-        let sum = 0;
-        for (let i = 0; i < bassEnd; i++) sum += data[i] * data[i];
-        const rms = Math.sqrt(sum / bassEnd) / 255;
-        let fullSum = 0;
-        for (let i = 0; i < data.length; i++) fullSum += data[i];
-        level = fullSum / (data.length * 255);
-        isBeat = rms > 0.4 && rms - prevLevelRef.current > 0.15;
-        prevLevelRef.current = rms;
-      }
-    }
-
-    if (isBeat) beatEnergyRef.current = 1;
+    if (audio.isBeat) beatEnergyRef.current = 1;
     else beatEnergyRef.current *= 0.92;
     const beat = beatEnergyRef.current;
 
-    hueRef.current = (hueRef.current + 0.5 + level * 2) % 360;
+    hueRef.current = (hueRef.current + 0.5 + audio.level * 2) % 360;
     const hue = hueRef.current;
 
-    // ── Clear ────────────────────────────────────────────────
+    // Clear
     ctx.clearRect(0, 0, w, h);
 
-    // ── 1. Beat flash ────────────────────────────────────────
+    // 1. Beat flash
     if (beat > 0.1) {
       ctx.fillStyle = `hsla(${hue}, 100%, 80%, ${beat * 0.06})`;
       ctx.fillRect(0, 0, w, h);
     }
 
-    // ── 2. Circular oscilloscopes around jog wheels ──────────
-    // Update cached positions every 60 frames (~1s)
+    // 2. Circular oscilloscopes
     if (frame % 60 === 0) updateJogPositions();
-    const jogPositions = jogCacheRef.current;
-    const deckIds: DeckId[] = ['A', 'B'];
+    drawOscilloscopes(ctx, beat);
 
-    if (engine.isInitialized) {
-      jogPositions.forEach((jog, idx) => {
-        const deckId = deckIds[idx] || 'A';
-        const state = useMixiStore.getState();
-        if (!state.decks[deckId].isPlaying) return;
-
-        const analyser = engine.channels[deckId].analyser;
-        // Reuse waveform buffer
-        const bufRef = idx === 0 ? waveBufA : waveBufB;
-        if (!bufRef.current || bufRef.current.length !== analyser.frequencyBinCount) {
-          bufRef.current = new Uint8Array(analyser.frequencyBinCount);
-        }
-        analyser.getByteTimeDomainData(bufRef.current as Uint8Array<ArrayBuffer>);
-        const waveData = bufRef.current;
-
-        const oscR = jog.r + 2; // snug to wheel edge
-        const bandWidth = 13; // black band width
-        const deckColor = idx === 0 ? '#00e5ff' : '#ff9100';
-
-        // Bass-reactive band behind oscilloscope
-        const bandIntensity = beat; // 0→1, fast attack slow decay
-        ctx.save();
-        ctx.globalAlpha = 0.7;
-        ctx.beginPath();
-        ctx.arc(jog.cx, jog.cy, oscR + bandWidth / 2, 0, Math.PI * 2);
-        // Dark base → bright yellow flash on bass
-        const r = Math.floor(bandIntensity * 255);   // 0→255
-        const g = Math.floor(bandIntensity * 230);    // 0→230
-        const b2 = Math.floor(bandIntensity * 10);    // stays dark
-        ctx.strokeStyle = `rgb(${r},${g},${b2})`;
-        ctx.lineWidth = bandWidth;
-        if (bandIntensity > 0.3) {
-          ctx.shadowColor = `rgba(255, 230, 0, ${bandIntensity * 0.4})`;
-          ctx.shadowBlur = bandIntensity * 15;
-        }
-        ctx.stroke();
-        ctx.restore();
-
-        // Oscilloscope waveform
-        ctx.save();
-        ctx.globalAlpha = 0.6 + beat * 0.3;
-        ctx.strokeStyle = deckColor;
-        ctx.lineWidth = 2.5 + beat * 1.5;
-        ctx.shadowColor = deckColor;
-        ctx.shadowBlur = 6 + beat * 10;
-        ctx.beginPath();
-
-        const len = waveData.length;
-        for (let i = 0; i < len; i++) {
-          const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
-          const amplitude = (waveData[i] - 128) / 128;
-          const r = oscR + amplitude * 9;
-          const x = jog.cx + Math.cos(angle) * r;
-          const y = jog.cy + Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      });
-    }
-
-    // ── 3. Scanlines ─────────────────────────────────────────
+    // 3. Scanlines
     ctx.save();
     ctx.globalAlpha = 0.025;
     ctx.fillStyle = '#000';
@@ -200,15 +339,38 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
     ctx.restore();
 
-    // ── 4. Vignette (cached gradient) ───────────────────────────
+    // 4. Vignette (cached gradient)
     if (vignetteRef.current) {
       ctx.fillStyle = vignetteRef.current;
       ctx.fillRect(0, 0, w, h);
     }
 
     ctx.restore();
-    rafRef.current = requestAnimationFrame(renderLoop);
-  }, [updateJogPositions]);
+    rafRef.current = requestAnimationFrame(canvasLoop);
+  }, [analyzeAudio, drawOscilloscopes, updateJogPositions]);
+
+  // ── Secret #29: Emergency Kill-Switch (ESC) ─────────────────
+  // Instantly kills GPU shaders and clears buffers if visuals
+  // cause problems (GPU runaway, epilepsy concern, etc.)
+
+  useEffect(() => {
+    if (!active) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && rendererRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+        rendererRef.current.destroy();
+        rendererRef.current = null;
+        setBackend('canvas2d');
+        console.warn('[mixi-vfx] Emergency kill-switch: GPU renderer destroyed');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active]);
+
+  // ── Lifecycle ─────────────────────────────────────────────
 
   useEffect(() => {
     if (!active) {
@@ -216,58 +378,153 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = 0;
       }
+      if (rendererRef.current) {
+        rendererRef.current.destroy();
+        rendererRef.current = null;
+      }
       return;
     }
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    let cancelled = false;
 
-    const resize = () => {
+    async function init() {
+      // Detect GPU backend
+      const detected = await detectGpuBackend();
+      if (cancelled) return;
+      setBackend(detected);
+
+      // Setup Canvas 2D (always needed — oscilloscopes or fallback)
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
       const dpr = window.devicePixelRatio || 1;
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
+
+      startTimeRef.current = performance.now();
+      beatEnergyRef.current = 0;
+      prevLevelRef.current = 0;
+      frameRef.current = 0;
+      beatCountRef.current = 0;
       updateJogPositions();
-      // Rebuild vignette gradient
+
+      if (detected === 'webgpu' && gpuCanvasRef.current) {
+        // Setup WebGPU canvas
+        const gpuCanvas = gpuCanvasRef.current;
+        gpuCanvas.width = window.innerWidth * dpr;
+        gpuCanvas.height = window.innerHeight * dpr;
+        gpuCanvas.style.width = `${window.innerWidth}px`;
+        gpuCanvas.style.height = `${window.innerHeight}px`;
+
+        try {
+          const renderer = await WebGpuRenderer.create(gpuCanvas, () => {
+            // Device lost callback — fall back to Canvas 2D
+            console.warn('[mixi-vfx] GPU device lost, falling back to Canvas 2D');
+            rendererRef.current = null;
+            setBackend('canvas2d');
+          });
+
+          if (cancelled) {
+            renderer.destroy();
+            return;
+          }
+
+          rendererRef.current = renderer;
+          console.log('[mixi-vfx] WebGPU renderer active');
+          rafRef.current = requestAnimationFrame(renderGpu);
+        } catch (err) {
+          console.warn('[mixi-vfx] WebGPU init failed, using Canvas 2D:', err);
+          setBackend('canvas2d');
+          setupCanvas2dFallback(canvas);
+          rafRef.current = requestAnimationFrame(renderCanvas2d);
+        }
+      } else {
+        // Canvas 2D fallback
+        setupCanvas2dFallback(canvas);
+        rafRef.current = requestAnimationFrame(renderCanvas2d);
+      }
+    }
+
+    function setupCanvas2dFallback(canvas: HTMLCanvasElement) {
       const ctx2 = canvas.getContext('2d');
       if (ctx2) {
         const w = window.innerWidth;
-        const vig = ctx2.createRadialGradient(w / 2, window.innerHeight / 2, w * 0.25, w / 2, window.innerHeight / 2, w * 0.7);
+        const vig = ctx2.createRadialGradient(
+          w / 2, window.innerHeight / 2, w * 0.25,
+          w / 2, window.innerHeight / 2, w * 0.7,
+        );
         vig.addColorStop(0, 'transparent');
         vig.addColorStop(1, 'rgba(0,0,0,0.35)');
         vignetteRef.current = vig;
       }
+    }
+
+    init();
+
+    const onResize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        setupCanvas2dFallback(canvas);
+      }
+      const gpuCanvas = gpuCanvasRef.current;
+      if (gpuCanvas) {
+        gpuCanvas.width = window.innerWidth * dpr;
+        gpuCanvas.height = window.innerHeight * dpr;
+        gpuCanvas.style.width = `${window.innerWidth}px`;
+        gpuCanvas.style.height = `${window.innerHeight}px`;
+      }
+      rendererRef.current?.resize(window.innerWidth, window.innerHeight);
+      updateJogPositions();
     };
-    resize();
-    window.addEventListener('resize', resize);
-
-    beatEnergyRef.current = 0;
-    prevLevelRef.current = 0;
-    frameRef.current = 0;
-    updateJogPositions();
-
-    rafRef.current = requestAnimationFrame(render);
+    window.addEventListener('resize', onResize);
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', onResize);
+      if (rendererRef.current) {
+        rendererRef.current.destroy();
+        rendererRef.current = null;
+      }
     };
-  }, [active, render, updateJogPositions]);
+  }, [active, renderGpu, renderCanvas2d, updateJogPositions]);
 
   if (!active) return null;
 
+  const canvasStyle = {
+    position: 'fixed' as const,
+    inset: 0,
+    pointerEvents: 'none' as const,
+    mixBlendMode: 'screen' as const,
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9996,
-        pointerEvents: 'none',
-        mixBlendMode: 'screen',
-      }}
-    />
+    <>
+      {/* WebGPU full-screen effects (bottom layer) */}
+      <canvas
+        ref={gpuCanvasRef}
+        style={{
+          ...canvasStyle,
+          zIndex: 9996,
+          display: backend === 'webgpu' ? 'block' : 'none',
+        }}
+      />
+      {/* Canvas 2D: oscilloscopes (WebGPU mode) or all effects (fallback) */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          ...canvasStyle,
+          zIndex: backend === 'webgpu' ? 9997 : 9996,
+        }}
+      />
+    </>
   );
 };
