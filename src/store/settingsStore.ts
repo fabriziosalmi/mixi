@@ -68,6 +68,8 @@ export interface SettingsState {
   fpsLimit: FpsLimit;
   bpmRange: BpmRangePreset;
   quantizeResolution: QuantizeResolution;
+  /** When true, use Rust/Wasm DSP in AudioWorklet instead of native WebAudio nodes. */
+  useWasmDsp: boolean;
 }
 
 export interface SettingsActions {
@@ -82,6 +84,7 @@ export interface SettingsActions {
   setFpsLimit: (fps: FpsLimit) => void;
   setBpmRange: (preset: BpmRangePreset) => void;
   setQuantizeResolution: (res: QuantizeResolution) => void;
+  setUseWasmDsp: (v: boolean) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -98,6 +101,7 @@ export const useSettingsStore = create<SettingsStore>()(
       fpsLimit: 60 as FpsLimit,
       bpmRange: 'wide' as BpmRangePreset,
       quantizeResolution: 1 as QuantizeResolution,
+      useWasmDsp: false,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -118,6 +122,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setFpsLimit: (fps) => set({ fpsLimit: fps }),
       setBpmRange: (preset) => set({ bpmRange: preset }),
       setQuantizeResolution: (res) => set({ quantizeResolution: res }),
+      setUseWasmDsp: (v) => set({ useWasmDsp: v }),
     }),
     {
       name: 'mixi-settings',
@@ -129,6 +134,7 @@ export const useSettingsStore = create<SettingsStore>()(
         fpsLimit: s.fpsLimit,
         bpmRange: s.bpmRange,
         quantizeResolution: s.quantizeResolution,
+        useWasmDsp: s.useWasmDsp,
       }),
       merge: (persisted, current) => {
         const p = persisted as Record<string, unknown> | undefined;
