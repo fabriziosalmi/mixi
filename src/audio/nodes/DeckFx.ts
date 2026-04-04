@@ -354,70 +354,77 @@ export class DeckFx {
     }
     this.gateActive = true;
     this.gateDivision = Math.round(Math.min(4, Math.max(0, amount)));
-    // Scheduling happens in updateGate() called externally
+    this.gateLastScheduled = 0;
+    // Ensure gate starts at unity (open) — scheduling takes over from next cycle
+    const t = this.ctx.currentTime;
+    this.gateGain.gain.cancelScheduledValues(0);
+    this.gateGain.gain.setValueAtTime(1, t);
   }
 
   /**
-   * Call every ~50ms from the engine or rAF loop.
-   * Schedules gate events 200ms ahead on the audio timeline.
+   * Call every ~50ms from the engine.
+   * Quantized gate: volume drops to 0 for the closed portion of each
+   * beat subdivision, then ramps back to 1 for the open portion.
+   * All transitions are beat-grid-locked via firstBeatOffset.
    */
-  updateGate(bpm: number, currentTime: number, gridOffset: number): void {
+  updateGate(bpm: number, _currentTime: number, gridOffset: number): void {
     if (!this.gateActive || bpm <= 0) return;
 
-    // #31 — When BPM changes (pitch bend), cancel stale scheduled events
-    // so the gate re-locks to the new tempo immediately.
+    // BPM change: cancel stale events and re-lock
     if (bpm !== this.gateLastBpm) {
       this.gateGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gateGain.gain.setValueAtTime(1, this.ctx.currentTime);
       this.gateLastScheduled = 0;
       this.gateLastBpm = bpm;
     }
 
     const beatSec = 60 / bpm;
-    // BUG-17: Clamp minimum division to 10ms to prevent scheduling explosion.
     const divSec = Math.max(0.01, beatSec * DeckFx.GATE_BEAT_DIVS[this.gateDivision]);
     const duty = DeckFx.GATE_DUTY;
     const ramp = DeckFx.GATE_RAMP;
-    const lookAhead = 0.2; // schedule 200ms ahead
-    const scheduleEnd = currentTime + lookAhead;
+    const lookAhead = 0.2;
+    const now = this.ctx.currentTime;
+    const scheduleEnd = now + lookAhead;
 
     const gain = this.gateGain.gain;
 
-    // Find the next gate boundary relative to grid
-    const elapsed = currentTime - gridOffset;
+    // Find current position in beat grid
+    const elapsed = now - gridOffset;
     const currentCycle = Math.floor(elapsed / divSec);
-    let nextCycleStart = gridOffset + (currentCycle + 1) * divSec;
+    let cycleStart = gridOffset + currentCycle * divSec;
 
-    // If we already scheduled past this point, skip
-    if (nextCycleStart <= this.gateLastScheduled) {
-      nextCycleStart = this.gateLastScheduled + divSec;
+    // Start from the current cycle (not next) so we don't miss the open phase
+    if (cycleStart <= this.gateLastScheduled) {
+      cycleStart = this.gateLastScheduled;
     }
 
-    // Schedule gate events within the look-ahead window
-    while (nextCycleStart < scheduleEnd) {
-      const openEnd = nextCycleStart + divSec * duty;
-      const closeEnd = nextCycleStart + divSec;
+    while (cycleStart < scheduleEnd) {
+      const openStart = cycleStart;
+      const closeStart = cycleStart + divSec * duty;
+      const cycleEnd = cycleStart + divSec;
 
-      // Open: ramp to 1
-      if (nextCycleStart > currentTime) {
-        gain.setValueAtTime(0, nextCycleStart);
-        gain.linearRampToValueAtTime(1, nextCycleStart + ramp);
-      }
-      // Close: ramp to 0
-      if (openEnd > currentTime) {
-        gain.setValueAtTime(1, openEnd);
-        gain.linearRampToValueAtTime(0, openEnd + ramp);
+      // Open phase: gain = 1 (volume up)
+      if (openStart > now && openStart > this.gateLastScheduled) {
+        gain.setValueAtTime(0, openStart);
+        gain.linearRampToValueAtTime(1, openStart + ramp);
       }
 
-      this.gateLastScheduled = closeEnd;
-      nextCycleStart = closeEnd;
+      // Close phase: gain = 0 (volume chop)
+      if (closeStart > now && closeStart > this.gateLastScheduled) {
+        gain.setValueAtTime(1, closeStart);
+        gain.linearRampToValueAtTime(0, closeStart + ramp);
+      }
+
+      this.gateLastScheduled = cycleEnd;
+      cycleStart = cycleEnd;
     }
   }
 
   private stopGate(): void {
     this.gateActive = false;
     this.gateLastScheduled = 0;
-    // Cancel all scheduled gain events and hard-reset to unity.
-    // Use a tiny future offset to avoid AudioParam timeline race.
+    this.gateLastBpm = 0;
+    // Cancel all scheduled events and restore unity gain immediately
     const t = this.ctx.currentTime + 0.005;
     this.gateGain.gain.cancelScheduledValues(0);
     this.gateGain.gain.setValueAtTime(1, t);
