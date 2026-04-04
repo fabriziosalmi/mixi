@@ -3,9 +3,11 @@
 //! Prevents audio "clicks" when parameters change abruptly.
 //! Uses a first-order IIR filter (exponential smoothing):
 //!
-//!     y[n] = y[n-1] + α · (target - y[n-1])
+//! ```text
+//! y[n] = y[n-1] + α · (target - y[n-1])
+//! ```
 //!
-//! where α = 1 - e^(-1 / (τ · sample_rate))
+//! where `α = 1 - e^(-1 / (τ · sample_rate))`
 //!
 //! Typical smoothing times:
 //!   - Volume/Gain:  5-10ms  (fast, no audible click)
