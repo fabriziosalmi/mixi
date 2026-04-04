@@ -6,10 +6,11 @@
 
 <p align="center">
   Deterministic audio workstation. Browser-native. Zero install.<br>
-  Dual decks, groovebox, automixer, 17 skins, MIDI, headphone cue — all Web Audio API.
+  Dual decks, Rust/Wasm DSP, WebGPU visuals, groovebox, automixer, 17 skins, MIDI, headphone cue.
 </p>
 
 <p align="center">
+  <a href="https://github.com/fabriziosalmi/mixi/actions/workflows/test.yml"><img src="https://github.com/fabriziosalmi/mixi/actions/workflows/test.yml/badge.svg" alt="Test Gate"></a>
   <a href="https://github.com/fabriziosalmi/mixi/actions/workflows/docs.yml"><img src="https://github.com/fabriziosalmi/mixi/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-blue" alt="License"></a>
 </p>
@@ -18,7 +19,7 @@
 
 ## What This Is
 
-MIXI is a dual-deck DJ engine and step sequencer that runs entirely inside a web browser. Every DSP node — EQ, compression, limiting, effects — is built directly on the Web Audio API with deterministic scheduling. No Tone.js. No third-party audio wrappers. No server required.
+MIXI is a dual-deck DJ engine and step sequencer that runs entirely inside a web browser. The DSP pipeline runs in Rust/Wasm (AudioWorklet) or falls back to hand-wired Web Audio API nodes. No Tone.js. No third-party audio wrappers. No server required.
 
 Load two tracks. Mix them. The groovebox runs in parallel on its own bus. The automixer watches phase, spectrum, and headroom on a 50ms tick and applies corrections as visible, non-destructive mutations. Plug in a MIDI controller and it maps to anything. Pick one of 17 skins or write your own in pure CSS.
 
@@ -126,8 +127,8 @@ python main.py --port 7779
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
 | **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
-| **Groovebox** | 8-voice step sequencer with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
-| **BPM/Key Detection** | Autocorrelation + onset detection for BPM. Chromagram for key. Rust/Wasm fast path. |
+| **Groovebox** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
+| **BPM/Key Detection** | Adaptive spectral-flux onset detection for BPM (multi-hop IOI histogram, octave resolution, ±2.5 BPM refinement). Goertzel chromagram for key (Camelot notation). Rust/Wasm fast path. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter — decks, mixer, groovebox, transport. |
 | **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
 | **Headphone Cue** | Split-stereo or dual-output routing. Mix knob blends cue and master. |
