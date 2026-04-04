@@ -16,6 +16,9 @@
 
 use wasm_bindgen::prelude::*;
 
+// ── Phase 2: DSP Analysis modules ──────────────────────────
+pub mod waveform;
+
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports
 // Validates that Rust → Wasm → JS pipeline works end-to-end.
