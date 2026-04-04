@@ -88,10 +88,14 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack
 
       - name: Install Node deps
         run: npm ci
+
+      - name: Build Wasm module
+        run: wasm-pack build --target web --release --out-dir pkg
+        working-directory: mixi-core
 
       - name: Download mixi-engine binary
         uses: actions/download-artifact@v4
@@ -107,6 +111,7 @@ jobs:
         env:
           EXEC_EXT: ${{ matrix.ext }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_WASM_BUILD: "1"
         run: ${{ matrix.dist-cmd }}
 
       - uses: actions/upload-artifact@v4
