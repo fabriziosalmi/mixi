@@ -16,6 +16,11 @@
 // ─────────────────────────────────────────────────────────────
 
 import { parseBlob } from 'music-metadata';
+import { isWasmReady } from '../wasm/wasmBridge';
+
+// Wasm module — imported dynamically
+let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
+import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
 
 export interface TrackMeta {
   title: string;
@@ -27,9 +32,37 @@ export interface TrackMeta {
 
 /**
  * Parse metadata from an audio Blob / File.
- * Returns sensible defaults when parsing fails or tags are absent.
+ * Uses Rust/Wasm when available for fast ID3v2/Vorbis parsing.
+ * Falls back to JS music-metadata library.
  */
 export async function parseTrackMeta(blob: Blob): Promise<TrackMeta> {
+  // ── Wasm fast path ──────────────────────────────────────────
+  if (isWasmReady() && wasmModule) {
+    try {
+      const buffer = await blob.arrayBuffer();
+      // Only send first 256KB — metadata is always in the header
+      const headerSize = Math.min(buffer.byteLength, 256 * 1024);
+      const header = new Uint8Array(buffer, 0, headerSize);
+      const result = wasmModule.parse_metadata(header);
+      const [title, artist, album, genre, bpmStr] = result.split('\0');
+      const bpmNum = bpmStr ? parseFloat(bpmStr) : NaN;
+      const meta: TrackMeta = {
+        title: title || '',
+        artist: artist || '',
+        album: album || '',
+        genre: genre || '',
+        bpm: !isNaN(bpmNum) && bpmNum > 0 ? bpmNum : null,
+      };
+      // If Rust found something, return it; otherwise fall through to JS
+      if (meta.title || meta.artist || meta.album) {
+        return meta;
+      }
+    } catch {
+      // Fall through to JS
+    }
+  }
+
+  // ── JS fallback (music-metadata library) ─────────────────────
   try {
     const metadata = await parseBlob(blob);
     const { common } = metadata;

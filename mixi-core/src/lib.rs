@@ -22,6 +22,7 @@ pub mod bpm;
 pub mod key;
 pub mod automix;
 pub mod drop_detect;
+pub mod metadata;
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports
