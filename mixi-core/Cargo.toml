@@ -1,6 +1,6 @@
 [package]
 name = "mixi-core"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
 description = "Mixi DAW — Rust/Wasm DSP core"
 license = "PolyForm-Noncommercial-1.0.0"

@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-04-04
+
+### Added — 🦀 Rust/Wasm Integration (Phase 2 Complete)
+
+- **mixi-core Crate**: New `mixi-core/` Rust crate compiled to WebAssembly (87 KB binary)
+  - `wasm-pack` build pipeline with `--target web`, `opt-level = "z"`, LTO
+  - Vite integration via `vite-plugin-wasm` + `vite-plugin-top-level-await`
+  - Cross-Origin Isolation (COOP/COEP headers) for `SharedArrayBuffer` support
+  - Lazy-loading `wasmBridge.ts` singleton with TypeScript types
+
+- **Waveform Analysis in Rust** (`waveform.rs`)
+  - `compute_rms()`, `compute_rms_multichannel()`: windowed RMS computation
+  - `normalise()`: in-place peak normalization
+  - `peak_level()`: absolute peak scan across all channels
+  - `build_waveform()`: flat interleaved [low,mid,high,...] array builder
+  - Automatic JS fallback when Wasm not loaded
+
+- **BPM Detection in Rust** (`bpm.rs`)
+  - Adaptive spectral-flux onset detection
+  - Multi-hop IOI histogram with Gaussian smoothing
+  - Octave resolution with DJ range preference (100–185 BPM)
+  - Grid alignment refinement (±2.5 BPM sweep at 0.1 steps)
+  - Integer BPM snap with alignment validation
+  - Beatgrid offset detection
+
+- **Key Detection in Rust** (`key.rs`)
+  - Goertzel algorithm for pitch-class energy (48 bins, 4 octaves)
+  - Krumhansl-Kessler key profiles (major + minor)
+  - Pearson correlation for all 24 keys
+  - Camelot wheel notation output
+  - `is_harmonic_match()` for DJ compatibility check
+
+- **AutoMix Computation in Rust** (`automix.rs`)
+  - Beat math: `time_to_beat()`, `beat_to_time()`, `snap_to_phrase()`, `calc_mix_out_beat()`
+  - Phase alignment: `compute_phase_alignment()` with signed delta + alignment flag
+  - Full blackboard computation: 18 raw inputs → 20 derived metrics per tick
+  - Intent scoring helpers: `urgency_curve()`, `score_bass_swap()`, `score_dead_air()`, `score_phase_correction()`
+  - 20 Hz AI tick now runs beat math in Rust
+
+- **SystemHud WASM Indicator**: Green dot status when Rust/Wasm module is loaded and active
+
+- **Test Coverage**: 112 total tests (39 Rust + 73 JS), all passing
+
+### Changed
+
+- **WaveformAnalyzer.ts**: Hot loops (RMS, normalization, peak) now use Rust fast path
+- **BpmDetector.ts**: Full BPM pipeline runs in Rust when available (log prefix `[Rust]`)
+- **KeyDetector.ts**: Goertzel + key matching runs in Rust when available (log prefix `[Rust]`)
+- **Blackboard.ts**: AI blackboard computation uses Rust `compute_blackboard()` at 20 Hz
+- **Build Pipeline**: `npm run build:wasm` integrated into main `build` script
+
+### Performance
+
+- `.wasm` binary: 87 KB (release, opt-level=z, LTO, stripped)
+- BPM detection: JS hot loops replaced by Rust/Wasm
+- Key detection: Goertzel on millions of samples now runs in Rust
+- AutoMix tick: beat math + phase alignment in Rust (20 Hz × 20 derived values)
+- All modules: automatic JS fallback if Wasm not loaded
+
 ## [0.1.1] - 2026-04-04
 
 ### Added
