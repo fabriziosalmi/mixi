@@ -26,7 +26,17 @@ import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import { detectGpuBackend, type GpuBackend } from '../gpu/detectGpu';
 import { WebGpuRenderer, type VfxFrameParams } from '../gpu/WebGpuRenderer';
+import { themeVar } from '../theme';
 import type { DeckId } from '../types';
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.substring(0, 2), 16) / 255,
+    parseInt(h.substring(2, 4), 16) / 255,
+    parseInt(h.substring(4, 6), 16) / 255,
+  ];
+}
 
 interface JogPos { cx: number; cy: number; r: number }
 
@@ -49,6 +59,11 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   const freqBufRef = useRef<Uint8Array | null>(null);
   const waveBufA = useRef<Uint8Array | null>(null);
   const waveBufB = useRef<Uint8Array | null>(null);
+  // Secret #3: Peak hold buffer (slower decay than raw FFT)
+  const peakBufRef = useRef(new Float32Array(128));
+  // Secret #24: Parsed CSS deck colors
+  const deckAColorRef = useRef<[number, number, number]>(hexToRgb('#00f0ff'));
+  const deckBColorRef = useRef<[number, number, number]>(hexToRgb('#ff6a00'));
 
   // Cached jog positions — updated every 60 frames
   const jogCacheRef = useRef<JogPos[]>([]);
@@ -93,7 +108,9 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     energyDeriv: number;
     totalEnergy: number;
     crossfader: number;
+    colorFilter: number;          // #25: -1(LPF)→+1(HPF)
     fftBins: Uint8Array | null;
+    peakBins: Float32Array;       // #3: peak-held 0..1
   }
 
   const prevEnergyRef = useRef(0);
@@ -101,7 +118,8 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   const analyzeAudio = useCallback((): AudioFrame => {
     const result: AudioFrame = {
       level: 0, isBeat: false, kick: 0, snare: 0, hihat: 0,
-      beatPhase: 0, energyDeriv: 0, totalEnergy: 0, crossfader: 0.5, fftBins: null,
+      beatPhase: 0, energyDeriv: 0, totalEnergy: 0, crossfader: 0.5,
+      colorFilter: 0, fftBins: null, peakBins: peakBufRef.current,
     };
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return result;
@@ -152,12 +170,23 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     prevLevelRef.current = result.kick;
 
     // Secret #5: BPM phase sync (0→1 sawtooth)
-    const activeDeck = state.decks.A.isPlaying ? state.decks.A : state.decks.B;
+    const activeDeckId = state.decks.A.isPlaying ? 'A' : 'B';
+    const activeDeck = state.decks[activeDeckId as 'A' | 'B'];
     if (activeDeck.bpm > 0) {
       const beatPeriod = 60 / activeDeck.bpm;
       const ctx = engine.getAudioContext();
       const currentTime = ctx.currentTime;
       result.beatPhase = (((currentTime - activeDeck.firstBeatOffset) / beatPeriod) % 1 + 1) % 1;
+    }
+
+    // Secret #25: Color filter state from active deck
+    result.colorFilter = activeDeck.colorFx ?? 0;
+
+    // Secret #3: Peak hold buffer (slower decay for ring texture)
+    const peakBuf = peakBufRef.current;
+    for (let i = 0; i < 128; i++) {
+      const current = i < data.length ? data[i] / 255 : 0;
+      peakBuf[i] = Math.max(peakBuf[i] * 0.95, current);
     }
 
     return result;
@@ -275,7 +304,13 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
       energyDeriv: audio.energyDeriv,
       totalEnergy: audio.totalEnergy,
       crossfader: audio.crossfader,
+      colorFilter: audio.colorFilter,
+      ringWritePos: frameRef.current % 64,
+      feedbackAmount: 0.7,   // #14: default feedback strength
+      deckAColor: deckAColorRef.current,
+      deckBColor: deckBColorRef.current,
       fftBins: audio.fftBins || new Uint8Array(128),
+      peakBins: audio.peakBins,
     };
     renderer.render(params);
 
@@ -388,6 +423,10 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     let cancelled = false;
 
     async function init() {
+      // Secret #24: Parse CSS deck colors
+      deckAColorRef.current = hexToRgb(themeVar('clr-a', '#00f0ff'));
+      deckBColorRef.current = hexToRgb(themeVar('clr-b', '#ff6a00'));
+
       // Detect GPU backend
       const detected = await detectGpuBackend();
       if (cancelled) return;
