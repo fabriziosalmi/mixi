@@ -25,7 +25,7 @@ import { createServer } from 'net';
 import { join } from 'path';
 import {
   existsSync, openSync, writeSync, closeSync, readSync,
-  copyFileSync, unlinkSync, readdirSync, statSync, Buffer as FsBuffer,
+  copyFileSync, unlinkSync, readdirSync, statSync,
 } from 'fs';
 import { tmpdir } from 'os';
 import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
