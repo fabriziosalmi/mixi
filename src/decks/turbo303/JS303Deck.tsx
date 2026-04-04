@@ -108,7 +108,7 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
           <span className="font-bold tracking-widest text-[10px]" style={{ color }}>
             {deckId}
           </span>
-          <span className="text-[10px] font-bold tracking-wider" style={{ color }}>JS-303</span>
+          <span className="text-[10px] font-bold tracking-wider" style={{ color }}>TURBOBASS</span>
           <span className="text-[10px] font-mono tabular-nums" style={{ color: 'var(--txt-muted)' }}>
             {bpm.toFixed(1)} BPM
           </span>
