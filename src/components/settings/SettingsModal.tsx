@@ -390,6 +390,11 @@ const SystemTab: FC = () => {
   const useWasmDsp = useSettingsStore((s) => s.useWasmDsp);
   const setUseWasmDsp = useSettingsStore((s) => s.setUseWasmDsp);
 
+  // Native audio state
+  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const [nativeHost, setNativeHost] = useState('');
+  const [nativeDevices, setNativeDevices] = useState<Array<{id: string; name: string; isDefault: boolean}>>([]);
+
   useEffect(() => {
     setSysInfo({
       cores: navigator.hardwareConcurrency || 0,
@@ -401,6 +406,18 @@ const SystemTab: FC = () => {
         : navigator.userAgent.includes('Safari') ? 'Safari'
         : 'Other',
     });
+
+    // Probe native audio (Electron only)
+    const w = window as any;
+    if (w?.mixi?.nativeAudio) {
+      w.mixi.nativeAudio.isAvailable().then((ok: boolean) => {
+        setNativeAvailable(ok);
+        if (ok) {
+          w.mixi.nativeAudio.getHostName().then((h: string) => setNativeHost(h));
+          w.mixi.nativeAudio.getDevices().then((d: any[]) => setNativeDevices(d));
+        }
+      }).catch(() => setNativeAvailable(false));
+    }
   }, []);
 
   return (
@@ -433,6 +450,28 @@ const SystemTab: FC = () => {
           </div>
         )}
       </div>
+
+      {/* Native Audio I/O — only visible in Electron with addon */}
+      {nativeAvailable && (
+        <>
+          <Divider />
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Native Audio I/O
+            </span>
+            <InfoRow label="Backend" value={nativeHost} />
+            <InfoRow
+              label="Devices"
+              value={nativeDevices.length > 0
+                ? nativeDevices.map(d => `${d.name}${d.isDefault ? ' ★' : ''}`).join(', ')
+                : 'Scanning...'}
+            />
+            <div className="text-[9px] text-emerald-400/70 px-1">
+              ✓ Zero-copy audio path available (cpal → {nativeHost})
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

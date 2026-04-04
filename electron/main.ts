@@ -19,7 +19,7 @@
 //   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen, session, globalShortcut } from 'electron';
+import { app, BrowserWindow, screen, session, globalShortcut, ipcMain } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join } from 'path';
@@ -72,6 +72,25 @@ app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff --experimental-wa
 let mainWindow: BrowserWindow | null = null;
 let pythonProcess: ChildProcess | null = null;
 let apiPort = 0;
+
+// ── Native Audio I/O (cpal via N-API) ────────────────────────
+// Load the mixi-native addon for direct hardware audio output.
+// Falls back gracefully if the addon is not available.
+
+let nativeAudio: any = null;
+try {
+  nativeAudio = require('./native/index.js');
+  if (nativeAudio.isLoaded()) {
+    console.log(`[mixi-native] Loaded — host: ${nativeAudio.getHostName()}`);
+    console.log(`[mixi-native] Available: ${nativeAudio.isNativeAudioAvailable()}`);
+  } else {
+    console.log('[mixi-native] Addon not found for this platform — using WebAudio');
+    nativeAudio = null;
+  }
+} catch (err) {
+  console.log(`[mixi-native] Not available: ${(err as Error).message}`);
+  nativeAudio = null;
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -269,6 +288,9 @@ app.whenReady().then(async () => {
     // 0. Setup COOP/COEP headers for SharedArrayBuffer
     setupSecurityHeaders();
 
+    // 0b. Setup native audio IPC handlers
+    setupNativeAudioIPC();
+
     // 1. Find free port
     apiPort = await findFreePort();
     console.log(`[mixi] API port: ${apiPort}`);
@@ -303,3 +325,49 @@ app.on('activate', () => {
     createWindow();
   }
 });
+
+// ── Native Audio IPC Handlers ────────────────────────────────
+
+function setupNativeAudioIPC(): void {
+  // Check if native audio is available
+  ipcMain.handle('native-audio:available', () => {
+    return nativeAudio?.isNativeAudioAvailable() ?? false;
+  });
+
+  // Get host backend name
+  ipcMain.handle('native-audio:host', () => {
+    return nativeAudio?.getHostName() ?? 'WebAudio';
+  });
+
+  // Enumerate output devices
+  ipcMain.handle('native-audio:devices', () => {
+    if (!nativeAudio) return [];
+    return nativeAudio.enumerateOutputDevices();
+  });
+
+  // Open a native audio stream
+  ipcMain.handle('native-audio:open', (_event, args: {
+    deviceIndex: number;
+    sampleRate: number;
+    bufferSize: number;
+    ringBuffer: SharedArrayBuffer;
+    ringCapacityFrames: number;
+    ringChannels: number;
+  }) => {
+    if (!nativeAudio) throw new Error('Native audio not available');
+    return nativeAudio.openStream(
+      args.deviceIndex,
+      args.sampleRate,
+      args.bufferSize,
+      Buffer.from(args.ringBuffer),
+      args.ringCapacityFrames,
+      args.ringChannels,
+    );
+  });
+
+  // Close the native audio stream
+  ipcMain.handle('native-audio:close', () => {
+    if (!nativeAudio) return;
+    return nativeAudio.closeStream();
+  });
+}

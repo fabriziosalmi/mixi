@@ -44,3 +44,7 @@ IO.md
 # Rust/Wasm build artifacts
 mixi-core/target/
 mixi-core/pkg/
+mixi-native/target/
+
+# Native audio addon binaries (built per-platform)
+electron/native/*.node
