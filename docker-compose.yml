@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mixi:
+    build: .
+    container_name: mixi
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Optional: mount local API for hot reloading 
+      # - ./api:/app/api
+      # - ./dist:/app/dist
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro

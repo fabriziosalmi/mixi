@@ -88,11 +88,19 @@ const App: FC = () => {
     
     if (settings.loadDemoTrack) {
       try {
-        const res = await fetch(new URL('../assets/v0.1.0.mp3', import.meta.url).href);
-        const buf = await res.arrayBuffer();
-        await engine.loadTrack('A', buf);
-        useMixiStore.getState().setDeckTrackName('A', 'Welcome to MIXI ^_^');
+        // Deck A
+        const resA = await fetch(new URL('../assets/v0.1.0.mp3', import.meta.url).href);
+        const bufA = await resA.arrayBuffer();
+        await engine.loadTrack('A', bufA);
+        useMixiStore.getState().setDeckTrackName('A', 'MIXI v0.1.0');
         useMixiStore.getState().setDeckTrackLoaded('A', true);
+
+        // Deck B
+        const resB = await fetch(new URL('../assets/v0.1.1.mp3', import.meta.url).href);
+        const bufB = await resB.arrayBuffer();
+        await engine.loadTrack('B', bufB);
+        useMixiStore.getState().setDeckTrackName('B', 'MIXI v0.1.1');
+        useMixiStore.getState().setDeckTrackLoaded('B', true);
       } catch (e) {
         log.warn('App', `Demo track load failed: ${e}`);
       }

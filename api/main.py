@@ -98,7 +98,7 @@ app = FastAPI(title="Mixi Stream Proxy", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:[0-9]+)?|file://.*|https://([a-zA-Z0-9-]+\.)?github\.io|https://(www\.)?mixidaw\.com)$",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     expose_headers=["Content-Length", "Content-Type", "X-Track-Title"],
@@ -125,6 +125,14 @@ async def mixer_websocket(ws: WebSocket):
     Receives state snapshots, relays commands from the MCP server.
     """
     global _browser_ws, _latest_state
+    
+    # Preempt any zombie connection that didn't clean up properly
+    if _browser_ws is not None:
+        try:
+            await _browser_ws.close()
+        except:
+            pass
+
     await ws.accept()
     _browser_ws = ws
     logger.info("[request]Browser connesso via WebSocket[/request]")
@@ -393,13 +401,15 @@ def download_audio(page_url: str) -> tuple[Path, str | None]:
 
     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
     tmp.close()
-    tmp_path = tmp.name
+    
+    # Secure templating: insert .%(ext)s right before .mp3
+    outtmpl = tmp.name[:-4] + ".%(ext)s"
 
     opts = {
         "format": "bestaudio/best",
         "quiet": True,
         "no_warnings": True,
-        "outtmpl": tmp_path.replace(".mp3", ".%(ext)s"),
+        "outtmpl": outtmpl,
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -456,21 +466,42 @@ async def stream_endpoint(
     url: str = Query(..., description="SoundCloud or YouTube URL"),
 ):
     """
-    Download audio via yt-dlp (handles HLS/DASH) and stream
-    the resulting MP3 to the browser.
+    Resolve audio URL via yt-dlp and proxy the stream in 
+    real-time from the original CDN to the browser.
     """
     logger.info("[request]Ricevuta richiesta per URL:[/request] [bold]%s[/bold]", url)
 
-    # Download to temp file (blocking — run in thread pool)
-    file_path, title = await asyncio.to_thread(download_audio, url)
+    try:
+        # 1. Resolve direct CDN URL without downloading
+        direct_url, title, content_type = await asyncio.to_thread(resolve_audio_url, url)
+    except Exception as e:
+        logger.error(f"[error]Resolve error:[/error] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # 2. Proxy the stream chunk by chunk
+    client = await get_http_client()
+    
+    async def proxy_stream():
+        try:
+            async with client.stream("GET", direct_url) as response:
+                if response.status_code != 200:
+                    logger.error(f"[error]Rifiutato dal CDN originario ({response.status_code})[/error]")
+                    return
+                # Stream the bytes transparently
+                async for chunk in response.aiter_bytes(chunk_size=65_536):
+                    yield chunk
+        except Exception as e:
+            logger.error("[error]Interruzione inaspettata dello stream:[/error] %s", e)
 
     headers: dict[str, str] = {}
     if title:
-        headers["X-Track-Title"] = title
+        # Encode title to ASCII explicitly or rely on strict strings, we'll cast safety
+        import urllib.parse
+        headers["X-Track-Title"] = urllib.parse.quote(title)
 
     return StreamingResponse(
-        content=stream_file(file_path),
-        media_type="audio/mpeg",
+        content=proxy_stream(),
+        media_type=content_type or "audio/mpeg",
         headers=headers,
     )
 

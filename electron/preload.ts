@@ -16,9 +16,10 @@
 
 import { contextBridge } from 'electron';
 
-// Read the apiPort from the URL query string
-const params = new URLSearchParams(window.location.search);
-const apiPort = params.get('apiPort') || '8000';
+// Leggi la porta API dall'argomento passato nel main process 
+// tramite `additionalArguments: ['--mixi-api-port=...']`.
+const portArg = process.argv.find((arg) => arg.startsWith('--mixi-api-port='));
+const apiPort = portArg ? portArg.split('=')[1] : '8000';
 
 contextBridge.exposeInMainWorld('mixi', {
   apiPort: Number(apiPort),

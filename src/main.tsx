@@ -13,11 +13,14 @@ import App from './App';
 import './index.css';
 
 import { MobileScaleWrapper } from './components/mobile/MobileScaleWrapper';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MobileScaleWrapper>
-      <App />
-    </MobileScaleWrapper>
+    <ErrorBoundary>
+      <MobileScaleWrapper>
+        <App />
+      </MobileScaleWrapper>
+    </ErrorBoundary>
   </StrictMode>,
 );

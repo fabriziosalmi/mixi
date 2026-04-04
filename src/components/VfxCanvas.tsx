@@ -62,7 +62,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     jogCacheRef.current = positions;
   }, []);
 
-  const render = useCallback(() => {
+  const render = useCallback(function renderLoop() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -207,7 +207,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
 
     ctx.restore();
-    rafRef.current = requestAnimationFrame(render);
+    rafRef.current = requestAnimationFrame(renderLoop);
   }, [updateJogPositions]);
 
   useEffect(() => {

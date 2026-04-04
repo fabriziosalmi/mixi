@@ -110,7 +110,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         {/* Track name — fills available space */}
         {isTrackLoaded && (
           <span className="flex-1 truncate text-[12px] text-zinc-300 font-bold min-w-0">
-            {trackName?.replace(/\.[^.]+$/, '') || ''}
+            {trackName || ''}
           </span>
         )}
         {/* Spacer when no track */}

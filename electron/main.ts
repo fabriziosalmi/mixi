@@ -148,20 +148,20 @@ function createWindow(): void {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: [`--mixi-api-port=${apiPort}`],
     },
   });
 
-  // Load the Vite build with the API port injected
+  // Load the Vite build without query parameters
   const indexPath = join(__dirname, '..', 'dist', 'index.html');
 
   if (existsSync(indexPath)) {
     // Production: load from dist/
-    mainWindow.loadFile(indexPath, {
-      query: { apiPort: String(apiPort) },
-    });
+    mainWindow.loadFile(indexPath);
   } else {
     // Dev: load from Vite dev server
-    mainWindow.loadURL(`http://localhost:5173?apiPort=${apiPort}`);
+    mainWindow.loadURL('http://localhost:5173');
   }
 
   mainWindow.on('closed', () => {

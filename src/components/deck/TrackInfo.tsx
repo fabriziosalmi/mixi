@@ -80,7 +80,7 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
   // Full mode (unused now but kept for flexibility).
   const trackName = useMixiStore.getState().decks[deckId].trackName;
   const musicalKey = useMixiStore.getState().decks[deckId].musicalKey;
-  const displayName = trackName ? trackName.replace(/\.[^.]+$/, '') : 'No Track';
+  const displayName = trackName || 'No Track';
 
   return (
     <div className="flex items-center gap-2 w-full px-1 min-h-[20px]">
