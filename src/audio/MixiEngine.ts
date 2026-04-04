@@ -41,7 +41,7 @@ import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
 import { log } from '../utils/logger';
-import { LocalParamBus, PARAM_BUS_SIZE } from './dsp';
+import { LocalParamBus, SharedParamBus, PARAM_BUS_SIZE } from './dsp';
 import { DspParamWriter } from './dsp/DspParamWriter';
 import { WasmDspBridge } from './dsp/WasmDspBridge';
 import { NativeAudioBridge } from './native/NativeAudioBridge';
@@ -196,18 +196,49 @@ export class MixiEngine {
     log.info('Engine', 'DSP param bus initialised (512 bytes)');
 
     // ── Wasm DSP Bridge (conditional) ──────────────────────
+    // When active, routes audio through Rust DSP engine in AudioWorklet:
+    //   Source A → trimGain A → worklet input[0]
+    //   Source B → trimGain B → worklet input[1]
+    //   worklet output → master.output (analyser) → destination
+    // WebAudio EQ/FX/MasterBus are bypassed (remain for fallback).
     const useWasm = useSettingsStore.getState().useWasmDsp;
     if (useWasm) {
       this._wasmBridge = new WasmDspBridge();
       this._wasmBridge.init(this.ctx).then((ok) => {
         if (ok && this._wasmBridge?.workletNode) {
-          // Insert worklet between deck outputs and master input.
-          // The worklet acts as a passthrough now, but will run
-          // the Rust DSP chain when fully wired.
+          // Use SharedParamBus so worklet and paramWriter share the same memory.
+          // The bridge's sharedBuffers.paramBus is a SharedArrayBuffer
+          // created by createDspBuffers(). We create a SharedParamBus
+          // of the same size — it allocates its own SAB which is sent to the worklet.
+          // The DspParamWriter writes to this bus, and the worklet reads from it.
+          if (this._wasmBridge.sharedBuffers) {
+            const sharedBus = new SharedParamBus(PARAM_BUS_SIZE);
+            this._paramWriter = new DspParamWriter(sharedBus);
+            this._paramWriter.setSampleRate(this.ctx.sampleRate);
+            // Re-send the param bus SAB to the worklet so it reads from the same memory
+            this._wasmBridge.workletNode!.port.postMessage({
+              type: 'init',
+              paramBus: sharedBus.buffer,
+            });
+          }
           this._paramWriter?.setDspBackend(true);
-          log.success('Engine', 'Wasm DSP path ACTIVE (passthrough)');
+
+          // Disconnect WebAudio deck→master chain
+          this.channels.A.output.disconnect();
+          this.channels.B.output.disconnect();
+
+          // Connect deck trims → worklet inputs (0=A, 1=B)
+          this._wasmBridge.connectDeckA(this.channels.A.input);
+          this._wasmBridge.connectDeckB(this.channels.B.input);
+
+          // Connect worklet output → master analyser → headphone bus → destination
+          this._wasmBridge.connectOutput(this.master.output);
+          // Also keep CUE/PFL paths via WebAudio (pre-fader listen)
+          // trimGain already fans out to cueGain via DeckChannel wiring
+
+          log.success('Engine', 'Wasm DSP path ACTIVE — Rust processing audio');
         } else {
-          log.warn('Engine', 'Wasm DSP init failed — using native path');
+          log.warn('Engine', 'Wasm DSP init failed — using WebAudio path');
           this._paramWriter?.setDspBackend(false);
         }
       }).catch((err) => {

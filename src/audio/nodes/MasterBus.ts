@@ -319,9 +319,12 @@ export class MasterBus {
    * Never fully replaces dry — always additive.
    */
   setPunch(amount: number, ctx: AudioContext): void {
-    // Dry stays at 1, wet blends in proportionally
-    smoothParam(this.punchDry.gain, 1, ctx);
-    smoothParam(this.punchWet.gain, amount * 0.5, ctx);
+    // Parallel compression: dry + wet blend.
+    // Compensate gain to maintain unity: dry+wet = 1/(1+wet_amount)
+    const wet = amount * 0.5;
+    const compensation = 1 / (1 + wet);
+    smoothParam(this.punchDry.gain, compensation, ctx);
+    smoothParam(this.punchWet.gain, wet * compensation, ctx);
   }
 
   destroy(): void {

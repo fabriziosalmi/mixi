@@ -36,18 +36,24 @@ export class DeckChannel {
   // ── Audio Nodes ────────────────────────────────────────────
   readonly trimGain: GainNode;
 
-  // 3-band isolator EQ (parallel split, not series)
+  // 3-band isolator EQ — Linkwitz-Riley 24dB/oct (LR4)
   //
-  //   Trim → ┬─ LP (250Hz)     → lowGain  ──┐
-  //          ├─ BP (250-4kHz)  → midGain  ──┤→ eqMerge → ColorFX
-  //          └─ HP (4kHz)      → highGain ──┘
+  // Two cascaded Butterworth 12dB/oct filters per crossover = LR4.
+  // Flat magnitude sum at crossover (-6dB per band), zero phase error.
+  //
+  //   Trim → ┬─ LP1(250)→LP2(250)           → lowGain  ──┐
+  //          ├─ HP1(250)→HP2(250)→LP3(4k)→LP4(4k) → midGain ──┤→ eqMerge → ColorFX
+  //          └─ HP3(4k)→HP4(4k)              → highGain ──┘
   //
   // Kill on any band = gain 0 → complete silence on that band only.
-  // Other bands are completely unaffected (parallel, not series).
-  private readonly eqLP: BiquadFilterNode;     // lowpass @ 250Hz
-  private readonly eqBPLow: BiquadFilterNode;  // highpass @ 250Hz (mid band lower edge)
-  private readonly eqBPHigh: BiquadFilterNode;  // lowpass @ 4kHz (mid band upper edge)
-  private readonly eqHP: BiquadFilterNode;     // highpass @ 4kHz
+  private readonly eqLP1: BiquadFilterNode;
+  private readonly eqLP2: BiquadFilterNode;
+  private readonly eqBPLow1: BiquadFilterNode;
+  private readonly eqBPLow2: BiquadFilterNode;
+  private readonly eqBPHigh1: BiquadFilterNode;
+  private readonly eqBPHigh2: BiquadFilterNode;
+  private readonly eqHP1: BiquadFilterNode;
+  private readonly eqHP2: BiquadFilterNode;
   readonly eqLow: GainNode;
   readonly eqMid: GainNode;
   readonly eqHigh: GainNode;
@@ -94,36 +100,32 @@ export class DeckChannel {
     this.trimGain = ctx.createGain();
     this.trimGain.gain.value = 1;
 
-    // ── 3-band isolator (parallel crossover) ─────────────────
-    // Low band: LP @ 250Hz → lowGain
-    this.eqLP = ctx.createBiquadFilter();
-    this.eqLP.type = 'lowpass';
-    this.eqLP.frequency.value = EQ_LOW_FREQ;
-    this.eqLP.Q.value = 0.707; // Butterworth
+    // ── 3-band isolator — Linkwitz-Riley 24dB/oct (LR4) ─────
+    // Two cascaded Butterworth 12dB/oct per crossover point.
 
+    const makeLR = (type: BiquadFilterType, freq: number) => {
+      const f1 = ctx.createBiquadFilter();
+      f1.type = type; f1.frequency.value = freq; f1.Q.value = 0.707;
+      const f2 = ctx.createBiquadFilter();
+      f2.type = type; f2.frequency.value = freq; f2.Q.value = 0.707;
+      f1.connect(f2);
+      return [f1, f2] as const;
+    };
+
+    // Low band: LP1 → LP2 @ 250Hz
+    [this.eqLP1, this.eqLP2] = makeLR('lowpass', EQ_LOW_FREQ);
     this.eqLow = ctx.createGain();
     this.eqLow.gain.value = 1;
 
-    // Mid band: HP @ 250Hz → LP @ 4kHz → midGain (bandpass)
-    this.eqBPLow = ctx.createBiquadFilter();
-    this.eqBPLow.type = 'highpass';
-    this.eqBPLow.frequency.value = EQ_LOW_FREQ;
-    this.eqBPLow.Q.value = 0.707;
-
-    this.eqBPHigh = ctx.createBiquadFilter();
-    this.eqBPHigh.type = 'lowpass';
-    this.eqBPHigh.frequency.value = EQ_HIGH_FREQ;
-    this.eqBPHigh.Q.value = 0.707;
-
+    // Mid band: HP1→HP2 @ 250Hz → LP3→LP4 @ 4kHz
+    [this.eqBPLow1, this.eqBPLow2] = makeLR('highpass', EQ_LOW_FREQ);
+    [this.eqBPHigh1, this.eqBPHigh2] = makeLR('lowpass', EQ_HIGH_FREQ);
+    this.eqBPLow2.connect(this.eqBPHigh1); // chain bandpass
     this.eqMid = ctx.createGain();
     this.eqMid.gain.value = 1;
 
-    // High band: HP @ 4kHz → highGain
-    this.eqHP = ctx.createBiquadFilter();
-    this.eqHP.type = 'highpass';
-    this.eqHP.frequency.value = EQ_HIGH_FREQ;
-    this.eqHP.Q.value = 0.707;
-
+    // High band: HP1 → HP2 @ 4kHz
+    [this.eqHP1, this.eqHP2] = makeLR('highpass', EQ_HIGH_FREQ);
     this.eqHigh = ctx.createGain();
     this.eqHigh.gain.value = 1;
 
@@ -155,26 +157,25 @@ export class DeckChannel {
 
     // ── Wire the chain ───────────────────────────────────────
     //
-    // 3-band parallel isolator EQ:
-    //   Trim → LP(250) → lowGain  → merge
-    //   Trim → HP(250) → LP(4k) → midGain → merge
-    //   Trim → HP(4k) → highGain → merge
+    // Linkwitz-Riley 24dB/oct parallel isolator EQ:
+    //   Trim → LP1→LP2(250) → lowGain  → merge
+    //   Trim → HP1→HP2(250) → LP3→LP4(4k) → midGain → merge
+    //   Trim → HP3→HP4(4k) → highGain → merge
     //   merge → ColorFX → FX → Fader → Analyser → Xfader
 
-    // Low band
-    this.trimGain.connect(this.eqLP);
-    this.eqLP.connect(this.eqLow);
+    // Low band (LP1→LP2 already chained in makeLR)
+    this.trimGain.connect(this.eqLP1);
+    this.eqLP2.connect(this.eqLow);
     this.eqLow.connect(this.eqMerge);
 
-    // Mid band (HP + LP in series = bandpass)
-    this.trimGain.connect(this.eqBPLow);
-    this.eqBPLow.connect(this.eqBPHigh);
-    this.eqBPHigh.connect(this.eqMid);
+    // Mid band (HP1→HP2→LP3→LP4 already chained)
+    this.trimGain.connect(this.eqBPLow1);
+    this.eqBPHigh2.connect(this.eqMid);
     this.eqMid.connect(this.eqMerge);
 
-    // High band
-    this.trimGain.connect(this.eqHP);
-    this.eqHP.connect(this.eqHigh);
+    // High band (HP1→HP2 already chained)
+    this.trimGain.connect(this.eqHP1);
+    this.eqHP2.connect(this.eqHigh);
     this.eqHigh.connect(this.eqMerge);
 
     // Post-EQ chain

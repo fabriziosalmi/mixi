@@ -26,6 +26,7 @@ use crate::dsp::predictive_limiter::PredictiveLimiter;
 // ── ParamBus layout (must match ParamLayout.ts) ──────────────
 
 // Deck offsets (relative to deck base)
+// MUST match src/audio/dsp/ParamLayout.ts exactly!
 const DECK_TRIM: usize = 0;
 const DECK_EQ_LOW: usize = 4;
 const DECK_EQ_MID: usize = 8;
@@ -34,17 +35,23 @@ const DECK_FADER: usize = 16;
 const DECK_XFADER_GAIN: usize = 20;
 const DECK_COLOR_FREQ: usize = 24;
 const DECK_COLOR_RES: usize = 28;
-// FX slots
-const DECK_FX_DLY_AMOUNT: usize = 36;
-const DECK_FX_DLY_ACTIVE: usize = 40;
-const DECK_FX_REV_AMOUNT: usize = 44;
-const DECK_FX_REV_ACTIVE: usize = 48;
-const DECK_FX_PHA_AMOUNT: usize = 52;
-const DECK_FX_PHA_ACTIVE: usize = 56;
-const DECK_FX_FLG_AMOUNT: usize = 60;
-const DECK_FX_FLG_ACTIVE: usize = 64;
-const DECK_FX_GATE_AMOUNT: usize = 68;
-const DECK_FX_GATE_ACTIVE: usize = 72;
+const DECK_CUE_ACTIVE: usize = 32;
+const DECK_PLAYBACK_RATE: usize = 36;
+// FX slots (each has amount + active flag, some have extra params)
+const DECK_FX_FLT_AMOUNT: usize = 40;
+const DECK_FX_FLT_ACTIVE: usize = 44;
+const DECK_FX_DLY_AMOUNT: usize = 48;
+const DECK_FX_DLY_ACTIVE: usize = 52;
+const DECK_FX_DLY_TIME: usize = 56;
+const DECK_FX_DLY_FEEDBACK: usize = 60;
+const DECK_FX_REV_AMOUNT: usize = 64;
+const DECK_FX_REV_ACTIVE: usize = 68;
+const DECK_FX_PHA_AMOUNT: usize = 72;
+const DECK_FX_PHA_ACTIVE: usize = 76;
+const DECK_FX_FLG_AMOUNT: usize = 80;
+const DECK_FX_FLG_ACTIVE: usize = 84;
+const DECK_FX_GATE_AMOUNT: usize = 88;
+const DECK_FX_GATE_ACTIVE: usize = 92;
 
 // Deck bases
 const DECK_A_BASE: usize = 0;
@@ -169,10 +176,14 @@ impl DeckDsp {
             self.color.process_block(samples);
         }
 
-        // FX: Delay
+        // FX: Delay (uses dedicated time/feedback params from ParamLayout)
         if read_bool(params, base + DECK_FX_DLY_ACTIVE) {
             let amount = read_f32(params, base + DECK_FX_DLY_AMOUNT);
-            self.delay.set_params(sr * 0.25 * amount, 0.4, amount);
+            let time_ms = read_f32(params, base + DECK_FX_DLY_TIME);
+            let feedback = read_f32(params, base + DECK_FX_DLY_FEEDBACK);
+            let time_samples = if time_ms > 0.0 { time_ms * sr / 1000.0 } else { sr * 0.25 };
+            let fb = if feedback > 0.0 { feedback } else { 0.4 };
+            self.delay.set_params(time_samples, fb, amount);
             self.delay.process_block(samples);
         }
 
@@ -407,5 +418,37 @@ impl DspEngine {
         self.master.punch.reset();
         self.master.limiter.reset();
         self.master.predictive.reset();
+    }
+
+    /// Process audio via raw memory offsets (for AudioWorklet direct access).
+    ///
+    /// The worklet pre-allocates buffers in Wasm linear memory and passes
+    /// their byte offsets. This avoids wasm-bindgen's heap object machinery.
+    ///
+    /// * `mem_in_l`  — byte offset of input L buffer (128 × f32)
+    /// * `mem_in_r`  — byte offset of input R buffer (128 × f32)
+    /// * `mem_out_l` — byte offset of output L buffer (128 × f32)
+    /// * `mem_out_r` — byte offset of output R buffer (128 × f32)
+    /// * `mem_params` — byte offset of param bus (512 bytes)
+    /// * `len`       — number of samples per channel (typically 128)
+    #[wasm_bindgen(js_name = "processRaw")]
+    pub fn process_raw(&mut self, mem_in_l: u32, mem_in_r: u32,
+        mem_out_l: u32, mem_out_r: u32, mem_params: u32, len: u32,
+    ) {
+        let len = (len as usize).min(MAX_BLOCK);
+
+        // SAFETY: These offsets point into Wasm linear memory, which is
+        // a single contiguous allocation managed by the JS host. The worklet
+        // guarantees non-overlapping regions and valid lifetimes.
+        unsafe {
+            let base = 0 as *mut u8;
+            let in_l = std::slice::from_raw_parts_mut(base.add(mem_in_l as usize) as *mut f32, len);
+            let in_r = std::slice::from_raw_parts_mut(base.add(mem_in_r as usize) as *mut f32, len);
+            let out_l = std::slice::from_raw_parts_mut(base.add(mem_out_l as usize) as *mut f32, len);
+            let out_r = std::slice::from_raw_parts_mut(base.add(mem_out_r as usize) as *mut f32, len);
+            let params = std::slice::from_raw_parts(base.add(mem_params as usize), 512);
+
+            self.process(in_l, in_r, out_l, out_r, params);
+        }
     }
 }
