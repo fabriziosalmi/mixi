@@ -43,6 +43,13 @@ export class MidiManager {
   private midiAccess: MIDIAccess | null = null;
   public static onStatusChange: ((connected: boolean) => void) | null = null;
 
+  // ── MIDI Clock Out ────────────────────────────────────────
+  // Sends 24 ppqn clock ticks synced to the active deck's BPM.
+  // 0xFA = Start, 0xFC = Stop, 0xF8 = Clock tick (24 per beat).
+  private _clockEnabled = false;
+  private _clockTimer: ReturnType<typeof setInterval> | null = null;
+  private _clockOutputs: MIDIOutput[] = [];
+
   private constructor() {
     this.init();
   }
@@ -109,6 +116,10 @@ export class MidiManager {
     if (!event.data) return;
     const [status, data1, data2] = event.data;
     
+    // Handle MIDI real-time messages (clock, start, stop)
+    if (status === 0xF8) { this.handleClockTick(); return; }
+    if (status === 0xFA) { this._externalClockTicks = []; log.info('MIDI', 'External clock: START'); return; }
+    if (status === 0xFC) { this._externalBpm = 0; this._externalClockTicks = []; log.info('MIDI', 'External clock: STOP'); return; }
     if (status >= 248) return;
 
     const command = status >> 4;
@@ -206,6 +217,116 @@ export class MidiManager {
         }
         break;
       }
+    }
+  }
+
+  // ── MIDI Clock Output ──────────────────────────────────────
+  // 24 ppqn (pulses per quarter note) synced to active deck BPM.
+  // Standard MIDI timing messages: 0xFA Start, 0xFC Stop, 0xF8 Tick.
+
+  get clockEnabled(): boolean { return this._clockEnabled; }
+
+  startClock(): void {
+    if (this._clockEnabled) return;
+    if (!this.midiAccess) return;
+
+    // Collect all available MIDI outputs
+    this._clockOutputs = [];
+    this.midiAccess.outputs.forEach((output: MIDIOutput) => {
+      this._clockOutputs.push(output);
+    });
+
+    if (this._clockOutputs.length === 0) {
+      log.warn('MIDI', 'No MIDI outputs available for clock');
+      return;
+    }
+
+    this._clockEnabled = true;
+
+    // Send MIDI Start (0xFA)
+    this.sendToAllOutputs([0xFA]);
+    log.info('MIDI', `Clock started → ${this._clockOutputs.map(o => o.name).join(', ')}`);
+
+    // Tick loop: calculate interval from BPM, send 24 ppqn
+    this.scheduleClockTicks();
+  }
+
+  stopClock(): void {
+    if (!this._clockEnabled) return;
+    this._clockEnabled = false;
+
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer);
+      this._clockTimer = null;
+    }
+
+    // Send MIDI Stop (0xFC)
+    this.sendToAllOutputs([0xFC]);
+    this._clockOutputs = [];
+    log.info('MIDI', 'Clock stopped');
+  }
+
+  private scheduleClockTicks(): void {
+    if (this._clockTimer) clearInterval(this._clockTimer);
+
+    // Tick at 24 ppqn — recalculate interval each tick for live BPM changes
+    this._clockTimer = setInterval(() => {
+      if (!this._clockEnabled) return;
+      this.sendToAllOutputs([0xF8]);
+    }, this.getTickIntervalMs());
+
+    // Re-schedule periodically to follow BPM changes
+    const bpmWatcher = setInterval(() => {
+      if (!this._clockEnabled) { clearInterval(bpmWatcher); return; }
+      if (this._clockTimer) clearInterval(this._clockTimer);
+      this._clockTimer = setInterval(() => {
+        if (!this._clockEnabled) return;
+        this.sendToAllOutputs([0xF8]);
+      }, this.getTickIntervalMs());
+    }, 500); // Re-sync interval every 500ms
+  }
+
+  private getTickIntervalMs(): number {
+    const state = useMixiStore.getState();
+    const deckA = state.decks.A;
+    const deckB = state.decks.B;
+    let bpm = 120;
+    if (deckA.isPlaying && deckA.bpm > 0) bpm = deckA.bpm;
+    else if (deckB.isPlaying && deckB.bpm > 0) bpm = deckB.bpm;
+    return 60000 / (bpm * 24); // ms per tick at 24 ppqn
+  }
+
+  private sendToAllOutputs(data: number[]): void {
+    const msg = new Uint8Array(data);
+    for (const output of this._clockOutputs) {
+      try { output.send(msg); } catch { /* output may have disconnected */ }
+    }
+  }
+
+  // ── MIDI Clock Input (receive external clock) ─────────────
+  // When receiving 0xF8 ticks, calculate external BPM and expose it.
+
+  private _externalClockTicks: number[] = [];
+  private _externalBpm = 0;
+
+  get externalBpm(): number { return this._externalBpm; }
+  get hasExternalClock(): boolean { return this._externalBpm > 0; }
+
+  private handleClockTick(): void {
+    const now = performance.now();
+    this._externalClockTicks.push(now);
+
+    // Keep last 48 ticks (2 beats worth)
+    if (this._externalClockTicks.length > 48) {
+      this._externalClockTicks.shift();
+    }
+
+    if (this._externalClockTicks.length >= 24) {
+      // Average interval over last 24 ticks (1 beat)
+      const ticks = this._externalClockTicks;
+      const span = ticks[ticks.length - 1] - ticks[ticks.length - 24];
+      const avgTickMs = span / 23;
+      this._externalBpm = 60000 / (avgTickMs * 24);
     }
   }
 
