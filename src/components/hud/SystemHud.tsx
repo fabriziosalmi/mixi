@@ -18,6 +18,7 @@ import { useEffect, useRef, useState, useCallback, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { MidiManager } from '../../midi/MidiManager';
 import { useMidiStore } from '../../store/midiStore';
+import { wasmCore, isWasmReady } from '../../wasm/wasmBridge';
 
 const HISTORY_SIZE = 8;
 const RISING_THRESHOLD = 4;
@@ -96,6 +97,7 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
   const [cpuAlert, setCpuAlert] = useState<AlertLevel>('nominal');
   const [latAlert, setLatAlert] = useState<AlertLevel>('nominal');
   const [midiConnected, setMidiConnected] = useState(false);
+  const [wasmReady, setWasmReady] = useState(isWasmReady());
   const [booting, setBooting] = useState(true);
   const [dimmed, setDimmed] = useState(false);
 
@@ -126,6 +128,11 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
   useEffect(() => {
     const timeout = setTimeout(() => setBooting(false), BOOT_DURATION_MS);
     return () => clearTimeout(timeout);
+  }, []);
+
+  // Initialize Rust/Wasm core (lazy, non-blocking)
+  useEffect(() => {
+    wasmCore().then(() => setWasmReady(true)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -256,6 +263,21 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
           </div>
 
           {/* MCP status: icon + dot */}
+
+          {/* ── gap ── */}
+          <div style={{ width: 6 }} />
+
+          {/* WASM status */}
+          <div className="flex items-center gap-1" title={wasmReady ? 'Rust/Wasm: Active' : 'Rust/Wasm: Loading...'}>
+            <span className="text-[7px] font-mono font-bold tracking-wider" style={{ color: wasmReady ? 'var(--status-ok)' : 'var(--txt-dim)' }}>WASM</span>
+            <div
+              className="h-[6px] w-[6px] rounded-full shrink-0"
+              style={{
+                backgroundColor: wasmReady ? 'var(--status-ok)' : 'var(--brd-default)',
+                boxShadow: wasmReady ? '0 0 6px var(--status-ok)66' : 'none',
+              }}
+            />
+          </div>
 
           {/* ── gap: Audio | Effects ── */}
           <div style={{ width: 6 }} />

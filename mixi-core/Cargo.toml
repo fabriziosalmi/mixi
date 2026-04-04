@@ -1,0 +1,32 @@
+[package]
+name = "mixi-core"
+version = "0.1.0"
+edition = "2021"
+description = "Mixi DAW — Rust/Wasm DSP core"
+license = "PolyForm-Noncommercial-1.0.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+# Phase 2 dependencies (uncomment when needed):
+# rustfft = "6"          # Step 4: BPM/Key detection
+# symphonia = "0.5"      # Step 3: Metadata parsing
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "z"        # Optimize for size (smallest .wasm)
+lto = true             # Link-Time Optimization
+strip = true           # Strip debug symbols
+codegen-units = 1      # Single codegen unit for max optimization
+
+# wasm-opt is disabled because the version bundled with wasm-pack 0.14
+# doesn't support bulk-memory ops emitted by Rust 1.94+.
+# Re-enable when wasm-pack ships wasm-opt ≥ 119.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

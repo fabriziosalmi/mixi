@@ -36,3 +36,7 @@ WHITE_PAPER.md
 SAAS.md
 ROADMAP.md
 coverage/
+
+# Rust/Wasm build artifacts
+mixi-core/target/
+mixi-core/pkg/
