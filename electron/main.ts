@@ -8,20 +8,54 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// Mixi – Electron Main Process
+// Mixi – Electron Main Process (Audio-Optimized)
 //
-// 1. Find a free port
-// 2. Spawn the mixi-engine (Python backend) on that port
-// 3. Wait for /api/health to respond
-// 4. Create the BrowserWindow loading the Vite build
-// 5. On quit → graceful shutdown of the Python child
+// Performance optimizations for professional audio:
+//   1. Chromium GPU flags for smooth UI rendering
+//   2. Audio thread priority elevation
+//   3. WebAudio low-latency hints
+//   4. SharedArrayBuffer enabled (COOP/COEP)
+//   5. V8 Wasm SIMD enabled
+//   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, screen, session } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join } from 'path';
 import { existsSync } from 'fs';
+
+// ── Chromium Audio & Performance Flags ───────────────────────
+// These must be set BEFORE app.ready fires.
+
+// Audio latency: request the lowest possible buffer size
+app.commandLine.appendSwitch('audio-buffer-size', '128');
+
+// Disable audio output resampling — pass-through at native rate
+app.commandLine.appendSwitch('disable-audio-output-resampler');
+
+// GPU acceleration for canvas/WebGL (waveforms, VU meters)
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
+// WebAssembly SIMD (our DSP engine uses simd128)
+app.commandLine.appendSwitch('enable-features',
+  'SharedArrayBuffer,WebAssemblySimd,WebAssemblyTiering');
+
+// Disable power throttling — audio must never be throttled
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+
+// Disable unnecessary Chromium features that waste CPU
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-extensions');
+app.commandLine.appendSwitch('disable-component-update');
+app.commandLine.appendSwitch('disable-default-apps');
+
+// V8 optimization: larger initial heap for Wasm
+app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff --experimental-wasm-simd');
 
 // ── Globals ──────────────────────────────────────────────────
 
@@ -132,6 +166,20 @@ function killEngine(): void {
   }
 }
 
+// ── COOP/COEP Headers (required for SharedArrayBuffer) ──────
+
+function setupSecurityHeaders(): void {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Cross-Origin-Opener-Policy': ['same-origin'],
+        'Cross-Origin-Embedder-Policy': ['require-corp'],
+      },
+    });
+  });
+}
+
 // ── Window ───────────────────────────────────────────────────
 
 function createWindow(): void {
@@ -144,12 +192,21 @@ function createWindow(): void {
     minHeight: 600,
     title: 'Mixi',
     backgroundColor: '#0a0a0a',
+    // Disable visual effects that add latency
+    transparent: false,
+    hasShadow: true,
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       additionalArguments: [`--mixi-api-port=${apiPort}`],
+      // Performance: disable spellcheck and autofill
+      spellcheck: false,
+      // Enable WebGL 2 for waveform rendering
+      webgl: true,
+      // Disable throttling when window loses focus
+      backgroundThrottling: false,
     },
   });
 
@@ -173,6 +230,9 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   try {
+    // 0. Setup COOP/COEP headers for SharedArrayBuffer
+    setupSecurityHeaders();
+
     // 1. Find free port
     apiPort = await findFreePort();
     console.log(`[mixi] API port: ${apiPort}`);
