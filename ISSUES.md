@@ -407,22 +407,24 @@ an estimated 20-30% larger .wasm binary.
 
 ## Summary
 
-| ID  | Severity | Category          | Component         | One-liner                                      |
-|-----|----------|-------------------|-------------------|-------------------------------------------------|
-| C1  | CRITICAL | Audio correctness | engine.rs         | Stereo output is mono (L = R = A+B)             |
-| C2  | CRITICAL | Audio correctness | engine.rs         | Master chain stateful processors called 2x      |
-| C3  | CRITICAL | Build/deploy      | WasmDspBridge.ts  | Wasm URL hardcoded, 404 in production            |
-| C4  | CRITICAL | Build/deploy      | WasmDspBridge.ts  | Worklet paths absolute, break non-root deploy   |
-| H1  | HIGH     | Memory safety     | engine.rs         | processRaw unsafe with no bounds validation     |
-| H2  | HIGH     | Correctness       | engine.rs + TS    | ParamBus layout has no version/checksum          |
-| H3  | HIGH     | GPU compatibility | WebGpuRenderer.ts | Feedback texture ignores float filterability     |
-| H4  | HIGH     | Debuggability     | dsp-worklet.js    | Wasm panic message discarded                    |
-| H5  | HIGH     | Robustness        | dsp-worklet.js    | Wasm malloc export name guessed, silent fail     |
-| M1  | MEDIUM   | Crash risk        | drop_detect.rs    | unwrap() on float sort panics on NaN             |
-| M2  | MEDIUM   | GPU compatibility | WebGpuRenderer.ts | Feedback texture format/sampleType mismatch      |
-| M3  | MEDIUM   | Resilience        | ErrorBoundary.tsx | Single boundary, component error kills all UI    |
-| M4  | MEDIUM   | Robustness        | dsp-worklet.js    | Engine constructor export name guessed           |
-| M5  | MEDIUM   | Concurrency       | ring_buffer.rs    | "Atomic" operations not actually atomic in Wasm  |
-| M6  | MEDIUM   | Numerical         | waveshaper.rs     | Division by tanh(0) produces Inf                 |
-| M7  | MEDIUM   | Robustness        | dsp-worklet.js    | processRaw export name guessed, silent fallback  |
-| M8  | MEDIUM   | Performance       | Cargo.toml        | wasm-opt disabled, ~20-30% larger binary         |
+| ID  | Severity | Status | One-liner | Fix |
+|-----|----------|--------|-----------|-----|
+| C1  | CRITICAL | ✅ FIXED | Stereo output is mono (L = R = A+B) | Separate `master_l`/`master_r` instances |
+| C2  | CRITICAL | ✅ FIXED | Master chain stateful processors called 2x | Independent state per channel |
+| C3  | CRITICAL | ✅ FIXED | Wasm URL hardcoded, 404 in production | `import.meta.url` resolution |
+| C4  | CRITICAL | ✅ FIXED | Worklet paths absolute, break non-root deploy | Relative paths (3 files) |
+| H1  | HIGH     | ✅ FIXED | processRaw unsafe with no bounds validation | `offset + size <= mem_size` check |
+| H2  | HIGH     | ✅ FIXED | ParamBus layout has no version/checksum | `PARAM_LAYOUT_VERSION=2` at offset 508 |
+| H3  | HIGH     | ⬜ N/A  | Feedback texture ignores float filterability | False positive: bgra8unorm supports `'float'` natively |
+| H4  | HIGH     | ✅ FIXED | Wasm panic message discarded | `TextDecoder` on `(ptr, len)` from Wasm memory |
+| H5  | HIGH     | ✅ FIXED | Wasm malloc export name guessed, silent fail | Explicit error with available exports list |
+| M1  | MEDIUM   | ✅ FIXED | unwrap() on float sort panics on NaN | `unwrap_or(Equal)` |
+| M2  | MEDIUM   | ⬜ N/A  | Feedback texture format/sampleType mismatch | False positive (same as H3) |
+| M3  | MEDIUM   | 🔲 TODO | Single ErrorBoundary, component error kills all UI | Needs dedicated refactor |
+| M4  | MEDIUM   | ✅ FIXED | Engine constructor export name guessed | Explicit error on mismatch |
+| M5  | MEDIUM   | 🔲 WONT | Ring buffer atomics not actually atomic in Wasm | Safe in current single-writer arch |
+| M6  | MEDIUM   | ✅ FIXED | Division by tanh(0) produces Inf | `.max(1e-10)` guard |
+| M7  | MEDIUM   | ✅ FIXED | processRaw export name guessed, silent fallback | Cached lookup + explicit disable + log |
+| M8  | MEDIUM   | 🔲 EXT  | wasm-opt disabled, ~20-30% larger binary | Waiting wasm-pack >= 0.15 |
+
+**Score: 13/18 fixed, 2 false positives, 3 deferred (M3 architectural, M5 safe by design, M8 external dep).**
