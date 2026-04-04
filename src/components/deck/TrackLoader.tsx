@@ -32,9 +32,10 @@ import {
   type FormEvent,
 } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
+import { HOUSE_DECKS } from '../../decks';
 import { useMixiStore } from '../../store/mixiStore';
 import { log } from '../../utils/logger';
-import type { DeckId } from '../../types';
+import type { DeckId, DeckMode } from '../../types';
 
 // ── Config ───────────────────────────────────────────────────
 
@@ -49,6 +50,8 @@ interface TrackLoaderProps {
   onTrackLoaded?: (name: string) => void;
   /** Called when user switches to groovebox mode. */
   onSwitchToGroovebox?: () => void;
+  /** Called when user picks any house deck module. */
+  onSwitchModule?: (mode: DeckMode) => void;
 }
 
 type LoadingState = 'idle' | 'loading' | 'error';
@@ -59,7 +62,8 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
   deckId,
   color,
   onTrackLoaded,
-  onSwitchToGroovebox,
+  onSwitchToGroovebox: _legacyGroovebox,
+  onSwitchModule,
 }) => {
   const setTrackLoaded = useMixiStore((s) => s.setDeckTrackLoaded);
   const setStoreTrackName = useMixiStore((s) => s.setDeckTrackName);
@@ -271,44 +275,39 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         <p className="text-[11px] text-red-400 leading-tight">{errorMsg}</p>
       )}
 
-      {/* ── Groovebox module switch ─────────────────────────── */}
-      {onSwitchToGroovebox && (
-        <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-zinc-800/30">
+      {/* ── House deck module picker ─────────────────────────── */}
+      {onSwitchModule && (
+        <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-zinc-800/30 flex-wrap">
           <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider">or load module</span>
-          <button
-            type="button"
-            onClick={onSwitchToGroovebox}
-            className="
-              flex items-center gap-1.5 rounded-md border px-3 py-1.5
-              text-[10px] font-mono font-bold uppercase tracking-widest
-              transition-all active:scale-95 hover:brightness-125
-            "
-            style={{
-              borderColor: `${color}44`,
-              color,
-              background: `${color}0a`,
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="1" y="1" width="3" height="3" rx="0.5" />
-              <rect x="5" y="1" width="3" height="3" rx="0.5" />
-              <rect x="9" y="1" width="3" height="3" rx="0.5" />
-              <rect x="13" y="1" width="2" height="3" rx="0.5" />
-              <rect x="1" y="5" width="3" height="3" rx="0.5" />
-              <rect x="5" y="5" width="3" height="3" rx="0.5" />
-              <rect x="9" y="5" width="3" height="3" rx="0.5" />
-              <rect x="13" y="5" width="2" height="3" rx="0.5" />
-              <rect x="1" y="9" width="3" height="3" rx="0.5" />
-              <rect x="5" y="9" width="3" height="3" rx="0.5" />
-              <rect x="9" y="9" width="3" height="3" rx="0.5" />
-              <rect x="13" y="9" width="2" height="3" rx="0.5" />
-              <rect x="1" y="13" width="3" height="2" rx="0.5" />
-              <rect x="5" y="13" width="3" height="2" rx="0.5" />
-              <rect x="9" y="13" width="3" height="2" rx="0.5" />
-              <rect x="13" y="13" width="2" height="2" rx="0.5" />
-            </svg>
-            GROOVEBOX
-          </button>
+          {HOUSE_DECKS.map((deck) => (
+            <button
+              key={deck.mode}
+              type="button"
+              onClick={() => onSwitchModule(deck.mode)}
+              className="
+                flex items-center gap-1.5 rounded-md border px-3 py-1.5
+                text-[10px] font-mono font-bold uppercase tracking-widest
+                transition-all active:scale-95 hover:brightness-125
+              "
+              style={{
+                borderColor: `${deck.accentColor}44`,
+                color: deck.accentColor,
+                background: `${deck.accentColor}0a`,
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1" y="1" width="3" height="3" rx="0.5" />
+                <rect x="5" y="1" width="3" height="3" rx="0.5" />
+                <rect x="9" y="1" width="3" height="3" rx="0.5" />
+                <rect x="13" y="1" width="2" height="3" rx="0.5" />
+                <rect x="1" y="5" width="3" height="3" rx="0.5" />
+                <rect x="5" y="5" width="3" height="3" rx="0.5" />
+                <rect x="9" y="5" width="3" height="3" rx="0.5" />
+                <rect x="13" y="5" width="2" height="3" rx="0.5" />
+              </svg>
+              {deck.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

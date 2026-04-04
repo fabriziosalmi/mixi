@@ -22,7 +22,8 @@ import { AiControlPanel } from './ai/components/AiControlPanel';
 import { IntentDisplay } from './ai/components/IntentDisplay';
 import { AiDebugPanel } from './ai/components/AiDebugPanel';
 import { DeckSection } from './components/deck/DeckSection';
-import { GrooveboxDeck } from './groovebox/GrooveboxDeck';
+import { HOUSE_DECKS } from './decks';
+import { Suspense } from 'react';
 import { MixerSection } from './components/mixer/MixerSection';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { useSettingsStore } from './store/settingsStore';
@@ -51,13 +52,18 @@ const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const mode = useMixiStore((s) => s.deckModes[deckId]);
   const setDeckMode = useMixiStore((s) => s.setDeckMode);
 
-  if (mode === 'groovebox') {
+  // Check house decks registry first
+  const houseDeck = HOUSE_DECKS.find((d) => d.mode === mode);
+  if (houseDeck) {
+    const Comp = houseDeck.component;
     return (
-      <GrooveboxDeck
-        deckId={deckId}
-        color={color}
-        onSwitchToTrack={() => setDeckMode(deckId, 'track')}
-      />
+      <Suspense fallback={<div className="flex-1" />}>
+        <Comp
+          deckId={deckId}
+          color={color}
+          onSwitchToTrack={() => setDeckMode(deckId, 'track')}
+        />
+      </Suspense>
     );
   }
   return <DeckSection deckId={deckId} color={color} />;

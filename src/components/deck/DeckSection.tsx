@@ -143,7 +143,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
       <div className="mixi-deck-content flex flex-1 flex-col px-3 pb-3 min-h-0 relative">
         {!isTrackLoaded && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-xl m-3 pointer-events-auto p-6">
-            <TrackLoader deckId={deckId} color={color} onSwitchToGroovebox={() => setDeckMode(deckId, 'groovebox')} />
+            <TrackLoader deckId={deckId} color={color} onSwitchToGroovebox={() => setDeckMode(deckId, 'groovebox')} onSwitchModule={(mode) => setDeckMode(deckId, mode)} />
           </div>
         )}
         <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-60 blur-[2px]' : 'opacity-100 blur-0'}`}>

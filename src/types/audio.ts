@@ -142,8 +142,8 @@ export interface AiState {
 /** Crossfader curve type. */
 export type CrossfaderCurve = 'smooth' | 'sharp';
 
-/** What occupies a deck slot – a normal track player or a groovebox module. */
-export type DeckMode = 'track' | 'groovebox';
+/** What occupies a deck slot – a normal track player or a house deck module. */
+export type DeckMode = 'track' | 'groovebox' | 'turbokick';
 
 /** Full mixer surface state – what an external controller (or AI agent) sees. */
 export interface MixerState {
