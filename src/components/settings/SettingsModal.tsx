@@ -104,7 +104,7 @@ export const SettingsModal: FC = () => {
 
         {/* Version */}
         <div className="text-center pb-3">
-          <span className="text-[9px] text-zinc-500">Mixi v{__APP_VERSION__}</span>
+          <span className="text-[9px] text-zinc-500">Mixi v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.4'}</span>
         </div>
       </div>
     </div>
