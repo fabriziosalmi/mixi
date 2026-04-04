@@ -46,4 +46,37 @@ contextBridge.exposeInMainWorld('mixi', {
     /** Close the active native audio stream */
     closeStream: () => ipcRenderer.invoke('native-audio:close'),
   },
+
+  // ── Disk Recording (Crash-Proof WAV) ─────────────────────
+  diskRecording: {
+    /** Open a new recording file in temp dir */
+    open: (args: { sampleRate: number; channels: number }) =>
+      ipcRenderer.invoke('disk-rec:open', args),
+    /** Flush PCM data to disk */
+    flush: (data: ArrayBuffer) =>
+      ipcRenderer.invoke('disk-rec:flush', data),
+    /** Finalize recording: patch WAV header, close file */
+    finalize: () =>
+      ipcRenderer.invoke('disk-rec:finalize'),
+    /** Cancel recording: close and delete temp file */
+    cancel: () =>
+      ipcRenderer.invoke('disk-rec:cancel'),
+    /** Show native OS save dialog */
+    showSaveDialog: () =>
+      ipcRenderer.invoke('disk-rec:show-save-dialog') as Promise<string | null>,
+    /** Copy temp file to user-chosen destination */
+    saveAs: (src: string, dest: string) =>
+      ipcRenderer.invoke('disk-rec:save-as', { src, dest }),
+    /** Check for orphan recordings from previous crashes */
+    checkOrphans: () =>
+      ipcRenderer.invoke('disk-rec:check-orphans') as Promise<Array<{
+        path: string; sizeBytes: number; estimatedDurationSecs: number; createdAt: string;
+      }>>,
+    /** Recover an orphan: patch header, copy to destination */
+    recover: (src: string, dest: string) =>
+      ipcRenderer.invoke('disk-rec:recover', { src, dest }),
+    /** Discard an orphan recording */
+    discard: (path: string) =>
+      ipcRenderer.invoke('disk-rec:discard', { path }),
+  },
 });

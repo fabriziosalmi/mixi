@@ -10,13 +10,16 @@
 // ─────────────────────────────────────────────────────────────
 // Mixi – Recording Panel (Top Bar)
 //
-// Zero-latency set recording via MediaRecorder connected to
-// the WebAudio master output. Includes MARK feature for
-// cue-list / tracklist export.
+// Dual-mode set recording:
+//   • Electron: crash-proof WAV via SPSC ring → disk (Pillar 3)
+//   • Web: MediaRecorder → WebM/Opus (fallback)
+//
+// Includes MARK feature for cue-list / tracklist export.
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
+import { DiskRecordingBridge } from '../../audio/recording/DiskRecordingBridge';
 import { useMixiStore } from '../../store/mixiStore';
 import { generateFingerprint, watermarkAudioBlob } from '../../utils/watermark';
 
@@ -28,7 +31,14 @@ interface CueMark {
   trackB: string;
 }
 
-// ── Timer formatting ─────────────────────────────────────────
+interface OrphanInfo {
+  path: string;
+  sizeBytes: number;
+  estimatedDurationSecs: number;
+  createdAt: string;
+}
+
+// ── Helpers ──────────────────────────────────────────────────
 
 function fmtTime(s: number): string {
   const h = Math.floor(s / 3600);
@@ -37,13 +47,25 @@ function fmtTime(s: number): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 }
 
+function fmtSize(bytes: number): string {
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
+}
+
 // ── RecPanel component ───────────────────────────────────────
 
 export const RecPanel: FC = () => {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [marks, setMarks] = useState<CueMark[]>([]);
+  const [orphans, setOrphans] = useState<OrphanInfo[]>([]);
 
+  // Track which recording mode is active
+  const diskModeRef = useRef(false);
+  const diskBridgeRef = useRef<DiskRecordingBridge | null>(null);
+
+  // MediaRecorder fallback refs
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef(0);
@@ -56,21 +78,55 @@ export const RecPanel: FC = () => {
     marksRef.current = marks;
   }, [marks]);
 
+  // ── Check for disk recording availability + orphans on mount ─
+
+  useEffect(() => {
+    const bridge = DiskRecordingBridge.getInstance();
+    diskBridgeRef.current = bridge;
+
+    if (bridge.isAvailable()) {
+      bridge.checkOrphans().then((found) => {
+        if (found.length > 0) setOrphans(found);
+      });
+    }
+  }, []);
+
+  const diskAvailable = diskBridgeRef.current?.isAvailable() ?? false;
+
   // ── Start recording ────────────────────────────────────────
 
-  const startRec = useCallback(() => {
+  const startRec = useCallback(async () => {
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return;
 
     const actx = engine.getAudioContext();
     const masterOutput = engine.getMasterOutput();
 
-    // Create stream destination and connect master
+    // Try disk recording first (Electron only)
+    if (diskAvailable && diskBridgeRef.current) {
+      const ok = await diskBridgeRef.current.start(actx, masterOutput);
+      if (ok) {
+        diskModeRef.current = true;
+        startTimeRef.current = performance.now();
+        setRecording(true);
+        setElapsed(0);
+        setMarks([]);
+
+        timerRef.current = setInterval(() => {
+          setElapsed(Math.floor((performance.now() - startTimeRef.current) / 1000));
+        }, 250);
+        return;
+      }
+      // If disk recording failed, fall through to MediaRecorder
+    }
+
+    // Fallback: MediaRecorder (web + Electron without addon)
+    diskModeRef.current = false;
+
     const dest = actx.createMediaStreamDestination();
     masterOutput.connect(dest);
     destRef.current = dest;
 
-    // Choose best supported codec
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : 'audio/webm';
@@ -83,18 +139,15 @@ export const RecPanel: FC = () => {
     };
 
     recorder.onstop = () => {
-      // Disconnect
       try {
         masterOutput.disconnect(dest);
       } catch { /* already disconnected */ }
       destRef.current = null;
 
-      // Build file + watermark + download
       const rawBlob = new Blob(chunksRef.current, { type: mimeType });
       const now = new Date();
       const stamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
 
-      // Watermark: inject build fingerprint into container metadata
       generateFingerprint().then((fp) => watermarkAudioBlob(rawBlob, fp)).then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -104,7 +157,6 @@ export const RecPanel: FC = () => {
         URL.revokeObjectURL(url);
       });
 
-      // Export cue list if marks exist
       const currentMarks = marksRef.current;
       const finalElapsed = Math.floor((performance.now() - startTimeRef.current) / 1000);
       if (currentMarks.length > 0) {
@@ -112,30 +164,51 @@ export const RecPanel: FC = () => {
       }
     };
 
-    recorder.start(1000); // 1s chunks
+    recorder.start(1000);
     recorderRef.current = recorder;
     startTimeRef.current = performance.now();
     setRecording(true);
     setElapsed(0);
     setMarks([]);
 
-    // Timer — performance.now() is monotonic (immune to clock adjustments)
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((performance.now() - startTimeRef.current) / 1000));
     }, 250);
-  }, []);
+  }, [diskAvailable]);
 
   // ── Stop recording ─────────────────────────────────────────
 
-  const stopRec = useCallback(() => {
+  const stopRec = useCallback(async () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop();
+
+    if (diskModeRef.current && diskBridgeRef.current) {
+      // Disk recording path: finalize → save dialog → save-as
+      const result = await diskBridgeRef.current.stop();
+      if (result) {
+        const dest = await diskBridgeRef.current.showSaveDialog();
+        if (dest) {
+          await diskBridgeRef.current.saveAs(result.filePath, dest);
+        }
+        // else: user cancelled save dialog — temp file remains for recovery
+      }
+
+      // Export cue list
+      const currentMarks = marksRef.current;
+      const finalElapsed = Math.floor((performance.now() - startTimeRef.current) / 1000);
+      if (currentMarks.length > 0) {
+        exportCueList(currentMarks, finalElapsed);
+      }
+    } else {
+      // MediaRecorder path
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+        recorderRef.current.stop();
+      }
+      recorderRef.current = null;
     }
-    recorderRef.current = null;
+
     setRecording(false);
   }, []);
 
@@ -180,10 +253,59 @@ export const RecPanel: FC = () => {
     };
   }, []);
 
+  // ── Orphan recovery handlers ───────────────────────────────
+
+  const handleRecoverOrphan = useCallback(async (orphan: OrphanInfo) => {
+    const bridge = diskBridgeRef.current;
+    if (!bridge) return;
+
+    const dest = await bridge.showSaveDialog();
+    if (dest) {
+      await bridge.recover(orphan.path, dest);
+    }
+    setOrphans((prev) => prev.filter((o) => o.path !== orphan.path));
+  }, []);
+
+  const handleDiscardOrphan = useCallback(async (orphan: OrphanInfo) => {
+    const bridge = diskBridgeRef.current;
+    if (!bridge) return;
+
+    await bridge.discard(orphan.path);
+    setOrphans((prev) => prev.filter((o) => o.path !== orphan.path));
+  }, []);
+
+  // ── Estimated file size for disk recording ─────────────────
+
+  const estimatedBytes = diskModeRef.current && recording
+    ? elapsed * 44100 * 2 * 4 // stereo, 32-bit float, 44.1kHz
+    : 0;
+
   // ── Render ────────────────────────────────────────────────
 
   return (
     <div className="flex items-center gap-1.5">
+      {/* Recovery banner for orphan recordings */}
+      {orphans.length > 0 && !recording && (
+        <div className="flex items-center gap-1.5 mr-2">
+          {orphans.map((o) => (
+            <div key={o.path} className="flex items-center gap-1 rounded px-1.5 py-0.5"
+              style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)' }}>
+              <span className="text-[9px] font-mono text-amber-400/90">
+                Recovered ({fmtTime(o.estimatedDurationSecs)} · {fmtSize(o.sizeBytes)})
+              </span>
+              <button type="button" onClick={() => handleRecoverOrphan(o)}
+                className="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 px-1 active:scale-95">
+                Save
+              </button>
+              <button type="button" onClick={() => handleDiscardOrphan(o)}
+                className="text-[9px] font-bold text-zinc-500 hover:text-zinc-400 px-1 active:scale-95">
+                Discard
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* REC button */}
       <button
         type="button"
@@ -212,14 +334,27 @@ export const RecPanel: FC = () => {
         >
           REC
         </span>
+        {/* WAV badge when disk recording is active */}
+        {recording && diskModeRef.current && (
+          <span className="text-[8px] font-mono font-bold tracking-wider text-emerald-400/80">
+            WAV
+          </span>
+        )}
       </button>
 
-      {/* Timer + mark count (visible only when recording) */}
+      {/* Timer + file size + mark count (visible only when recording) */}
       {recording && (
         <>
           <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color: 'var(--clr-rec)' }}>
             {fmtTime(elapsed)}
           </span>
+
+          {/* File size estimate (disk recording only) */}
+          {diskModeRef.current && estimatedBytes > 0 && (
+            <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
+              {fmtSize(estimatedBytes)}
+            </span>
+          )}
 
           {/* MARK button */}
           <button

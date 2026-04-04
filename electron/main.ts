@@ -19,11 +19,16 @@
 //   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen, session, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, screen, session, globalShortcut, ipcMain, dialog } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import {
+  existsSync, openSync, writeSync, closeSync, readSync,
+  copyFileSync, unlinkSync, readdirSync, statSync, Buffer as FsBuffer,
+} from 'fs';
+import { tmpdir } from 'os';
+import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
 
 // ── Chromium Audio & Performance Flags ───────────────────────
 // These must be set BEFORE app.ready fires.
@@ -91,6 +96,16 @@ try {
   console.log(`[mixi-native] Not available: ${(err as Error).message}`);
   nativeAudio = null;
 }
+
+// ── Disk Recording State ────────────────────────────────────
+
+let recState: {
+  filePath: string;
+  fd: number;
+  totalBytes: number;
+  sampleRate: number;
+  channels: number;
+} | null = null;
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -288,8 +303,9 @@ app.whenReady().then(async () => {
     // 0. Setup COOP/COEP headers for SharedArrayBuffer
     setupSecurityHeaders();
 
-    // 0b. Setup native audio IPC handlers
+    // 0b. Setup IPC handlers
     setupNativeAudioIPC();
+    setupDiskRecordingIPC();
 
     // 1. Find free port
     apiPort = await findFreePort();
@@ -317,6 +333,18 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  // Finalize any active disk recording before quitting
+  if (recState) {
+    try {
+      const totalFileSize = recState.totalBytes + WAV_HEADER_SIZE;
+      patchWavHeaderSize(recState.fd, totalFileSize, { writeSync });
+      closeSync(recState.fd);
+      console.log(`[mixi-rec] Finalized on quit: ${recState.filePath} (${totalFileSize} bytes)`);
+    } catch (err) {
+      console.error(`[mixi-rec] Failed to finalize on quit: ${err}`);
+    }
+    recState = null;
+  }
   killEngine();
 });
 
@@ -369,5 +397,167 @@ function setupNativeAudioIPC(): void {
   ipcMain.handle('native-audio:close', () => {
     if (!nativeAudio) return;
     return nativeAudio.closeStream();
+  });
+}
+
+// ── Disk Recording IPC Handlers ─────────────────────────────
+
+function setupDiskRecordingIPC(): void {
+  // Open a new recording file (WAV with sentinel header)
+  ipcMain.handle('disk-rec:open', (_event, args: {
+    sampleRate: number;
+    channels: number;
+  }) => {
+    if (recState) {
+      throw new Error('Recording already in progress');
+    }
+
+    const filePath = join(tmpdir(), `mixi-rec-${Date.now()}.wav`);
+    const header = createWavHeader(args.sampleRate, args.channels, WAV_DATA_SIZE_SENTINEL);
+    const fd = openSync(filePath, 'w');
+    writeSync(fd, header, 0, header.length, 0);
+
+    recState = {
+      filePath,
+      fd,
+      totalBytes: 0,
+      sampleRate: args.sampleRate,
+      channels: args.channels,
+    };
+
+    console.log(`[mixi-rec] Opened: ${filePath} (${args.sampleRate}Hz, ${args.channels}ch, 32-bit float)`);
+    return { filePath };
+  });
+
+  // Flush PCM data to disk (called every ~500ms from renderer)
+  ipcMain.handle('disk-rec:flush', (_event, data: ArrayBuffer) => {
+    if (!recState) return { bytesWritten: 0 };
+
+    const buf = Buffer.from(data);
+    writeSync(recState.fd, buf, 0, buf.length);
+    recState.totalBytes += buf.length;
+
+    return { bytesWritten: buf.length };
+  });
+
+  // Finalize: patch WAV header and close file
+  ipcMain.handle('disk-rec:finalize', () => {
+    if (!recState) throw new Error('No recording in progress');
+
+    const { filePath, fd, totalBytes, sampleRate, channels } = recState;
+    const totalFileSize = totalBytes + WAV_HEADER_SIZE;
+
+    // Patch RIFF and data size fields
+    patchWavHeaderSize(fd, totalFileSize, { writeSync });
+    closeSync(fd);
+
+    const durationSecs = totalBytes / (sampleRate * channels * 4);
+
+    console.log(`[mixi-rec] Finalized: ${filePath} (${(totalFileSize / 1048576).toFixed(1)} MB, ${durationSecs.toFixed(1)}s)`);
+
+    const result = { filePath, durationSecs, fileSizeBytes: totalFileSize };
+    recState = null;
+    return result;
+  });
+
+  // Cancel recording: close and delete temp file
+  ipcMain.handle('disk-rec:cancel', () => {
+    if (!recState) return;
+
+    try { closeSync(recState.fd); } catch { /* already closed */ }
+    try { unlinkSync(recState.filePath); } catch { /* may not exist */ }
+
+    console.log(`[mixi-rec] Cancelled: ${recState.filePath}`);
+    recState = null;
+  });
+
+  // Show native save dialog
+  ipcMain.handle('disk-rec:show-save-dialog', async () => {
+    const now = new Date();
+    const stamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+      '_',
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+    ].join('');
+
+    const result = await dialog.showSaveDialog({
+      title: 'Save Recording',
+      defaultPath: `MIXI_Set_${stamp}.wav`,
+      filters: [{ name: 'WAV Audio', extensions: ['wav'] }],
+    });
+
+    return result.canceled ? null : result.filePath;
+  });
+
+  // Copy temp file to user-chosen destination
+  ipcMain.handle('disk-rec:save-as', (_event, args: { src: string; dest: string }) => {
+    copyFileSync(args.src, args.dest);
+    try { unlinkSync(args.src); } catch { /* temp may already be gone */ }
+    console.log(`[mixi-rec] Saved: ${args.dest}`);
+    return { dest: args.dest };
+  });
+
+  // Check for orphan recordings (crash recovery)
+  ipcMain.handle('disk-rec:check-orphans', () => {
+    const tmp = tmpdir();
+    const orphans: Array<{
+      path: string;
+      sizeBytes: number;
+      estimatedDurationSecs: number;
+      createdAt: string;
+    }> = [];
+
+    try {
+      const files = readdirSync(tmp).filter(f => f.startsWith('mixi-rec-') && f.endsWith('.wav'));
+
+      for (const file of files) {
+        const filePath = join(tmp, file);
+        try {
+          const stat = statSync(filePath);
+          const headerBuf = Buffer.alloc(WAV_HEADER_SIZE);
+          const fd = openSync(filePath, 'r');
+          readSync(fd, headerBuf, 0, WAV_HEADER_SIZE, 0);
+          closeSync(fd);
+
+          if (isOrphanWav(headerBuf)) {
+            const dataBytes = stat.size - WAV_HEADER_SIZE;
+            // Assume stereo 44100Hz 32-bit float
+            const durationSecs = dataBytes > 0 ? dataBytes / (44100 * 2 * 4) : 0;
+
+            orphans.push({
+              path: filePath,
+              sizeBytes: stat.size,
+              estimatedDurationSecs: durationSecs,
+              createdAt: stat.birthtime.toISOString(),
+            });
+          }
+        } catch { /* skip unreadable files */ }
+      }
+    } catch { /* tmpdir not readable */ }
+
+    return orphans;
+  });
+
+  // Recover an orphan recording: patch header and save
+  ipcMain.handle('disk-rec:recover', (_event, args: { src: string; dest: string }) => {
+    const stat = statSync(args.src);
+    const fd = openSync(args.src, 'r+');
+    patchWavHeaderSize(fd, stat.size, { writeSync });
+    closeSync(fd);
+
+    copyFileSync(args.src, args.dest);
+    try { unlinkSync(args.src); } catch { /* temp cleanup */ }
+
+    console.log(`[mixi-rec] Recovered: ${args.dest} (${(stat.size / 1048576).toFixed(1)} MB)`);
+    return { dest: args.dest, sizeBytes: stat.size };
+  });
+
+  // Discard an orphan recording
+  ipcMain.handle('disk-rec:discard', (_event, args: { path: string }) => {
+    try { unlinkSync(args.path); } catch { /* may not exist */ }
+    console.log(`[mixi-rec] Discarded: ${args.path}`);
   });
 }
