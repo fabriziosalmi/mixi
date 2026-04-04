@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Otevřít webovou verzi
-      link: /play
+      link: /app/
     - theme: alt
       text: Technická dokumentace
       link: /guide/architecture

@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Buka Versi Web
-      link: /play
+      link: /app/
     - theme: alt
       text: Dokumentasi Teknis
       link: /guide/architecture

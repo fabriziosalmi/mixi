@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: वेब संस्करण खोलें
-      link: /play
+      link: /app/
     - theme: alt
       text: तकनीकी दस्तावेज़
       link: /guide/architecture

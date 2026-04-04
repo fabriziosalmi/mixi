@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Öppna Webbversion
-      link: /play
+      link: /app/
     - theme: alt
       text: Teknisk Dokumentation
       link: /guide/architecture

@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Fungua Toleo la Wavuti
-      link: /play
+      link: /app/
     - theme: alt
       text: Nyaraka za Kiufundi
       link: /guide/architecture

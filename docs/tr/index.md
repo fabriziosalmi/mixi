@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Web Sürümünü Aç
-      link: /play
+      link: /app/
     - theme: alt
       text: Teknik Dokümantasyon
       link: /guide/architecture

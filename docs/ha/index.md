@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Buɗe Sigar Yanar Gizo
-      link: /play
+      link: /app/
     - theme: alt
       text: Takardun Fasaha
       link: /guide/architecture

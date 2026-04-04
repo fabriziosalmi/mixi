@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Открыть веб-версию
-      link: /play
+      link: /app/
     - theme: alt
       text: Техническая документация
       link: /guide/architecture

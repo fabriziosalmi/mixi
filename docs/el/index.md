@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Άνοιγμα Έκδοσης Web
-      link: /play
+      link: /app/
     - theme: alt
       text: Τεχνική Τεκμηρίωση
       link: /guide/architecture

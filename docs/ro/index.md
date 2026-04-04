@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Deschide Versiunea Web
-      link: /play
+      link: /app/
     - theme: alt
       text: Documentație Tehnică
       link: /guide/architecture

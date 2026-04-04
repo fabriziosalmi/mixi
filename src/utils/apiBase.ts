@@ -31,10 +31,10 @@ declare global {
 export const API_BASE: string =
   window.mixi?.apiBase
   ?? import.meta.env.VITE_API_BASE
-  ?? 'http://localhost:8000';
+  ?? `http://localhost:${import.meta.env.VITE_PORT || '8000'}`;
 
 /** WebSocket base URL (no trailing slash) */
 export const WS_BASE: string =
   window.mixi?.wsBase
   ?? import.meta.env.VITE_WS_BASE
-  ?? 'ws://localhost:8000';
+  ?? `ws://localhost:${import.meta.env.VITE_PORT || '8000'}`;

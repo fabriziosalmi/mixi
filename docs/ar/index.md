@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: افتح نسخة الويب
-      link: /play
+      link: /app/
     - theme: alt
       text: التوثيق التقني
       link: /guide/architecture

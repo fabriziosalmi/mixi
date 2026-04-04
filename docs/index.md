@@ -5,6 +5,13 @@ hero:
   name: "MIXI DAW"
   text: "Deterministic Audio Workstation"
   tagline: "Professional-grade WebAudio processing with zero-latency DSP, hardware-modeled signal chains, and an intelligent automation layer. Free for artists. Open by design."
+  actions:
+    - theme: brand
+      text: Launch Web Version
+      link: /app/
+    - theme: alt
+      text: Technical Docs
+      link: /guide/architecture
 
 features:
   - title: "Deterministic DSP Engine"

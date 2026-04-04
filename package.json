@@ -21,7 +21,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "dev:ui": "vite",
-    "dev:api": "cd api && uvicorn main:app --reload --port 8000",
+    "dev:api": "cd api && uvicorn main:app --reload --port ${PORT:-8000}",
     "dev:mcp": "cd api && python mcp_server.py",
     "dev:electron": "npm run build:electron && concurrently -c \"cyan,magenta\" -n \"UI,ELECTRON\" \"vite\" \"electron .\"",
     "build": "tsc -b && vite build",

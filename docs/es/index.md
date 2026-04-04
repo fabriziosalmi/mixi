@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Abrir Versión Web
-      link: /play
+      link: /app/
     - theme: alt
       text: Documentación Técnica
       link: /guide/architecture

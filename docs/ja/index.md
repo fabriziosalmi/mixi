@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Web版を開く
-      link: /play
+      link: /app/
     - theme: alt
       text: 技術ドキュメント
       link: /guide/architecture

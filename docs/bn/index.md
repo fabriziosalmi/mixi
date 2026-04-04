@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: ওয়েব সংস্করণ খুলুন
-      link: /play
+      link: /app/
     - theme: alt
       text: প্রযুক্তিগত ডকুমেন্টেশন
       link: /guide/architecture
