@@ -19,7 +19,7 @@
 //   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen, session } from 'electron';
+import { app, BrowserWindow, screen, session, globalShortcut } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join } from 'path';
@@ -54,7 +54,17 @@ app.commandLine.appendSwitch('disable-extensions');
 app.commandLine.appendSwitch('disable-component-update');
 app.commandLine.appendSwitch('disable-default-apps');
 
-// V8 optimization: larger initial heap for Wasm
+// Windows: high-resolution timers (fixes 15.6ms default tick rate)
+app.commandLine.appendSwitch('enable-highres-timer');
+
+// Reduce memory footprint: single-origin app, no need for site isolation
+app.commandLine.appendSwitch('disable-site-isolation-trials');
+
+// Disable renderer code integrity checks (saves CPU cycles)
+app.commandLine.appendSwitch('disable-features',
+  'RendererCodeIntegrity,MediaRouter');
+
+// V8 optimization: Wasm SIMD and tiering
 app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff --experimental-wasm-simd');
 
 // ── Globals ──────────────────────────────────────────────────
@@ -207,7 +217,33 @@ function createWindow(): void {
       webgl: true,
       // Disable throttling when window loses focus
       backgroundThrottling: false,
+      // Lock zoom to 1.0 — DJ app must not be zoomable
+      zoomFactor: 1.0,
     },
+  });
+
+  // ── Live Performance Protections ────────────────────────
+  // Block accidental refresh/close during live performance
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    // Block Cmd+R / Ctrl+R / F5 (refresh)
+    if ((input.control || input.meta) && input.key === 'r') {
+      _event.preventDefault();
+    }
+    if (input.key === 'F5') {
+      _event.preventDefault();
+    }
+    // Block Cmd+W (accidental close)
+    if ((input.control || input.meta) && input.key === 'w') {
+      _event.preventDefault();
+    }
+  });
+
+  // Disable pinch-to-zoom
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
+
+  // Disable back/forward navigation (trackpad swipe)
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
   });
 
   // Load the Vite build without query parameters
