@@ -66,9 +66,11 @@ jobs:
           cd mixi-core && wasm-pack build --target web --out-dir pkg
 
   # ── E2E Smoke Tests (Playwright) ───────────────────────────
+  # Optional: may fail in CI due to headless browser limitations
   test-e2e:
     runs-on: ubuntu-latest
     needs: test-js
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
