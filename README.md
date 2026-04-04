@@ -30,24 +30,39 @@ It ships as a static site. It also packages as an Electron desktop app for macOS
 
 ```
 Deck A/B:
-  BufferSource -> Trim -> 3-Band Kill-EQ -> ColorFX -> DeckFX [FLT|DLY|REV|PHA|FLG|GATE]
-    ├── Fader -> Crossfader -> MasterBus
-    └── CueGain -> HeadphoneBus
+  BufferSource → Trim → 3-Band Parallel Isolator EQ (LR4 24dB/oct)
+    → ColorFX → DeckFX [FLT|DLY|REV|PHA|FLG|GATE]
+      ├── Fader → Crossfader → MasterBus
+      └── CueGain → HeadphoneBus
+
+  EQ Crossover (Linkwitz-Riley):
+    Trim → LP₁→LP₂(250Hz) → lowGain  → merge
+    Trim → HP₁→HP₂(250Hz) → LP₃→LP₄(4kHz) → midGain → merge
+    Trim → HP₃→HP₄(4kHz)  → highGain → merge
+    Kill = gain 0. Other bands 100% unaffected.
 
 MasterBus:
-  Gain -> MasterFilter -> BandSplit (300Hz crossover)
-    ├── Sub (<300Hz) -> Mono Sum (phase-safe for PA)
-    └── High (>300Hz) -> Oversampled tanh Waveshaper
-  -> Parallel Compressor -> Headroom Pad (-0.3dB) -> Brickwall Limiter -> destination
+  Gain → MasterFilter → BandSplit (300Hz crossover)
+    ├── Sub (<300Hz) → Mono Sum (phase-safe for PA)
+    └── High (>300Hz) → Oversampled tanh Waveshaper
+  → Parallel Compressor (gain-compensated) → DC Blocker (10Hz)
+  → Headroom Pad (-0.3dB) → Brickwall Limiter → destination
 
 HeadphoneBus:
-  CueSum + MasterTap -> Mix knob -> Level -> destination
+  CueSum + MasterTap → Mix knob → Level → destination
+  Split mode: Master → R ear | Cue → L ear
 
-Split mode:
-  Master -> Right channel | Headphones -> Left channel
+Wasm DSP Path (optional, toggle in Settings):
+  Source A → Trim → AudioWorklet input[0] ─┐
+  Source B → Trim → AudioWorklet input[1] ──┤→ Rust DSP Engine
+    DspEngine: Deck EQ → ColorFX → FX → Fader → Crossfader
+    → Master: Filter → Distortion → Punch → Predictive Limiter → DC Blocker
+    ← 128 samples @ 44.1kHz, ~10µs per block (99.6% headroom)
 ```
 
-EQ is modeled on analog kill mixers: Lowshelf at 250Hz, Peaking at 1kHz (Q=1), Highshelf at 4kHz. Range from -32dB kill to +6dB boost. All parameter changes are scheduled via `setTargetAtTime` with a 12ms smoothing constant — no zipper noise, no clicks.
+EQ is a **parallel 3-band isolator** with Linkwitz-Riley 24dB/oct crossovers (two cascaded Butterworth per crossover point). Flat magnitude sum at crossover, zero phase difference between bands. Kill on any band silences only that band — other bands completely unaffected.
+
+The Rust DSP engine (`mixi-core`) runs the full signal chain in an AudioWorklet when enabled: per-deck EQ, color filter, 5 effects, fader, crossfader mixing, master filter, distortion, parallel compression, predictive limiter (0.2ms lookahead), and DC blocker. Parameters flow via a 512-byte SharedArrayBuffer with layout versioning.
 
 The brickwall limiter (threshold -0.5dB, ratio 20:1, attack 1ms) guarantees the output never exceeds 0dBFS regardless of how the faders are handled.
 
@@ -106,16 +121,19 @@ python main.py --port 7779
 | Module | What It Does |
 |--------|-------------|
 | **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Timeline-scheduled via AudioContext. |
-| **3-Band Kill-EQ** | Analog-modeled lowshelf/peaking/highshelf. Full kill at -32dB. |
+| **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | Filter, Delay, Reverb, Phaser, Flanger, Gate. BPM-synced where applicable. |
-| **Master DSP** | Band-split distortion, parallel compression, brickwall limiter. Sub-bass mono sum. |
+| **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
+| **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
 | **Groovebox** | 8-voice step sequencer with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
-| **BPM/Key Detection** | Autocorrelation + onset detection for BPM. Chromagram for key. Runs in-browser. |
+| **BPM/Key Detection** | Autocorrelation + onset detection for BPM. Chromagram for key. Rust/Wasm fast path. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter — decks, mixer, groovebox, transport. |
 | **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
 | **Headphone Cue** | Split-stereo or dual-output routing. Mix knob blends cue and master. |
-| **Recording** | Capture master output to WAV or WebM with embedded metadata. |
+| **Recording** | Crash-proof WAV recording (SPSC ring buffer → disk, 1MB fixed RAM). WebM fallback in browser. Orphan recovery on crash. |
+| **WebGPU VFX** | 14-effect GPU shader: spectrum border, beat shockwave, particles, plasma, CRT, Tron floor, feedback loops. Canvas 2D fallback. ESC kill-switch. |
+| **Native Audio** | Optional cpal output via N-API addon (Electron). CoreAudio/WASAPI/ALSA bypass. Zero-copy SharedArrayBuffer ring. |
 | **17 Skins** | Runtime-switchable. Pure CSS custom properties — zero JavaScript per skin. |
 
 ### Available Skins
@@ -130,17 +148,26 @@ Each skin is a directory containing `skin.json` (metadata) and `skin.css` (CSS c
 
 ```
 src/
-  audio/        Core engine, DSP nodes, sample manager, BPM/key detection
-  ai/           AutoMixEngine, Blackboard, Ghost Mutations, intents
-  groovebox/    Step sequencer engine, drum synthesis, UI
-  automixer/    AutoMixer panel, beat utilities
-  midi/         WebMIDI manager, controller mapping
-  components/   React UI — decks, mixer, browser, HUD, settings
-  store/        Zustand stores — mixer state, settings, MIDI, samples
-  hooks/        React hooks — sync bridge, keyboard shortcuts, drag
-  bridge/       MCP bridge for external agents
-  utils/        Logger, skin loader, watermark
-  types/        Shared TypeScript interfaces
+  audio/          Core engine, DSP nodes, sample manager, BPM/key detection
+    dsp/          Wasm DSP bridge, SharedArrayBuffer param bus, worklet lifecycle
+    nodes/        DeckChannel (LR4 EQ), MasterBus, HeadphoneBus, DeckFx
+    recording/    Crash-proof WAV recording bridge
+    native/       Native audio output bridge (cpal/N-API)
+  gpu/            WebGPU VFX renderer, WGSL shaders, GPU detection
+  ai/             AutoMixEngine, Blackboard, Ghost Mutations, intents
+  groovebox/      Step sequencer engine, drum synthesis, UI
+  automixer/      AutoMixer panel, beat utilities
+  midi/           WebMIDI manager, controller mapping
+  components/     React UI — decks, mixer, browser, HUD, settings
+  store/          Zustand stores — mixer state, settings, MIDI, samples
+  hooks/          React hooks — sync bridge, keyboard shortcuts, drag
+  bridge/         MCP bridge for external agents
+  utils/          Logger, skin loader, watermark
+  types/          Shared TypeScript interfaces
+mixi-core/        Rust DSP engine (Wasm) — EQ, FX, limiter, analysis
+mixi-native/      Rust N-API addon — cpal audio output (Electron)
+electron/         Electron main/preload, WAV header, native audio IPC
+tests/            Unit tests (vitest) + E2E (Playwright)
 ```
 
 **Design constraints:**
@@ -158,9 +185,13 @@ src/
 | UI | React 19, TypeScript (strict), vanilla CSS + CSS custom properties |
 | State | Zustand 5 with transient selectors |
 | Audio | Web Audio API — hand-wired graph, no wrappers |
-| Bundler | Vite |
+| DSP | Rust/Wasm (mixi-core) — AudioWorklet, SharedArrayBuffer, zero-alloc |
+| GPU | WebGPU (WGSL shaders), Canvas 2D fallback |
+| Native I/O | cpal via N-API addon (Electron), CoreAudio/WASAPI/ALSA |
+| Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
+| Tests | Vitest (118), Playwright (5 E2E), cargo test (152 Rust) — 275 total |
 | Docs | VitePress, 24 languages |
 
 ---
@@ -179,9 +210,11 @@ src/
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
-| `npm test` | Run unit tests (Vitest) |
+| `npm test` | Run unit tests (Vitest, 118 tests) |
 | `npm run test:watch` | Watch mode for tests |
 | `npm run test:coverage` | Test coverage report |
+| `npm run test:e2e` | Playwright E2E smoke tests (5 tests) |
+| `cd mixi-core && cargo test` | Rust DSP tests (152 tests) |
 
 ---
 

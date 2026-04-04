@@ -5,6 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-04-04
+
+### Added — SOTA Mixer + Audit Fixes + Test Gate
+
+**Wasm DSP Engine — Now Actually Processing Audio**
+- AudioWorklet calls Rust `DspEngine.processRaw()` via direct Wasm memory access
+- 2-input worklet (Deck A + Deck B), full signal chain in Rust
+- ParamLayout offset mismatch fixed (all FX byte offsets aligned TS ↔ Rust)
+- SharedParamBus with layout versioning (PARAM_LAYOUT_VERSION=2 at offset 508)
+- Wasm module fetched, compiled, and sent to worklet thread
+
+**Linkwitz-Riley 24dB/oct EQ (WebAudio path)**
+- Parallel 3-band isolator with cascaded Butterworth = LR4
+- Flat magnitude sum at crossover, zero phase difference
+- Kill = gain 0 on one band only, others 100% unaffected
+
+**Audit Fixes (13/18 from ISSUES.md)**
+- C1: Stereo mono bug — separate `master_l`/`master_r` instances
+- C2: Master double-processing — independent state per channel
+- C3+C4: Wasm URL + worklet paths — `import.meta.url` resolution
+- H1: `processRaw` bounds validation (offset + size <= memory size)
+- H2: ParamBus version check (Rust validates on every `process()` call)
+- H4: Wasm panic message extraction via TextDecoder
+- H5+M4+M7: Export name guessing → explicit error reporting
+- M1: NaN sort panic → `unwrap_or(Equal)` in drop_detect
+- M6: Waveshaper div-by-zero → `.max(1e-10)` guard
+
+**Headroom Hardening**
+- Punch compressor gain compensation: `1/(1+wet)` prevents +3.5dB overshoot
+
+**Comprehensive Test Gate (275 tests)**
+- 118 JS unit tests (Vitest): stores, math, WAV header, ParamLayout, crossfader, GPU detect
+- 152 Rust tests: DSP modules (127 unit + 24 integration + 1 bench)
+- 5 Playwright E2E: app launch, layout, VFX toggle, REC button, console errors
+- CI pipeline: `.github/workflows/test.yml` — test-js + test-rust on every push
+
+### Stats
+- 275 total tests (118 JS + 152 Rust + 5 E2E)
+- Rust DSP benchmark: 10.76µs/block, 99.6% headroom
+- Build: 2.08s (Vite), 6.9s (wasm-pack)
+
+## [0.2.5] - 2026-04-04
+
+### Fixed
+- **Parallel 3-Band Isolator EQ**: rewritten from series shelving to parallel crossover
+- **Gate FX**: rewritten as simple phase-based volume chop (was broken scheduling)
+- **WebGPU VFX**: fixed swap chain CopyDst error, render direct to swap chain
+- **VFX tuning**: thinner spectrum border, sensitivity boost, removed polar circle, softer CRT/vignette
+
+## [0.2.4] - 2026-04-04
+
+### Added — VFX Tier 2 (7 VJ secrets, 16/30 total)
+- Ring texture spectrogram (128×64 r32float, 64-frame audio history)
+- Feedback loops (ping-pong render targets, zoom + hihat rotation)
+- CRT phosphor emulation (barrel distortion + RGB subpixel mask + curved scanlines)
+- Semantic color binding (CSS `--clr-a`/`--clr-b` → GPU uniforms)
+- Filter washout (HPF → white/contrast, LPF → dark/desaturate)
+- Beatgrid Tron floor (BPM-synced perspective grid, deck-colored)
+- Peak-hold downsampling (0.95 decay per frame)
+- 14-effect shader chain, spectrum border contour around page
+
+## [0.2.3] - 2026-04-04
+
+### Added — WebGPU VFX Engine (Pillar 5 Step 1)
+- WebGPU audio-reactive visual engine with Canvas 2D fallback
+- 10 composited WGSL shader effects (single draw call per frame)
+- VJ secrets: FFT as GPU texture, isolated stems, BPM phase sync, energy derivative
+- Polar spectrum, chromatic aberration, dynamic film grain, Rule of Black
+- ESC kill-switch (instant GPU teardown)
+- float32-filterable feature negotiation (linear/nearest sampler adaptive)
+
+## [0.2.2] - 2026-04-04
+
+### Added — Crash-Proof WAV Recording (Pillar 3)
+- Disk-backed WAV recording via SPSC ring buffer → IPC → fs.writeSync
+- Fixed ~1MB RAM regardless of recording length (6+ hour sets safe)
+- 32-bit float IEEE WAV format, orphan detection and recovery on crash
+- 9 Electron IPC handlers (open/flush/finalize/cancel/save-as/recover/discard)
+- Dual-mode RecPanel: Electron gets disk WAV, web keeps MediaRecorder → WebM
+
+## [0.2.1] - 2026-04-04
+
+### Added — Native Audio I/O (Pillar 1, Phase D Complete)
+- mixi-native Rust crate: cpal 0.15 for direct hardware audio output
+- N-API addon loader with platform detection (darwin-arm64/x64, win32, linux)
+- Zero-copy SPSC ring buffer consumer from SharedArrayBuffer
+- Device enumeration, lock-free audio thread, 364KB ARM64 dylib
+- Settings UI: native output toggle + device dropdown
+- MixiEngine: switchToNativeOutput() / switchToWebOutput()
+
+## [0.2.0] - 2026-04-04
+
+### Added — DSP Engine Hardening + Electron God Mode
+- Predictive limiter (0.2ms lookahead, poly-knee)
+- Electron audio optimization flags (128-sample buffer, GPU rasterization, SIMD)
+- Mobile landscape compact mode
+- Drop detection in Rust/Wasm
+
 ## [0.1.4] - 2026-04-04
 
 ### Added -- Phase 3: Rust DSP Engine Foundation
@@ -191,5 +289,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VitePress documentation site with 5 guide pages
 - Mobile scale wrapper for responsive desktop-first layout
 
+[0.2.6]: https://github.com/fabriziosalmi/mixi/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/fabriziosalmi/mixi/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/fabriziosalmi/mixi/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/fabriziosalmi/mixi/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/fabriziosalmi/mixi/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/fabriziosalmi/mixi/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/fabriziosalmi/mixi/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/fabriziosalmi/mixi/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/fabriziosalmi/mixi/compare/v0.1.1...v0.1.3
 [0.1.1]: https://github.com/fabriziosalmi/mixi/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fabriziosalmi/mixi/releases/tag/v0.1.0
