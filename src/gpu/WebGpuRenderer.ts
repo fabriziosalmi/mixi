@@ -308,17 +308,20 @@ export class WebGpuRenderer {
     );
     this.ringRow = (this.ringRow + 1) % 64;
 
-    // ── Render: draw to offscreen (ping-pong) → copy to swap chain
-    const renderTarget = this.pingPong ? this.fbA! : this.fbB!;
+    // ── Render: direct to swap chain ──────────────────────────
+    // Feedback reads from the ping-pong offscreen texture (prev frame).
+    // We render to swap chain AND to the offscreen fb for next frame's feedback.
     const bindGroup = this.pingPong ? this.bindGroupA! : this.bindGroupB!;
+    const feedbackTarget = this.pingPong ? this.fbA! : this.fbB!;
     this.pingPong = !this.pingPong;
 
     const encoder = this.device.createCommandEncoder();
 
-    // Pass 1: render to offscreen texture
+    // Pass 1: render to swap chain (display)
+    const swapChainView = this.context.getCurrentTexture().createView();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: renderTarget.createView(),
+        view: swapChainView,
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
         loadOp: 'clear',
         storeOp: 'store',
@@ -329,15 +332,19 @@ export class WebGpuRenderer {
     pass.draw(3);
     pass.end();
 
-    // Pass 2: copy offscreen → swap chain
-    const swapChainTex = this.context.getCurrentTexture();
-    const copyW = Math.min(renderTarget.width, swapChainTex.width);
-    const copyH = Math.min(renderTarget.height, swapChainTex.height);
-    encoder.copyTextureToTexture(
-      { texture: renderTarget },
-      { texture: swapChainTex },
-      { width: copyW, height: copyH },
-    );
+    // Pass 2: render same frame to offscreen fb (for next frame's feedback)
+    const fbPass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: feedbackTarget.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    fbPass.setPipeline(this.pipeline);
+    fbPass.setBindGroup(0, bindGroup);
+    fbPass.draw(3);
+    fbPass.end();
 
     this.device.queue.submit([encoder.finish()]);
   }
