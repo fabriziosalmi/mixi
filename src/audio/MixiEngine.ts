@@ -41,6 +41,8 @@ import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
 import { log } from '../utils/logger';
+import { LocalParamBus, PARAM_BUS_SIZE } from './dsp';
+import { DspParamWriter } from './dsp/DspParamWriter';
 
 // ── Per-deck transport state (not exposed to store) ──────────
 
@@ -91,6 +93,12 @@ export class MixiEngine {
   private _visHandler: (() => void) | null = null;
   /** Generation counter per deck — stale async loads are discarded. */
   private _loadGen: Record<DeckId, number> = { A: 0, B: 0 };
+
+  /** DSP Parameter Writer — populates the shared param bus for Wasm DSP. */
+  private _paramWriter: DspParamWriter | null = null;
+
+  /** Public access to the param writer (for useMixiSync). */
+  get paramWriter(): DspParamWriter | null { return this._paramWriter; }
 
   // ── Singleton access ───────────────────────────────────────
 
@@ -157,6 +165,16 @@ export class MixiEngine {
     };
 
     this.initialized = true;
+
+    // ── DSP Param Bus (Phase 3) ────────────────────────────
+    // Create the param bus and writer. In native mode the bus
+    // is populated but not consumed. When Wasm DSP activates,
+    // the AudioWorklet will read from the SharedArrayBuffer.
+    const paramBus = new LocalParamBus(PARAM_BUS_SIZE);
+    this._paramWriter = new DspParamWriter(paramBus);
+    this._paramWriter.setSampleRate(this.ctx.sampleRate);
+    this._paramWriter.setDspBackend(false); // native mode
+    log.info('Engine', 'DSP param bus initialised (512 bytes)');
 
     // Load the pitch-shift AudioWorklet (non-blocking).
     this.loadPitchWorklet();

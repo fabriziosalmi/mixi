@@ -23,3 +23,6 @@ export { NativeMasterProcessor } from './NativeMasterProcessor';
 // Shared buffer bridge (Worklet communication)
 export { createDspBuffers, sendBuffersToWorklet, isSharedBufferSupported, MeteringReader } from './SharedBufferBridge';
 export type { DspSharedBuffers } from './SharedBufferBridge';
+
+// Parameter writer
+export { DspParamWriter } from './DspParamWriter';

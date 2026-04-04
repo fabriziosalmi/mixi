@@ -387,6 +387,8 @@ const PerfTab: FC = () => {
 
 const SystemTab: FC = () => {
   const [sysInfo, setSysInfo] = useState({ cores: 0, mem: '', ua: '' });
+  const useWasmDsp = useSettingsStore((s) => s.useWasmDsp);
+  const setUseWasmDsp = useSettingsStore((s) => s.setUseWasmDsp);
 
   useEffect(() => {
     setSysInfo({
@@ -402,13 +404,35 @@ const SystemTab: FC = () => {
   }, []);
 
   return (
-    <div className="space-y-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">System Info</span>
-      <InfoRow label="Browser" value={sysInfo.ua} />
-      <InfoRow label="CPU Cores" value={String(sysInfo.cores)} />
-      <InfoRow label="Memory" value={sysInfo.mem} />
-      <InfoRow label="Audio SR" value="44.1 kHz" />
-      <InfoRow label="Tick Rate" value="50 ms (20 Hz)" />
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">System Info</span>
+        <InfoRow label="Browser" value={sysInfo.ua} />
+        <InfoRow label="CPU Cores" value={String(sysInfo.cores)} />
+        <InfoRow label="Memory" value={sysInfo.mem} />
+        <InfoRow label="Audio SR" value="44.1 kHz" />
+        <InfoRow label="Tick Rate" value="50 ms (20 Hz)" />
+      </div>
+
+      <Divider />
+
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">DSP Engine</span>
+        <SettingRow
+          label="Rust/Wasm DSP"
+          description={useWasmDsp ? 'AudioWorklet (Rust)' : 'Native WebAudio'}
+        >
+          <ToggleSwitch
+            checked={useWasmDsp}
+            onChange={() => setUseWasmDsp(!useWasmDsp)}
+          />
+        </SettingRow>
+        {useWasmDsp && (
+          <div className="text-[9px] text-amber-400/80 px-1">
+            Experimental: Requires page reload to take effect.
+          </div>
+        )}
+      </div>
     </div>
   );
 };
