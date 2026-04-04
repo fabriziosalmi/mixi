@@ -21,6 +21,7 @@ use crate::dsp::phaser::Phaser;
 use crate::dsp::gate::Gate;
 use crate::dsp::waveshaper::Waveshaper;
 use crate::dsp::smoother::ParamSmoother;
+use crate::dsp::predictive_limiter::PredictiveLimiter;
 
 // ── ParamBus layout (must match ParamLayout.ts) ──────────────
 
@@ -225,6 +226,7 @@ struct MasterDsp {
     distortion: Waveshaper,
     punch: Compressor,
     limiter: Limiter,
+    predictive: PredictiveLimiter,
     last_filter_val: f32,
     // DC Blocker state (10 Hz one-pole highpass)
     dc_x_prev: f32,
@@ -242,6 +244,7 @@ impl MasterDsp {
             distortion: Waveshaper::new(),
             punch: Compressor::new(-12.0, 4.0, 5.0, 100.0, sr),
             limiter: Limiter::new(-0.5, 50.0, sr),
+            predictive: PredictiveLimiter::new(-0.3, sr),
             last_filter_val: 0.0,
             dc_x_prev: 0.0,
             dc_y_prev: 0.0,
@@ -289,9 +292,10 @@ impl MasterDsp {
             self.punch.process_block(samples);
         }
 
-        // Limiter
+        // Limiter: Predictive (0.2ms lookahead) + brickwall safety net
         if limiter_active {
-            self.limiter.process_block(samples);
+            self.predictive.process_block(samples);
+            self.predictive.hard_clip(samples);
         }
 
         // DC Blocker (10 Hz highpass) — protects speakers
@@ -398,5 +402,6 @@ impl DspEngine {
         self.master.distortion.reset();
         self.master.punch.reset();
         self.master.limiter.reset();
+        self.master.predictive.reset();
     }
 }

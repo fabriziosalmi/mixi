@@ -20,6 +20,7 @@ use mixi_core::dsp::phaser::Phaser;
 use mixi_core::dsp::gate::Gate;
 use mixi_core::dsp::waveshaper::Waveshaper;
 use mixi_core::dsp::smoother::ParamSmoother;
+use mixi_core::dsp::predictive_limiter::PredictiveLimiter;
 
 const SR: f32 = 44100.0;
 const BLOCK_SIZE: usize = 128;
@@ -187,6 +188,15 @@ fn bench_all_dsp() {
             sm.set_target(0.9);
             sm.apply_gain(buf);
             sm.set_target(0.1); // force ramp every block
+        }));
+    }
+
+    // 15. Predictive Limiter (0.2ms lookahead, 4-stage)
+    {
+        let mut plim = PredictiveLimiter::new(-0.3, SR);
+        results.push(bench("Predictive Limiter", |buf| {
+            plim.process_block(buf);
+            plim.hard_clip(buf);
         }));
     }
 

@@ -15,4 +15,5 @@ pub mod phaser;
 pub mod gate;
 pub mod waveshaper;
 pub mod smoother;
+pub mod predictive_limiter;
 pub mod engine;
