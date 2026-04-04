@@ -60,4 +60,12 @@ export const HOUSE_DECKS: HouseDeckEntry[] = [
       import('./turbokick/TurboKickDeck').then((m) => ({ default: m.TurboKickDeck })),
     ),
   },
+  {
+    mode: 'js303',
+    label: 'JS-303',
+    accentColor: '#00ff88',
+    component: lazy(() =>
+      import('./turbo303/JS303Deck').then((m) => ({ default: m.JS303Deck })),
+    ),
+  },
 ];
