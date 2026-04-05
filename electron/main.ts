@@ -29,6 +29,7 @@ import {
 } from 'fs';
 import { tmpdir } from 'os';
 import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
+import { createSocket, Socket as DgramSocket } from 'dgram';
 
 // ── Chromium Audio & Performance Flags ───────────────────────
 // These must be set BEFORE app.ready fires.
@@ -306,6 +307,7 @@ app.whenReady().then(async () => {
     // 0b. Setup IPC handlers
     setupNativeAudioIPC();
     setupDiskRecordingIPC();
+    setupMixiSyncIPC();
 
     // 1. Find free port
     apiPort = await findFreePort();
@@ -559,5 +561,93 @@ function setupDiskRecordingIPC(): void {
   ipcMain.handle('disk-rec:discard', (_event, args: { path: string }) => {
     try { unlinkSync(args.path); } catch { /* may not exist */ }
     console.log(`[mixi-rec] Discarded: ${args.path}`);
+  });
+}
+
+// ── MIXI Sync Protocol IPC ──────────────────────────────────
+
+let syncSocket: DgramSocket | null = null;
+let syncAnnounceTimer: ReturnType<typeof setInterval> | null = null;
+const syncPeers = new Map<string, { ip: string; port: number; lastSeen: number }>();
+
+function setupMixiSyncIPC(): void {
+  // Start sync (publisher or subscriber)
+  ipcMain.handle('mixi-sync:start', (_event, args: { broadcastIp?: string }) => {
+    if (syncSocket) return { ok: true, msg: 'Already running' };
+
+    try {
+      syncSocket = createSocket({ type: 'udp4', reuseAddr: true });
+      syncSocket.bind(4303, () => {
+        syncSocket!.setBroadcast(true);
+        console.log('[mixi-sync] UDP socket bound to :4303');
+      });
+
+      // Listen for incoming packets → forward to renderer
+      syncSocket.on('message', (msg, rinfo) => {
+        if (msg.length < 64) return;
+        // Rate limit: drop if we already have >100 packets this second from this IP
+        const key = rinfo.address;
+        const peer = syncPeers.get(key);
+        if (peer) peer.lastSeen = Date.now();
+        else syncPeers.set(key, { ip: rinfo.address, port: rinfo.port, lastSeen: Date.now() });
+
+        // Forward raw packet to renderer as ArrayBuffer
+        if (mainWindow?.webContents) {
+          mainWindow.webContents.send('mixi-sync:packet', msg.buffer.slice(msg.byteOffset, msg.byteOffset + msg.byteLength));
+        }
+      });
+
+      // Start periodic announce broadcast (1 Hz)
+      syncAnnounceTimer = setInterval(() => {
+        // Expire stale peers (>5s)
+        const now = Date.now();
+        for (const [k, v] of syncPeers) {
+          if (now - v.lastSeen > 5000) syncPeers.delete(k);
+        }
+      }, 1000);
+
+      return { ok: true };
+    } catch (err) {
+      console.error('[mixi-sync] Failed to start:', err);
+      return { ok: false, msg: String(err) };
+    }
+  });
+
+  // Send a packet (heartbeat, announce, transport, etc.)
+  ipcMain.handle('mixi-sync:send', (_event, args: {
+    data: ArrayBuffer;
+    broadcast?: boolean;
+    targetIp?: string;
+  }) => {
+    if (!syncSocket) return;
+    const buf = Buffer.from(args.data);
+
+    if (args.broadcast) {
+      // Broadcast (ANNOUNCE only)
+      syncSocket.send(buf, 0, buf.length, 4303, '255.255.255.255');
+    } else if (args.targetIp) {
+      // Unicast to specific peer
+      syncSocket.send(buf, 0, buf.length, 4303, args.targetIp);
+    } else {
+      // Unicast to all known peers
+      for (const [, peer] of syncPeers) {
+        syncSocket.send(buf, 0, buf.length, 4303, peer.ip);
+      }
+    }
+  });
+
+  // Get discovered peers
+  ipcMain.handle('mixi-sync:peers', () => {
+    return Array.from(syncPeers.entries()).map(([k, v]) => ({
+      id: k, ip: v.ip, port: v.port, lastSeen: v.lastSeen,
+    }));
+  });
+
+  // Stop sync
+  ipcMain.handle('mixi-sync:stop', () => {
+    if (syncAnnounceTimer) { clearInterval(syncAnnounceTimer); syncAnnounceTimer = null; }
+    if (syncSocket) { syncSocket.close(); syncSocket = null; }
+    syncPeers.clear();
+    console.log('[mixi-sync] Stopped');
   });
 }

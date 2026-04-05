@@ -79,4 +79,23 @@ contextBridge.exposeInMainWorld('mixi', {
     discard: (path: string) =>
       ipcRenderer.invoke('disk-rec:discard', { path }),
   },
+
+  // ── MIXI Sync Protocol ───────────────────────────────────
+  mixiSync: {
+    /** Start the UDP sync socket on port 4303 */
+    start: () => ipcRenderer.invoke('mixi-sync:start', {}),
+    /** Send a 64-byte sync packet */
+    send: (data: ArrayBuffer, broadcast?: boolean, targetIp?: string) =>
+      ipcRenderer.invoke('mixi-sync:send', { data, broadcast, targetIp }),
+    /** Get discovered peers */
+    peers: () => ipcRenderer.invoke('mixi-sync:peers') as Promise<Array<{
+      id: string; ip: string; port: number; lastSeen: number;
+    }>>,
+    /** Stop sync */
+    stop: () => ipcRenderer.invoke('mixi-sync:stop'),
+    /** Listen for incoming packets (forwarded from main process) */
+    onPacket: (cb: (data: ArrayBuffer) => void) => {
+      ipcRenderer.on('mixi-sync:packet', (_event, data: ArrayBuffer) => cb(data));
+    },
+  },
 });
