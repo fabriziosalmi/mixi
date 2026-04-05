@@ -132,15 +132,19 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     let cachedOffset = useMixiStore.getState().decks[deckId].firstBeatOffset;
     let cachedLoop = useMixiStore.getState().decks[deckId].activeLoop;
 
-    const unsub = useMixiStore.subscribe((s) => {
-      const d = s.decks[deckId];
-      cachedWaveform = d.waveformData;
-      cachedHotCues = d.hotCues;
-      cachedDropBeats = d.dropBeats;
-      cachedBpm = d.bpm;
-      cachedOffset = d.firstBeatOffset;
-      cachedLoop = d.activeLoop;
-    });
+    // H1: Selective subscribe — only fire when our deck's data changes,
+    // not on every store dispatch (volume, crossfader, other deck, etc.)
+    const unsub = useMixiStore.subscribe(
+      (s) => s.decks[deckId],
+      (d) => {
+        cachedWaveform = d.waveformData;
+        cachedHotCues = d.hotCues;
+        cachedDropBeats = d.dropBeats;
+        cachedBpm = d.bpm;
+        cachedOffset = d.firstBeatOffset;
+        cachedLoop = d.activeLoop;
+      },
+    );
 
     // ── Render loop ────────────────────────────────────────
 

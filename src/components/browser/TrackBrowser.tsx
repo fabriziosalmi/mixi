@@ -15,7 +15,7 @@
 // Toggled with the top-bar button or Tab key.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useRef, useEffect, type FC, type FormEvent, type DragEvent } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type FC, type FormEvent, type DragEvent } from 'react';
 import { useBrowserStore, TAG_COLORS, type TrackEntry } from '../../store/browserStore';
 import { usePlaylistStore, matchesSmartFilter, type SmartFilter } from '../../store/playlistStore';
 import { BatchAnalyzer } from '../../audio/BatchAnalyzer';
@@ -257,34 +257,47 @@ export const TrackBrowser: FC = () => {
     }
   }, []);
 
-  // ── Filter + sort ─────────────────────────────────────────
+  // ── Filter + sort (H2: memoized to avoid O(n) recomputation on unrelated renders) ──
 
-  // Playlist filter first — smart playlists compute matches dynamically
-  const playlistTracks = selectedPlaylist
-    ? selectedPlaylist.smart
-      ? tracks.filter((t) => matchesSmartFilter(t, selectedPlaylist.smart!))
-      : tracks.filter((t) => selectedPlaylist.trackIds.includes(t.id))
-    : tracks;
+  const filtered = useMemo(() => {
+    // Playlist filter first — smart playlists compute matches dynamically
+    const base = selectedPlaylist
+      ? selectedPlaylist.smart
+        ? tracks.filter((t) => matchesSmartFilter(t, selectedPlaylist.smart!))
+        : tracks.filter((t) => selectedPlaylist.trackIds.includes(t.id))
+      : tracks;
 
-  const q = search.toLowerCase();
-  let filtered = q
-    ? playlistTracks.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          t.artist.toLowerCase().includes(q) ||
-          t.key.toLowerCase().includes(q),
-      )
-    : playlistTracks;
+    const q = search.toLowerCase();
+    const searched = q
+      ? base.filter(
+          (t) =>
+            t.title.toLowerCase().includes(q) ||
+            t.artist.toLowerCase().includes(q) ||
+            t.key.toLowerCase().includes(q),
+        )
+      : base;
 
-  filtered = [...filtered].sort((a, b) => {
-    const va = a[sortCol];
-    const vb = b[sortCol];
-    if (typeof va === 'number' && typeof vb === 'number')
-      return sortAsc ? va - vb : vb - va;
-    return sortAsc
-      ? String(va).localeCompare(String(vb))
-      : String(vb).localeCompare(String(va));
-  });
+    return [...searched].sort((a, b) => {
+      const va = a[sortCol];
+      const vb = b[sortCol];
+      if (typeof va === 'number' && typeof vb === 'number')
+        return sortAsc ? va - vb : vb - va;
+      return sortAsc
+        ? String(va).localeCompare(String(vb))
+        : String(vb).localeCompare(String(va));
+    });
+  }, [tracks, search, sortCol, sortAsc, selectedPlaylist]);
+
+  // H3: Memoize smart playlist counts to avoid O(playlists × tracks) per render
+  const playlistCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const pl of playlists) {
+      counts.set(pl.id, pl.smart
+        ? tracks.filter((t) => matchesSmartFilter(t, pl.smart!)).length
+        : pl.trackIds.length);
+    }
+    return counts;
+  }, [playlists, tracks]);
 
   // ColHead extracted outside component (see bottom of file)
 
@@ -414,7 +427,7 @@ export const TrackBrowser: FC = () => {
                   borderLeft: isSelected ? '2px solid var(--clr-master)' : '2px solid transparent',
                 }}
               >
-                {pl.smart ? '⚡' : ''}{pl.name} <span className="text-zinc-600">({pl.smart ? tracks.filter((t) => matchesSmartFilter(t, pl.smart!)).length : pl.trackIds.length})</span>
+                {pl.smart ? '⚡' : ''}{pl.name} <span className="text-zinc-600">({playlistCounts.get(pl.id) ?? 0})</span>
               </button>
               <button
                 type="button"

@@ -287,15 +287,24 @@ export class MixiEngine {
     this._deviceGuard = new AudioDeviceGuard(this.ctx);
     this._deviceGuard.start();
 
-    // Gate scheduling tick — 50ms interval for both decks
+    // Gate scheduling tick — 50ms interval, only reads store when gate is active
     this._gateTimer = setInterval(() => {
+      // H4: Skip store read entirely if no gate is active on either deck
+      const gateA = this.channels.A.fx.isGateActive;
+      const gateB = this.channels.B.fx.isGateActive;
+      if (!gateA && !gateB) return;
+
       const state = useMixiStore.getState();
-      for (const d of ['A', 'B'] as const) {
-        if (!this.channels[d].fx.isGateActive) continue;
-        const deck = state.decks[d];
-        if (deck.isPlaying && deck.bpm > 0) {
-          const t = this.getCurrentTime(d);
-          this.channels[d].updateGate(deck.bpm, t, deck.firstBeatOffset);
+      if (gateA) {
+        const dA = state.decks.A;
+        if (dA.isPlaying && dA.bpm > 0) {
+          this.channels.A.updateGate(dA.bpm, this.getCurrentTime('A'), dA.firstBeatOffset);
+        }
+      }
+      if (gateB) {
+        const dB = state.decks.B;
+        if (dB.isPlaying && dB.bpm > 0) {
+          this.channels.B.updateGate(dB.bpm, this.getCurrentTime('B'), dB.firstBeatOffset);
         }
       }
     }, 50);
