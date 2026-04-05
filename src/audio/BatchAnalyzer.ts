@@ -77,13 +77,16 @@ export class BatchAnalyzer {
         // require rendering — it only needs an AudioContext for decoding.
         const arrayBuf = await blob.arrayBuffer();
         const audioCtx = new OfflineAudioContext(1, 1, 44100);
-        const decoded = await audioCtx.decodeAudioData(arrayBuf);
+        let decoded: AudioBuffer | null = await audioCtx.decodeAudioData(arrayBuf);
 
         // BPM detection (Rust/Wasm fast path if available)
-        const bpmResult = detectBpm(decoded, { bpmMin, bpmMax });
+        const bpmResult = detectBpm(decoded!, { bpmMin, bpmMax });
 
         // Key detection (Rust/Wasm fast path if available)
-        const keyResult = detectKey(decoded);
+        const keyResult = detectKey(decoded!);
+
+        // C4: Release decoded AudioBuffer (20-50MB) immediately after analysis.
+        decoded = null;
 
         // Update store
         useBrowserStore.getState().updateTrackAnalysis(

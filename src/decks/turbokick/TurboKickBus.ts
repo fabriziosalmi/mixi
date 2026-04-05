@@ -173,13 +173,20 @@ export class TurboKickBus {
 
   // ── Valve A: Tube saturation ──────────────────────────────
 
+  private _lastTubeDrive = 1;
+  private _lastPunchDrive = 1;
+
   get valveA(): number { return this._valveA; }
   set valveA(v: number) {
     this._valveA = clamp01(v);
-    // Drive: 1 (clean) → 8 (heavy saturation)
     const drive = 1 + this._valveA * 7;
     this.valveADrive.gain.setTargetAtTime(drive, this.ctx.currentTime, 0.01);
-    this.valveAShaper.curve = makeTubeCurve(drive);
+    // C2: Only regen curve when drive changes meaningfully (0.05 step)
+    const quantized = Math.round(drive * 20) / 20;
+    if (quantized !== this._lastTubeDrive) {
+      this._lastTubeDrive = quantized;
+      this.valveAShaper.curve = makeTubeCurve(drive);
+    }
   }
 
   // ── Valve B: Punch compressor ─────────────────────────────
@@ -189,7 +196,11 @@ export class TurboKickBus {
     this._valveB = clamp01(v);
     const drive = 1 + this._valveB * 5;
     this.valveBDrive.gain.setTargetAtTime(drive, this.ctx.currentTime, 0.01);
-    this.valveBShaper.curve = makePunchCurve(drive);
+    const quantized = Math.round(drive * 20) / 20;
+    if (quantized !== this._lastPunchDrive) {
+      this._lastPunchDrive = quantized;
+      this.valveBShaper.curve = makePunchCurve(drive);
+    }
   }
 
   // ── FX controls ───────────────────────────────────────────

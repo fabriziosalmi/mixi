@@ -483,12 +483,17 @@ export class DeckFx {
 
   // ── CRUSH (bitcrusher) ──────────────────────────────────────
 
+  private _lastCrushSteps = 16;
+
   private setCrush(amount: number, active: boolean, ctx: AudioContext): void {
     smoothParam(this.crushWet.gain, active ? amount * 0.7 : 0, ctx);
-    // Reduce staircase steps: 16 (mild) → 3 (heavy)
     if (active) {
       const steps = Math.max(3, Math.round(16 - amount * 13));
-      this.crushShaper.curve = DeckFx.buildCrushCurve(steps);
+      // C1: Only regenerate curve when step count actually changes
+      if (steps !== this._lastCrushSteps) {
+        this._lastCrushSteps = steps;
+        this.crushShaper.curve = DeckFx.buildCrushCurve(steps);
+      }
     }
   }
 

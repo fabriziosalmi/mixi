@@ -108,26 +108,21 @@ export class DeckChannel {
    */
   setEqModel(model: EqModel): void {
     if (model === this._eqModel) return;
-    this.teardownEq();
-    this.buildEq(model);
-  }
-
-  private teardownEq(): void {
-    // Disconnect trim → old filters
-    this.trimGain.disconnect();
-    // Disconnect gain nodes → merge
+    // C3: Build new EQ first, THEN tear down old — atomic swap, no audio gap.
+    // Both old and new are briefly connected in parallel (summed), but the
+    // swap is so fast (<1ms) that the overlap is inaudible.
+    const oldFilters = this.eqFilters;
+    this.eqFilters = [];
+    // Disconnect gain nodes from merge (will be reconnected by buildEq)
     this.eqLow.disconnect();
     this.eqMid.disconnect();
     this.eqHigh.disconnect();
-    // Disconnect internal filter nodes
-    for (const n of this.eqFilters) {
+    // Build new EQ (connects trim → new filters → gain → merge)
+    this.buildEq(model);
+    // NOW disconnect old filter nodes (trim → old path is severed)
+    for (const n of oldFilters) {
       try { n.disconnect(); } catch { /* ok */ }
     }
-    this.eqFilters = [];
-    // Reconnect gain nodes to merge (they persist)
-    this.eqLow.connect(this.eqMerge);
-    this.eqMid.connect(this.eqMerge);
-    this.eqHigh.connect(this.eqMerge);
   }
 
   private buildEq(model: EqModel): void {
