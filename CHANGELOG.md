@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.9] - 2026-04-05
+
+### Added — TurboBass v2 + Performance Features + MIDI Presets
+
+**TurboBass v2 — 5 Iterations**
+
+*Audio Engine (Iter 1)*
+- Sub-oscillator (sine, -1 octave) with mixable SUB level
+- Analog drift LFO (~0.1Hz, ±5 cents) for organic fatness
+- Pre-filter drive (tanh saturation) — the "squelch"
+- Accent click (1ms noise burst, -22dB) for percussive transients
+- Exponential slide with variable glide time (faster on accents)
+- Extended accent decay (+50%) with momentary resonance Q boost
+
+*FX Chain (Iter 2)*
+- Rat-style asymmetric distortion (germanium diode modeling)
+- BPM-synced delay with HP filter (200Hz) in feedback loop
+- Ducking spring reverb (generated metallic IR, ducks on note-on)
+- Chorus (dual modulated delay lines), auto-pan (LFO → StereoPanner)
+- Filter LFO with BPM-synced subdivisions (1/4 → 1/32)
+- Internal brick-wall limiter (ratio 20:1, 1ms attack)
+
+*Usability (Iter 3)*
+- Smart randomizer (6 scales: minor, phrygian, pentatonic, blues, dorian, chromatic)
+- Pattern mutate (progressive alteration preserving DNA)
+- ACID macro knob (single gesture: cutoff + envMod + resonance + decay)
+- Pattern shift ◀▶, polyrhythmic length (1-32 steps)
+- Transpose ±24 semitones, crossfader-linked cutoff
+
+*UI (Iter 4)*
+- Industrial chassis (dark metallic gradient + brushed texture)
+- VFD display (cyan-green glow: bank/pattern/name/BPM/transpose)
+- LED glow sequencer with color-coded step indicators
+- Roland-style horizontal param rows (ACC/SLD/UP/DN per step)
+- Filter visualizer (real-time Canvas LP response curve)
+- Per-step note editor (right-click popup), 16/32-step toggle
+
+*Presets (Iter 5)*
+- 32 factory patterns: 4 banks × 8 (Acid House, Techno, Minimal, Experimental)
+- Pattern bank selector (A/B/C/D + 1-8)
+- Ghost sequence (auto-generates pattern after 5min idle)
+- PANIC button (reset all synth+FX to safe defaults)
+
+**Performance Features**
+- Slip mode, beat jump (1-32 beats), 3 EQ models (LR4 Isolator, DJ Peak, Xone Kill)
+- Master 3-band EQ, click-to-seek on waveform
+- 37 MIDI controller presets (Pioneer, Numark, Denon, Hercules, NI, Reloop, Roland, Akai, A&H, Behringer, Traktor)
+
+### Changed
+- TurboBass README description updated with full v2 feature set
+- js303 by thedjinn credited in Acknowledgements
+
 ## [0.2.8] - 2026-04-05
 
 ### Added — House Decks + MIXI Sync Protocol + MIDI Clock
@@ -53,7 +105,7 @@ New files: `src/decks/turbokick/` (TurboKickDeck.tsx, TurboKickEngine.ts, TurboK
 
 ## [0.2.6] - 2026-04-04
 
-### Added — SOTA Mixer + Audit Fixes + Test Gate
+### Added — Mixer Hardening + Audit Fixes + Test Gate
 
 **Wasm DSP Engine — Now Actually Processing Audio**
 - AudioWorklet calls Rust `DspEngine.processRaw()` via direct Wasm memory access

@@ -4,7 +4,7 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// Mixi – JS303 Engine (SOTA Edition)
+// Mixi – JS303 Engine (v2)
 //
 // 16-step acid sequencer with per-step note, gate, accent, slide.
 // Syncs to master BPM. AudioContext look-ahead scheduling.

@@ -4,7 +4,7 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// JS303 Deck — SOTA UI (Iter 4 + Iter 3/5 controls)
+// JS303 Deck — v2 UI (Iter 4 + Iter 3/5 controls)
 //
 // Industrial chassis, VFD display, LED glow sequencer,
 // filter visualizer, macro knobs, pattern bank, ghost sequence.

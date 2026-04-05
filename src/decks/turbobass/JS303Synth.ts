@@ -4,11 +4,11 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// Mixi – JS303 Acid Synth (SOTA Edition)
+// Mixi – JS303 Acid Synth (v2)
 //
 // TB-303 emulation — 5 iterations of analog modeling:
 //
-//   Iter 1 — Audio SOTA:
+//   Iter 1 — Audio:
 //     Sub-oscillator (sine, -1 octave), analog drift LFO,
 //     pre-filter drive (tanh saturation), accent click (noise burst),
 //     exponential slide (variable glide), extended accent decay.

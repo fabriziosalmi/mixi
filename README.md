@@ -128,7 +128,7 @@ python main.py --port 7779
 |--------|-------------|
 | **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Pluggable deck modes: Track, Groovebox, TurboKick, TurboBass. |
 | **TurboKick Deck** | Kick drum synthesizer + 16-step sequencer. THUMP macro, dual valves (tube + punch), filter + LFO, Berghain-style RUMBLE. |
-| **TurboBass Deck** | TB-303 acid synth. Saw/square oscillator, resonant LP filter (Q 26), filter envelope + accent + slide, distortion, BPM-synced delay. |
+| **TurboBass Deck** | TB-303 acid synth. Saw/square + sub-oscillator, analog drift, pre-filter drive, resonant LP (Q 26) + filter LFO, accent click, exponential slide. Rat-style distortion, ducking spring reverb, chorus, auto-pan, BPM-synced delay. ACID macro, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | Filter, Delay, Reverb, Phaser, Flanger, Gate. BPM-synced where applicable. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
