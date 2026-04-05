@@ -42,6 +42,9 @@ ZEROLATENCY.md
 IO.md
 ISSUES.md
 MISSING.md
+docs/FX_REFACTORING_PLAN.md
+ROAD_TO_TRAKTOR.md
+DECKS_MARKETPLACE.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/
