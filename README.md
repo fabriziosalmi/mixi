@@ -130,12 +130,12 @@ python main.py --port 7779
 | **TurboKick Deck** | Kick drum synthesizer + 16-step sequencer. THUMP macro, dual valves (tube + punch), filter + LFO, Berghain-style RUMBLE. |
 | **TurboBass Deck** | TB-303 acid synth. Saw/square + sub-oscillator, analog drift, pre-filter drive, resonant LP (Q 26) + filter LFO, accent click, exponential slide. Rat-style distortion, ducking spring reverb, chorus, auto-pan, BPM-synced delay. ACID macro, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
-| **Deck Effects** | Filter, Delay, Reverb, Phaser, Flanger, Gate. BPM-synced where applicable. |
+| **Deck Effects** | 10 built-in: Filter, Delay, Reverb, Phaser, Flanger, Gate, Bitcrusher, Echo, Tape Stop, Noise. BPM-synced where applicable. Dry/wet gain-compensated. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
 | **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
 | **Groovebox Deck** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
-| **BPM/Key Detection** | Adaptive spectral-flux onset detection for BPM (multi-hop IOI histogram, octave resolution, ±2.5 BPM refinement). Goertzel chromagram for key (Camelot notation). Rust/Wasm fast path. |
+| **BPM/Key Detection** | Multi-band onset detection (low/mid/high), comb filter resonator bank + IOI histogram fusion, PLL grid offset, genre-aware octave resolution. Two-speed API (fast <50ms + full). Goertzel chromagram for key (Camelot). Rust/Wasm. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter. MIDI Clock Out/In (24 ppqn) for external gear sync. |
 | **MIXI Sync** | Binary sync protocol (64-byte UDP packets, port 4303). PID phase lock, auto-discovery, master election, predictive VJ triggers. BroadcastChannel fallback for browser. |
 | **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
@@ -202,7 +202,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (169), Playwright (7 E2E), cargo test (152 Rust) — 328 total |
+| Tests | Vitest (169), Playwright (7 E2E), cargo test (203 Rust) — 379 total |
 | Docs | VitePress, 24 languages |
 
 ---

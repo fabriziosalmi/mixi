@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.10] - 2026-04-05
+
+### Added
+
+**BPM Detection v3** — complete rewrite of Rust/Wasm engine
+- Multi-band onset detection (low/mid/high IIR split, weighted merge)
+- Comb filter resonator bank (280 combs, float accumulator, lerp interpolation)
+- PLL sinusoid grid offset (phase-based sweep, sub-millisecond alignment)
+- Genre pattern heuristics (Dubstep halving, D&B doubling, DJ-range bonus)
+- Smart chunking (3x15s at 0%/30%/70%, octave-normalized consensus)
+- Two-speed API: `detect_bpm_fast` (<50ms) + `detect_bpm` (full)
+- 58 Rust tests (was 7)
+
+**4 New Deck Effects** (10 total)
+- Bitcrusher (staircase waveshaper, 3-16 step resolution)
+- Echo (dub delay with LP feedback, BPM-synced)
+- Tape Stop (tonal darkening simulation)
+- Noise (white noise sweep with resonant filter)
+
+**Playlists and Library**
+- Playlist/crate management with rename, reorder, delete
+- Smart playlists (auto-filter by BPM range, key, rating, color tag)
+- Track rating (0-5 stars) and color tags
+- Session save/load (full mixer state snapshots)
+- Batch BPM/key analysis for entire library
+
+### Fixed
+
+- Tape FX dead signal path (no audio input connected to tapeWet)
+- 4 new FX corrupted Gate param bus offsets (aliased to same memory)
+- Track hydration race condition (async overwrite lost newly added tracks)
+- Dry/wet gain compensation (was dry+wet summed, now unity-gain)
+- Flanger feedback capped at 0.6 (was 0.8, resonant peaks above 0dB)
+- Noise filter Q capped at 4 (was 9, ~19dB resonant peak)
+- Echo feedback capped at 0.7 (was 0.85, low-freq buildup)
+- addTrack blob save failure now removes ghost entry from UI
+- loadSession now restores crossfaderCurve (was silently discarded)
+- BatchAnalyzer OfflineAudioContext reduced to mono 1-sample
+- ColHead FC extracted outside render (was remounting DOM every frame)
+- Multi-file drop now yields between CPU-bound analysis calls
+- All 6 stores use safeStorage (catches QuotaExceededError)
+- BPM: octave-normalized chunk consensus, branchless comb/PLL loops,
+  f64 sliding window accumulators, compute_energy actual-size division,
+  PLL integer phase iterator, snap threshold 0.15, fast parabola,
+  lerp interpolation, 2-decimal precision, anti-denormal IIR filters
+
+### Changed
+- Deck Effects count: 6 to 10
+- BPM detection: single-band IOI to multi-band + comb filter + PLL
+- Rust test count: 152 to 203
+- README updated with new FX count, BPM engine description, test totals
+
 ## [0.2.9] - 2026-04-05
 
 ### Added — TurboBass v2 + Performance Features + MIDI Presets
