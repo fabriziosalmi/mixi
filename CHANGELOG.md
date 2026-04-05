@@ -5,21 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.8] - 2026-04-05
 
-### Added — TurboKick Deck
+### Added — House Decks + MIXI Sync Protocol + MIDI Clock
 
-**TurboKick** — Real-time kick drum synthesizer + 16-step sequencer deck mode.
+**Pluggable Deck System**
+- `src/decks/` registry with lazy-loaded components and DeckMode union type
+- One-line registration: add mode to `DeckMode`, push entry to `HOUSE_DECKS`
 
-- **Kick Synthesis**: Pitch (30-100Hz), decay (50-600ms), click (noise transient), drive (tanh distortion)
-- **THUMP macro**: Single knob maps pitch + decay + click for intuitive control (0 = clicky psychedelic → 1 = deep industrial sub)
-- **16-step sequencer**: Quantized to 16th notes, swing support (0-50%), sync to master BPM or free-run
-- **Dual valve distortion**: Valve A (TUBE, smooth tanh saturation) + Valve B (PUNCH, hard asymmetric clipper)
-- **Filter + LFO**: Lowpass 60-20kHz with resonance up to 18, LFO modulation 0.1-20Hz
-- **RUMBLE effect**: Berghain-style dark reverb (2.5s synthetic IR, 250Hz sub-only) + rhythmic 1/16th delay + sidechain pump
-- **Speaker pad**: Visual touchpad with hit detection, shockwave animations, beat flash
-- **Quantized engage**: Snap-to-downbeat when syncing to playing track
-- **Pluggable deck system**: Registered via `src/decks/index.ts`, occupies standard deck slot A or B
+**TurboKick Deck** — Real-time kick drum synthesizer + 16-step sequencer
+- Pitch/decay/click/drive synthesis, THUMP macro, dual valve distortion (tube + punch)
+- Filter + LFO, Berghain-style RUMBLE (dark reverb + rhythmic delay + sidechain pump)
+- BPM sync, quantized engage, speaker touchpad with shockwave animations
+
+**TurboBass Deck** — TB-303 acid synth (pure WebAudio, no external Wasm dependency)
+- Persistent oscillator (saw/square) + resonant LP filter (Q up to 26)
+- Filter envelope with accent boost + env mod depth, slide (60ms portamento)
+- Per-step note/gate/accent/slide/octave, 16-step acid sequencer
+- tanh waveshaper distortion, BPM-synced dotted 8th delay
+
+**MIDI Clock Out + In (24 ppqn)**
+- `startClock()` sends 0xFA Start + 24 ppqn 0xF8 ticks to all MIDI outputs
+- Dynamic BPM tracking from active deck
+- Clock input: calculates external BPM from received ticks
+- Two MIXI instances can now sync via standard MIDI Clock
+
+**MIXI Sync Protocol v1** (src/sync/)
+- 64-byte binary packet codec (encode/decode, fixed-point u32 phase)
+- PID phase lock controller with gain scheduling, hysteresis, phase unwrapping
+- UDP transport on port 4303 (Electron IPC + dgram)
+- BroadcastChannel fallback for browser-only sync
+- Predictive onset triggers (kick/snare/hihat countdown for VJ software)
+- Dynamic Dictatorship master election with epoch-generation split-brain resolution
+- Flywheel mode, dead reckoning, graceful degradation (phase-lock → tempo-match)
+- 5 final amendments: drain-to-newest, feed-forward pitch nudge, epoch poisoning guard, master claim cooldown
+
+**Documentation**
+- `CREATE_DECKS_AI.md`: complete AI guide for building deck plugins (506 lines)
+- `MIXI_PROTOCOL.md`: scientific spec with 55 engineering directives + PDF export
+
+### Tests
+- 51 new sync tests (protocol codec + PID controller)
+- 2 new E2E sync tests (BroadcastChannel two-tab exchange)
+- Total: 169 JS unit + 7 E2E + 152 Rust = 328 tests
 
 New files: `src/decks/turbokick/` (TurboKickDeck.tsx, TurboKickEngine.ts, TurboKickBus.ts, kickSynth.ts, types.ts)
 
@@ -307,6 +335,8 @@ New files: `src/decks/turbokick/` (TurboKickDeck.tsx, TurboKickEngine.ts, TurboK
 - VitePress documentation site with 5 guide pages
 - Mobile scale wrapper for responsive desktop-first layout
 
+[0.2.8]: https://github.com/fabriziosalmi/mixi/compare/v0.2.7...v0.2.8
+[0.2.7]: https://github.com/fabriziosalmi/mixi/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/fabriziosalmi/mixi/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/fabriziosalmi/mixi/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/fabriziosalmi/mixi/compare/v0.2.3...v0.2.4

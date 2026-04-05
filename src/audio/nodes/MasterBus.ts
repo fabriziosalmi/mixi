@@ -65,6 +65,11 @@ export class MasterBus {
   readonly limiter: DynamicsCompressorNode;
   readonly analyser: AnalyserNode;
 
+  // Master EQ (3-band shelving)
+  readonly masterEqLow: BiquadFilterNode;
+  readonly masterEqMid: BiquadFilterNode;
+  readonly masterEqHigh: BiquadFilterNode;
+
   // Master Filter (bipolar HPF/LPF)
   private readonly filterLP: BiquadFilterNode;
   private readonly filterHP: BiquadFilterNode;
@@ -104,6 +109,23 @@ export class MasterBus {
   constructor(ctx: AudioContext) {
     this.gainNode = ctx.createGain();
     this.gainNode.gain.value = 1;
+
+    // ── Master EQ (3-band shelving) ──────────────────────────
+    this.masterEqLow = ctx.createBiquadFilter();
+    this.masterEqLow.type = 'lowshelf';
+    this.masterEqLow.frequency.value = 80;
+    this.masterEqLow.gain.value = 0;
+
+    this.masterEqMid = ctx.createBiquadFilter();
+    this.masterEqMid.type = 'peaking';
+    this.masterEqMid.frequency.value = 1000;
+    this.masterEqMid.Q.value = 0.7;
+    this.masterEqMid.gain.value = 0;
+
+    this.masterEqHigh = ctx.createBiquadFilter();
+    this.masterEqHigh.type = 'highshelf';
+    this.masterEqHigh.frequency.value = 12000;
+    this.masterEqHigh.gain.value = 0;
 
     // ── Master Filter ────────────────────────────────────────
     this.filterLP = ctx.createBiquadFilter();
@@ -210,10 +232,13 @@ export class MasterBus {
 
     // ── Wiring ───────────────────────────────────────────────
 
-    // 1. Gain → Filter paths (3 parallel: bypass, LP, HP)
-    this.gainNode.connect(this.filterBypassGain);
-    this.gainNode.connect(this.filterLP);
-    this.gainNode.connect(this.filterHP);
+    // 1. Gain → Master EQ → Filter paths (3 parallel: bypass, LP, HP)
+    this.gainNode.connect(this.masterEqLow);
+    this.masterEqLow.connect(this.masterEqMid);
+    this.masterEqMid.connect(this.masterEqHigh);
+    this.masterEqHigh.connect(this.filterBypassGain);
+    this.masterEqHigh.connect(this.filterLP);
+    this.masterEqHigh.connect(this.filterHP);
     this.filterLP.connect(this.filterLPGain);
     this.filterHP.connect(this.filterHPGain);
     this.filterBypassGain.connect(this.filterMerge);
@@ -261,6 +286,12 @@ export class MasterBus {
 
   setVolume(value: number, ctx: AudioContext): void {
     smoothParam(this.gainNode.gain, value, ctx);
+  }
+
+  /** Set master EQ band in dB (-12 to +12). */
+  setMasterEq(band: 'low' | 'mid' | 'high', db: number, ctx: AudioContext): void {
+    const node = band === 'low' ? this.masterEqLow : band === 'mid' ? this.masterEqMid : this.masterEqHigh;
+    smoothParam(node.gain, db, ctx);
   }
 
   /**
@@ -329,6 +360,9 @@ export class MasterBus {
 
   destroy(): void {
     this.gainNode.disconnect();
+    this.masterEqLow.disconnect();
+    this.masterEqMid.disconnect();
+    this.masterEqHigh.disconnect();
     this.filterLP.disconnect();
     this.filterHP.disconnect();
     this.filterBypassGain.disconnect();

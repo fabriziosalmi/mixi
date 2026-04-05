@@ -17,6 +17,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useMixiStore } from '../store/mixiStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { MixiEngine } from '../audio/MixiEngine';
 import { log } from '../utils/logger';
 import type { DeckId, EqBand } from '../types';
@@ -276,6 +277,34 @@ export function useMixiSync() {
       engine.destroy();
       isReady.current = false;
     };
+  }, [engine]);
+
+  // ── Master EQ ──────────────────────────────────────────────
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    for (const band of EQ_BANDS) {
+      unsubs.push(
+        useMixiStore.subscribe(
+          (s) => s.master.eq[band],
+          (db) => {
+            if (!engine.isInitialized) return;
+            engine.setMasterEq(band, db);
+          },
+        ),
+      );
+    }
+    return () => unsubs.forEach((u) => u());
+  }, [engine]);
+
+  // ── EQ Model (from settings store) ──────────────────────────
+  useEffect(() => {
+    let prevModel = useSettingsStore.getState().eqModel;
+    return useSettingsStore.subscribe((s) => {
+      if (s.eqModel !== prevModel) {
+        prevModel = s.eqModel;
+        if (engine.isInitialized) engine.setEqModel(s.eqModel);
+      }
+    });
   }, [engine]);
 
   return {

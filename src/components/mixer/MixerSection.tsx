@@ -418,6 +418,9 @@ export const MixerSection: FC = () => {
       {/* ── Headphone strip ──────────────────────────────────── */}
       <HeadphoneStrip />
 
+      {/* ── Master EQ (3-band) ──────────────────────────────── */}
+      <MasterEqStrip />
+
       {/* Crossfader */}
       <div className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/50 px-3 py-2 border border-zinc-800/40">
         <Fader value={crossfader} min={0} max={1} onChange={onCrossfaderChange} orientation="horizontal" length={260} color="#fff" ghost={isGhost('crossfader')} capSize={[40, 14]} midiAction={{ type: 'CROSSFADER' }} />
@@ -471,6 +474,33 @@ const HeadphoneStrip: FC = () => {
       {/* CUE B */}
       <div className="flex-1 flex justify-center">
         <CueBtn active={cueB} color={ORANGE} onClick={() => toggleCueA('B')} title="CUE B" />
+      </div>
+    </div>
+  );
+};
+
+// ── Master EQ Strip: [HI] [MID] [LOW] — 3-band shelving ────
+
+const COLOR_MST = '#a855f7';
+
+const MasterEqStrip: FC = () => {
+  const eqLow = useMixiStore((s) => s.master.eq.low);
+  const eqMid = useMixiStore((s) => s.master.eq.mid);
+  const eqHigh = useMixiStore((s) => s.master.eq.high);
+  const setMasterEq = useMixiStore((s) => s.setMasterEq);
+
+  return (
+    <div className="w-full flex items-center justify-center rounded-md bg-zinc-900/50 border border-zinc-800/40 px-2 py-1.5 gap-1">
+      <span className="text-[6px] font-mono font-bold tracking-wider shrink-0" style={{ color: 'var(--txt-muted)' }}>MST EQ</span>
+      <div className="w-px self-stretch bg-zinc-800/40" />
+      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+        <Knob value={eqHigh} min={-12} max={12} center={0} onChange={(v) => setMasterEq('high', v)} bipolar color={COLOR_MST} scale={0.5} label="HI" />
+      </div>
+      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+        <Knob value={eqMid} min={-12} max={12} center={0} onChange={(v) => setMasterEq('mid', v)} bipolar color={COLOR_MST} scale={0.5} label="MID" />
+      </div>
+      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+        <Knob value={eqLow} min={-12} max={12} center={0} onChange={(v) => setMasterEq('low', v)} bipolar color={COLOR_MST} scale={0.5} label="LO" />
       </div>
     </div>
   );

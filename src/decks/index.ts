@@ -65,7 +65,7 @@ export const HOUSE_DECKS: HouseDeckEntry[] = [
     label: 'TURBOBASS',
     accentColor: '#00ff88',
     component: lazy(() =>
-      import('./turbo303/JS303Deck').then((m) => ({ default: m.JS303Deck })),
+      import('./turbobass/JS303Deck').then((m) => ({ default: m.JS303Deck })),
     ),
   },
 ];

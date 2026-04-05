@@ -25,6 +25,15 @@ export const BUILTIN_SKINS: BuiltinSkinId[] = ['midnight', 'freetekno', 'carbon'
 /** Any valid skin id (built-in or custom). */
 export type SkinId = string;
 
+/** EQ model type — selects the filter architecture per channel. */
+export type EqModel = 'lr4-isolator' | 'dj-peak' | 'xone-kill';
+
+export const EQ_MODELS: { value: EqModel; label: string; description: string }[] = [
+  { value: 'lr4-isolator', label: 'LR4 Isolator',  description: 'Linkwitz-Riley 24dB/oct parallel isolator (default)' },
+  { value: 'dj-peak',      label: 'DJ Peak',        description: 'Pioneer DJM-style shelf + peak EQ' },
+  { value: 'xone-kill',    label: 'Xone Kill',      description: 'Allen & Heath-style 48dB/oct full-kill isolator' },
+];
+
 /** EQ range presets — [min dB, max dB]. Centre is always 0 dB. */
 export type EqRangePreset = 'techno' | 'standard' | 'gentle';
 
@@ -61,6 +70,7 @@ export const QUANTIZE_RESOLUTIONS: { value: QuantizeResolution; label: string }[
 export interface SettingsState {
   showDebugPanel: boolean;
   showSettings: boolean;
+  eqModel: EqModel;
   eqRange: EqRangePreset;
   skin: SkinId;
   customSkins: CustomSkin[];
@@ -76,6 +86,7 @@ export interface SettingsActions {
   toggleDebugPanel: () => void;
   toggleSettings: () => void;
   setShowSettings: (v: boolean) => void;
+  setEqModel: (model: EqModel) => void;
   setEqRange: (preset: EqRangePreset) => void;
   setSkin: (skin: SkinId) => void;
   addCustomSkin: (skin: CustomSkin) => void;
@@ -94,6 +105,7 @@ export const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       showDebugPanel: false,
       showSettings: false,
+      eqModel: 'lr4-isolator' as EqModel,
       eqRange: 'standard' as EqRangePreset,
       skin: 'midnight' as SkinId,
       customSkins: [] as CustomSkin[],
@@ -106,6 +118,7 @@ export const useSettingsStore = create<SettingsStore>()(
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
       setShowSettings: (v) => set({ showSettings: v }),
+      setEqModel: (model) => set({ eqModel: model }),
       setEqRange: (preset) => set({ eqRange: preset }),
       setSkin: (skin) => set({ skin }),
       addCustomSkin: (skin) =>
@@ -127,6 +140,7 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: 'mixi-settings',
       partialize: (s) => ({
+        eqModel: s.eqModel,
         eqRange: s.eqRange,
         skin: s.skin,
         customSkins: s.customSkins,

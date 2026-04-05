@@ -103,6 +103,8 @@ export interface DeckState {
 /** Master section state. */
 export interface MasterState {
   volume: UnitValue;
+  /** Master 3-band EQ in dB (-12 to +12, 0 = flat). */
+  eq: EqState;
   /** Bipolar master filter: -1 (LPF full) → 0 (off) → +1 (HPF full). */
   filter: number;
   /** Master distortion amount (0 = off, 1 = max). */

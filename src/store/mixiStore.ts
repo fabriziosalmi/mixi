@@ -53,6 +53,7 @@ const _hotCueLastCall: Record<string, number> = {};
 export interface MixiActions {
   // Master
   setMasterVolume: (v: UnitValue) => void;
+  setMasterEq: (band: EqBand, v: number) => void;
   setMasterFilter: (v: number) => void;
   setMasterDistortion: (v: UnitValue) => void;
   setMasterPunch: (v: UnitValue) => void;
@@ -172,7 +173,7 @@ export const useMixiStore = create<MixiStore>()(
     persist(
       (set, get) => ({
     // ── Initial state ────────────────────────────────────────
-    master: { volume: 1.0, filter: 0, distortion: 0, punch: 0 },
+    master: { volume: 1.0, eq: { low: 0, mid: 0, high: 0 }, filter: 0, distortion: 0, punch: 0 },
     crossfader: 0.5,
     crossfaderCurve: 'smooth' as CrossfaderCurve,
     headphones: { level: 1.0, mix: 0, splitMode: false },
@@ -187,6 +188,9 @@ export const useMixiStore = create<MixiStore>()(
 
     setMasterVolume: (v) =>
       set((s) => ({ master: { ...s.master, volume: clamp(v, 0, 1) } })),
+
+    setMasterEq: (band, v) =>
+      set((s) => ({ master: { ...s.master, eq: { ...s.master.eq, [band]: clamp(v, -12, 12) } } })),
 
     setMasterFilter: (v) =>
       set((s) => ({ master: { ...s.master, filter: clamp(v, -1, 1) } })),

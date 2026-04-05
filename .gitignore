@@ -40,6 +40,8 @@ OMNIDECK.md
 LIMITER.md
 ZEROLATENCY.md
 IO.md
+ISSUES.md
+MISSING.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

@@ -126,8 +126,9 @@ python main.py --port 7779
 
 | Module | What It Does |
 |--------|-------------|
-| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Timeline-scheduled via AudioContext. Pluggable deck modes: Track, Groovebox, TurboKick. |
-| **TurboKick Deck** | Real-time kick drum synthesizer + 16-step sequencer. Pitch/decay/click/drive synthesis, THUMP macro, dual valve distortion (tube + punch), filter with LFO, Berghain-style RUMBLE (dark reverb + rhythmic delay + sidechain pump). Syncs to master BPM. |
+| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Pluggable deck modes: Track, Groovebox, TurboKick, TurboBass. |
+| **TurboKick Deck** | Kick drum synthesizer + 16-step sequencer. THUMP macro, dual valves (tube + punch), filter + LFO, Berghain-style RUMBLE. |
+| **TurboBass Deck** | TB-303 acid synth. Saw/square oscillator, resonant LP filter (Q 26), filter envelope + accent + slide, distortion, BPM-synced delay. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | Filter, Delay, Reverb, Phaser, Flanger, Gate. BPM-synced where applicable. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
@@ -135,7 +136,8 @@ python main.py --port 7779
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
 | **Groovebox Deck** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
 | **BPM/Key Detection** | Adaptive spectral-flux onset detection for BPM (multi-hop IOI histogram, octave resolution, ±2.5 BPM refinement). Goertzel chromagram for key (Camelot notation). Rust/Wasm fast path. |
-| **MIDI** | WebMIDI API. Map any CC/note to any parameter — decks, mixer, groovebox, transport. |
+| **MIDI** | WebMIDI API. Map any CC/note to any parameter. MIDI Clock Out/In (24 ppqn) for external gear sync. |
+| **MIXI Sync** | Binary sync protocol (64-byte UDP packets, port 4303). PID phase lock, auto-discovery, master election, predictive VJ triggers. BroadcastChannel fallback for browser. |
 | **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
 | **Headphone Cue** | Split-stereo or dual-output routing. Mix knob blends cue and master. |
 | **Recording** | Crash-proof WAV recording (SPSC ring buffer → disk, 1MB fixed RAM). WebM fallback in browser. Orphan recovery on crash. |
@@ -162,7 +164,8 @@ src/
     native/       Native audio output bridge (cpal/N-API)
   gpu/            WebGPU VFX renderer, WGSL shaders, GPU detection
   ai/             AutoMixEngine, Blackboard, Ghost Mutations, intents
-  decks/          Pluggable deck modes (TurboKick synth, future instruments)
+  decks/          Pluggable deck modes (TurboKick, TurboBass, future instruments)
+  sync/           MIXI Sync protocol (packet codec, PID phase lock, bridge)
   groovebox/      Step sequencer engine, drum synthesis, UI
   automixer/      AutoMixer panel, beat utilities
   midi/           WebMIDI manager, controller mapping
@@ -199,7 +202,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (118), Playwright (5 E2E), cargo test (152 Rust) — 275 total |
+| Tests | Vitest (169), Playwright (7 E2E), cargo test (152 Rust) — 328 total |
 | Docs | VitePress, 24 languages |
 
 ---
@@ -218,10 +221,10 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
-| `npm test` | Run unit tests (Vitest, 118 tests) |
+| `npm test` | Run unit tests (Vitest, 169 tests) |
 | `npm run test:watch` | Watch mode for tests |
 | `npm run test:coverage` | Test coverage report |
-| `npm run test:e2e` | Playwright E2E smoke tests (5 tests) |
+| `npm run test:e2e` | Playwright E2E tests (7 tests: smoke + sync) |
 | `cd mixi-core && cargo test` | Rust DSP tests (152 tests) |
 
 ---

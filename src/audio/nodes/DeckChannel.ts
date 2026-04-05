@@ -12,22 +12,21 @@
 //
 // Full audio signal chain for one deck:
 //
-//   Source → Trim → HiShelf → MidPeak → LoShelf → ColorFX ─┬─→ Fader → XfaderGain
-//                                                            └─→ CueGain (PFL tap)
+//   Source → Trim → [EQ model] → ColorFX → FX → Fader → XfaderGain
+//                                     └─→ CueGain (PFL tap)
 //
-// The CueGain is a Pre-Fader Listen tap: it picks up the
-// signal AFTER EQ/FX processing but BEFORE the channel fader.
-// This lets the DJ hear how the track will sound with EQ
-// applied, without the fader position affecting the cue level.
+// EQ models:
+//   lr4-isolator  Linkwitz-Riley 24dB/oct parallel isolator (default)
+//   dj-peak       Pioneer DJM-style low-shelf + mid-peak + high-shelf
+//   xone-kill     Allen & Heath 48dB/oct full-kill isolator
 // ─────────────────────────────────────────────────────────────
 
 import type { DeckId } from '../../types';
+import type { EqModel } from '../../store/settingsStore';
 import { smoothParam } from '../utils/paramSmooth';
 import { logFrequency } from '../utils/mathUtils';
 import { DeckFx, type FxId } from './DeckFx';
 
-const EQ_LOW_FREQ = 250;
-const EQ_HIGH_FREQ = 4_000;
 const COLOR_OFF_FREQ = 20_000;
 
 export class DeckChannel {
@@ -36,102 +35,45 @@ export class DeckChannel {
   // ── Audio Nodes ────────────────────────────────────────────
   readonly trimGain: GainNode;
 
-  // 3-band isolator EQ — Linkwitz-Riley 24dB/oct (LR4)
-  //
-  // Two cascaded Butterworth 12dB/oct filters per crossover = LR4.
-  // Flat magnitude sum at crossover (-6dB per band), zero phase error.
-  //
-  //   Trim → ┬─ LP1(250)→LP2(250)           → lowGain  ──┐
-  //          ├─ HP1(250)→HP2(250)→LP3(4k)→LP4(4k) → midGain ──┤→ eqMerge → ColorFX
-  //          └─ HP3(4k)→HP4(4k)              → highGain ──┘
-  //
-  // Kill on any band = gain 0 → complete silence on that band only.
-  private readonly eqLP1: BiquadFilterNode;
-  private readonly eqLP2: BiquadFilterNode;
-  private readonly eqBPLow1: BiquadFilterNode;
-  private readonly eqBPLow2: BiquadFilterNode;
-  private readonly eqBPHigh1: BiquadFilterNode;
-  private readonly eqBPHigh2: BiquadFilterNode;
-  private readonly eqHP1: BiquadFilterNode;
-  private readonly eqHP2: BiquadFilterNode;
+  // EQ — gain nodes are always present regardless of model.
+  // The filter nodes behind them change with the model.
   readonly eqLow: GainNode;
   readonly eqMid: GainNode;
   readonly eqHigh: GainNode;
   private readonly eqMerge: GainNode;
 
+  // Internal EQ filter nodes (rebuilt on model change)
+  private eqFilters: AudioNode[] = [];
+  private _eqModel: EqModel = 'lr4-isolator';
+
   readonly colorFilter: BiquadFilterNode;
   readonly fx: DeckFx;
   readonly faderGain: GainNode;
   readonly xfaderGain: GainNode;
-
-  /**
-   * PFL (Pre-Fader Listen) tap.
-   * Signal is tapped after ColorFX, before the channel fader.
-   * Gain is 0 when CUE is off, 1 when CUE is on.
-   */
   readonly cueGain: GainNode;
-
-  /**
-   * AnalyserNode tapped post-fader for real VU metering.
-   * fftSize = 256 → 128 frequency bins, enough for a level reading.
-   */
   readonly analyser: AnalyserNode;
 
-  /** The node that sources should connect *into*. */
-  get input(): GainNode {
-    return this.trimGain;
-  }
+  private ctx: AudioContext;
 
-  /** The final output of this channel strip (goes to Master). */
-  get output(): GainNode {
-    return this.xfaderGain;
-  }
+  get input(): GainNode { return this.trimGain; }
+  get output(): GainNode { return this.xfaderGain; }
+  get cueOutput(): GainNode { return this.cueGain; }
+  get eqModel(): EqModel { return this._eqModel; }
 
-  /** The PFL output (goes to Headphone Bus). */
-  get cueOutput(): GainNode {
-    return this.cueGain;
-  }
-
-  constructor(ctx: AudioContext, id: DeckId) {
+  constructor(ctx: AudioContext, id: DeckId, eqModel: EqModel = 'lr4-isolator') {
     this.id = id;
+    this.ctx = ctx;
+    this._eqModel = eqModel;
 
-    // ── Create nodes ─────────────────────────────────────────
-
+    // ── Create permanent nodes ──────────────────────────────
     this.trimGain = ctx.createGain();
     this.trimGain.gain.value = 1;
 
-    // ── 3-band isolator — Linkwitz-Riley 24dB/oct (LR4) ─────
-    // Two cascaded Butterworth 12dB/oct per crossover point.
-
-    const makeLR = (type: BiquadFilterType, freq: number) => {
-      const f1 = ctx.createBiquadFilter();
-      f1.type = type; f1.frequency.value = freq; f1.Q.value = 0.707;
-      const f2 = ctx.createBiquadFilter();
-      f2.type = type; f2.frequency.value = freq; f2.Q.value = 0.707;
-      f1.connect(f2);
-      return [f1, f2] as const;
-    };
-
-    // Low band: LP1 → LP2 @ 250Hz
-    [this.eqLP1, this.eqLP2] = makeLR('lowpass', EQ_LOW_FREQ);
-    this.eqLow = ctx.createGain();
-    this.eqLow.gain.value = 1;
-
-    // Mid band: HP1→HP2 @ 250Hz → LP3→LP4 @ 4kHz
-    [this.eqBPLow1, this.eqBPLow2] = makeLR('highpass', EQ_LOW_FREQ);
-    [this.eqBPHigh1, this.eqBPHigh2] = makeLR('lowpass', EQ_HIGH_FREQ);
-    this.eqBPLow2.connect(this.eqBPHigh1); // chain bandpass
-    this.eqMid = ctx.createGain();
-    this.eqMid.gain.value = 1;
-
-    // High band: HP1 → HP2 @ 4kHz
-    [this.eqHP1, this.eqHP2] = makeLR('highpass', EQ_HIGH_FREQ);
-    this.eqHigh = ctx.createGain();
-    this.eqHigh.gain.value = 1;
-
-    // Merge point
-    this.eqMerge = ctx.createGain();
-    this.eqMerge.gain.value = 1;
+    // EQ gain nodes (shared by all models)
+    this.eqLow = ctx.createGain();  this.eqLow.gain.value = 1;
+    this.eqMid = ctx.createGain();  this.eqMid.gain.value = 1;
+    this.eqHigh = ctx.createGain(); this.eqHigh.gain.value = 1;
+    this.eqMerge = ctx.createGain(); this.eqMerge.gain.value = 1;
 
     this.colorFilter = ctx.createBiquadFilter();
     this.colorFilter.type = 'lowpass';
@@ -139,67 +81,199 @@ export class DeckChannel {
     this.colorFilter.Q.value = 0.707;
 
     this.fx = new DeckFx(ctx);
-
-    this.faderGain = ctx.createGain();
-    this.faderGain.gain.value = 1;
-
-    this.xfaderGain = ctx.createGain();
-    this.xfaderGain.gain.value = 1;
-
-    // PFL tap – starts silent (CUE off).
-    this.cueGain = ctx.createGain();
-    this.cueGain.gain.value = 0;
-
-    // Post-fader analyser for VU metering.
+    this.faderGain = ctx.createGain(); this.faderGain.gain.value = 1;
+    this.xfaderGain = ctx.createGain(); this.xfaderGain.gain.value = 1;
+    this.cueGain = ctx.createGain(); this.cueGain.gain.value = 0;
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 256;
     this.analyser.smoothingTimeConstant = 0.8;
 
-    // ── Wire the chain ───────────────────────────────────────
-    //
-    // Linkwitz-Riley 24dB/oct parallel isolator EQ:
-    //   Trim → LP1→LP2(250) → lowGain  → merge
-    //   Trim → HP1→HP2(250) → LP3→LP4(4k) → midGain → merge
-    //   Trim → HP3→HP4(4k) → highGain → merge
-    //   merge → ColorFX → FX → Fader → Analyser → Xfader
+    // ── Build EQ for chosen model ───────────────────────────
+    this.buildEq(eqModel);
 
-    // Low band (LP1→LP2 already chained in makeLR)
-    this.trimGain.connect(this.eqLP1);
-    this.eqLP2.connect(this.eqLow);
-    this.eqLow.connect(this.eqMerge);
-
-    // Mid band (HP1→HP2→LP3→LP4 already chained)
-    this.trimGain.connect(this.eqBPLow1);
-    this.eqBPHigh2.connect(this.eqMid);
-    this.eqMid.connect(this.eqMerge);
-
-    // High band (HP1→HP2 already chained)
-    this.trimGain.connect(this.eqHP1);
-    this.eqHP2.connect(this.eqHigh);
-    this.eqHigh.connect(this.eqMerge);
-
-    // Post-EQ chain
+    // ── Wire post-EQ chain ──────────────────────────────────
     this.eqMerge.connect(this.colorFilter);
-
-    // Master path: ColorFX → FX Chain → Fader → Analyser → Xfader
     this.colorFilter.connect(this.fx.input);
     this.fx.output.connect(this.faderGain);
     this.faderGain.connect(this.analyser);
     this.analyser.connect(this.xfaderGain);
-
-    // PFL path: FX output → CueGain (so DJ hears FX in headphones)
     this.fx.output.connect(this.cueGain);
+  }
+
+  // ── EQ Model Builders ─────────────────────────────────────
+
+  /**
+   * Hot-swap EQ model at runtime.
+   * Disconnects old EQ filters, builds new ones, reconnects.
+   */
+  setEqModel(model: EqModel): void {
+    if (model === this._eqModel) return;
+    this.teardownEq();
+    this.buildEq(model);
+  }
+
+  private teardownEq(): void {
+    // Disconnect trim → old filters
+    this.trimGain.disconnect();
+    // Disconnect gain nodes → merge
+    this.eqLow.disconnect();
+    this.eqMid.disconnect();
+    this.eqHigh.disconnect();
+    // Disconnect internal filter nodes
+    for (const n of this.eqFilters) {
+      try { n.disconnect(); } catch { /* ok */ }
+    }
+    this.eqFilters = [];
+    // Reconnect gain nodes to merge (they persist)
+    this.eqLow.connect(this.eqMerge);
+    this.eqMid.connect(this.eqMerge);
+    this.eqHigh.connect(this.eqMerge);
+  }
+
+  private buildEq(model: EqModel): void {
+    this._eqModel = model;
+    switch (model) {
+      case 'lr4-isolator': this.buildLR4(); break;
+      case 'dj-peak':      this.buildDJPeak(); break;
+      case 'xone-kill':    this.buildXoneKill(); break;
+    }
+  }
+
+  // ── Model 1: LR4 Isolator (24dB/oct) ─────────────────────
+  //   Trim → LP×2(250Hz) → lowGain  → merge
+  //   Trim → HP×2(250Hz) → LP×2(4kHz) → midGain → merge
+  //   Trim → HP×2(4kHz)  → highGain → merge
+
+  private buildLR4(): void {
+    const ctx = this.ctx;
+    const LO = 250, HI = 4000;
+
+    const makeLR = (type: BiquadFilterType, freq: number) => {
+      const f1 = ctx.createBiquadFilter();
+      f1.type = type; f1.frequency.value = freq; f1.Q.value = 0.707;
+      const f2 = ctx.createBiquadFilter();
+      f2.type = type; f2.frequency.value = freq; f2.Q.value = 0.707;
+      f1.connect(f2);
+      this.eqFilters.push(f1, f2);
+      return [f1, f2] as const;
+    };
+
+    // Low
+    const [lp1, lp2] = makeLR('lowpass', LO);
+    this.trimGain.connect(lp1);
+    lp2.connect(this.eqLow);
+    this.eqLow.connect(this.eqMerge);
+
+    // Mid
+    const [bpLo1, bpLo2] = makeLR('highpass', LO);
+    const [bpHi1, bpHi2] = makeLR('lowpass', HI);
+    bpLo2.connect(bpHi1);
+    this.trimGain.connect(bpLo1);
+    bpHi2.connect(this.eqMid);
+    this.eqMid.connect(this.eqMerge);
+
+    // High
+    const [hp1, hp2] = makeLR('highpass', HI);
+    this.trimGain.connect(hp1);
+    hp2.connect(this.eqHigh);
+    this.eqHigh.connect(this.eqMerge);
+  }
+
+  // ── Model 2: DJ Peak EQ (Pioneer DJM-style) ──────────────
+  //   Trim → lowShelf(80Hz) → midPeak(1kHz) → highShelf(12kHz) → merge
+  //   No kill — gain nodes still used but filters are serial peaking/shelving.
+  //   Gain nodes set to 1.0 (bypass) — EQ is applied via filter.gain.
+
+  private buildDJPeak(): void {
+    const ctx = this.ctx;
+
+    const lo = ctx.createBiquadFilter();
+    lo.type = 'lowshelf'; lo.frequency.value = 80; lo.gain.value = 0;
+    this.eqFilters.push(lo);
+
+    const mid = ctx.createBiquadFilter();
+    mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 0.7; mid.gain.value = 0;
+    this.eqFilters.push(mid);
+
+    const hi = ctx.createBiquadFilter();
+    hi.type = 'highshelf'; hi.frequency.value = 12000; hi.gain.value = 0;
+    this.eqFilters.push(hi);
+
+    // Serial chain: Trim → lo → mid → hi → merge
+    this.trimGain.connect(lo);
+    lo.connect(mid);
+    mid.connect(hi);
+    hi.connect(this.eqMerge);
+
+    // For DJ Peak, gain nodes are bypassed (always 1.0).
+    // EQ is applied directly via BiquadFilter.gain.
+    // Connect gain nodes to merge so they're in the graph (for consistency)
+    // but they pass through unchanged.
+    this.eqLow.connect(this.eqMerge);
+    this.eqMid.connect(this.eqMerge);
+    this.eqHigh.connect(this.eqMerge);
+    // Disconnect gain from merge — they're not in the signal path for this model
+    this.eqLow.disconnect();
+    this.eqMid.disconnect();
+    this.eqHigh.disconnect();
+  }
+
+  // ── Model 3: Xone Kill (48dB/oct full-kill isolator) ──────
+  //   Same topology as LR4 but 4th-order (4× cascaded) with
+  //   slightly resonant crossovers (Q=1.0) and tighter bands.
+  //   Crossovers: 200Hz / 2500Hz (classic Xone voicing)
+
+  private buildXoneKill(): void {
+    const ctx = this.ctx;
+    const LO = 200, HI = 2500;
+    const Q = 1.0; // slight resonance at crossover
+
+    const make4th = (type: BiquadFilterType, freq: number) => {
+      const filters: BiquadFilterNode[] = [];
+      for (let i = 0; i < 4; i++) {
+        const f = ctx.createBiquadFilter();
+        f.type = type; f.frequency.value = freq; f.Q.value = Q;
+        this.eqFilters.push(f);
+        filters.push(f);
+        if (i > 0) filters[i - 1].connect(f);
+      }
+      return filters;
+    };
+
+    // Low: 4× cascaded LP @ 200Hz
+    const lowChain = make4th('lowpass', LO);
+    this.trimGain.connect(lowChain[0]);
+    lowChain[3].connect(this.eqLow);
+    this.eqLow.connect(this.eqMerge);
+
+    // Mid: 4× HP @ 200Hz → 4× LP @ 2500Hz
+    const midHP = make4th('highpass', LO);
+    const midLP = make4th('lowpass', HI);
+    midHP[3].connect(midLP[0]);
+    this.trimGain.connect(midHP[0]);
+    midLP[3].connect(this.eqMid);
+    this.eqMid.connect(this.eqMerge);
+
+    // High: 4× cascaded HP @ 2500Hz
+    const highChain = make4th('highpass', HI);
+    this.trimGain.connect(highChain[0]);
+    highChain[3].connect(this.eqHigh);
+    this.eqHigh.connect(this.eqMerge);
   }
 
   // ── Parameter Setters (all smoothed) ─────────────────────
 
   setEq(band: 'low' | 'mid' | 'high', db: number, ctx: AudioContext, rangeMin?: number): void {
-    const node =
-      band === 'low' ? this.eqLow : band === 'mid' ? this.eqMid : this.eqHigh;
-    const isKill = rangeMin !== undefined && db <= rangeMin;
+    if (this._eqModel === 'dj-peak') {
+      // DJ Peak: apply dB directly to filter.gain (shelving/peaking)
+      const filter = this.eqFilters[band === 'low' ? 0 : band === 'mid' ? 1 : 2] as BiquadFilterNode;
+      if (filter) smoothParam(filter.gain, db, ctx);
+      return;
+    }
 
-    // Parallel isolator EQ: gain nodes are linear (0..N), not dB.
-    // Convert dB → linear. Kill = 0 (complete silence on this band only).
+    // Isolator models (LR4, Xone): convert dB → linear gain
+    const node = band === 'low' ? this.eqLow : band === 'mid' ? this.eqMid : this.eqHigh;
+    const isKill = rangeMin !== undefined && db <= rangeMin;
     const linear = isKill ? 0 : Math.pow(10, db / 20);
     smoothParam(node.gain, linear, ctx);
   }
@@ -212,7 +286,6 @@ export class DeckChannel {
     smoothParam(this.xfaderGain.gain, value, ctx);
   }
 
-  /** Activate/deactivate the PFL (CUE) send. */
   setCueActive(active: boolean, ctx: AudioContext): void {
     smoothParam(this.cueGain.gain, active ? 1 : 0, ctx);
   }
@@ -229,7 +302,6 @@ export class DeckChannel {
       this.colorFilter.type = 'lowpass';
       const t = 1 + value;
       const freq = logFrequency(t);
-      // #39: Taper Q near extremes to prevent self-oscillation
       const norm = Math.log(Math.max(20, freq) / 20) / Math.log(1000);
       const taper = 1 - 0.6 * Math.pow(2 * Math.abs(norm - 0.5), 2);
       smoothParam(this.colorFilter.frequency, freq, ctx);
@@ -248,16 +320,19 @@ export class DeckChannel {
     this.fx.setFx(id, amount, active, ctx);
   }
 
-  /** Call periodically (~50ms) to schedule beat-locked gate events. */
   updateGate(bpm: number, currentTime: number, gridOffset: number): void {
     this.fx.updateGate(bpm, currentTime, gridOffset);
   }
 
   destroy(): void {
     this.trimGain.disconnect();
-    this.eqHigh.disconnect();
-    this.eqMid.disconnect();
+    for (const n of this.eqFilters) {
+      try { n.disconnect(); } catch { /* ok */ }
+    }
     this.eqLow.disconnect();
+    this.eqMid.disconnect();
+    this.eqHigh.disconnect();
+    this.eqMerge.disconnect();
     this.colorFilter.disconnect();
     this.fx.destroy();
     this.faderGain.disconnect();

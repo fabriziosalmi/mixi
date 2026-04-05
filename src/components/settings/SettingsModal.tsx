@@ -18,9 +18,11 @@ import { useEffect, useState, type FC } from 'react';
 import {
   useSettingsStore,
   EQ_RANGE_PRESETS,
+  EQ_MODELS,
   BPM_RANGE_PRESETS,
   QUANTIZE_RESOLUTIONS,
   type EqRangePreset,
+  type EqModel,
   type FpsLimit,
   type BpmRangePreset,
   type QuantizeResolution,
@@ -115,6 +117,8 @@ export const SettingsModal: FC = () => {
 // ── Tab: Mixer ──────────────────────────────────────────────
 
 const MixerTab: FC = () => {
+  const eqModel = useSettingsStore((s) => s.eqModel);
+  const setEqModel = useSettingsStore((s) => s.setEqModel);
   const eqRange = useSettingsStore((s) => s.eqRange);
   const setEqRange = useSettingsStore((s) => s.setEqRange);
   const quantizeRes = useSettingsStore((s) => s.quantizeResolution);
@@ -122,6 +126,19 @@ const MixerTab: FC = () => {
 
   return (
     <>
+      <SettingRow label="EQ Model" description="Filter architecture for channel EQ">
+        <SegmentedControl<EqModel>
+          options={EQ_MODELS.map((m) => ({
+            value: m.value,
+            label: m.label,
+          }))}
+          value={eqModel}
+          onChange={setEqModel}
+        />
+      </SettingRow>
+
+      <Divider />
+
       <SettingRow label="EQ Range" description="Kill depth and boost headroom">
         <SegmentedControl<EqRangePreset>
           options={(['gentle', 'standard', 'techno'] as const).map((p) => ({

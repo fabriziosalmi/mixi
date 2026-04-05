@@ -7,10 +7,10 @@
 |   |   |
 |---|---|
 | **Document** | MIXI Sync Protocol Specification |
-| **Version** | 1.1-draft |
+| **Version** | v0.2.6-draft |
 | **Date** | 2026-04-05 |
 | **Authors** | Fabrizio Salmi |
-| **Status** | Pre-implementation draft (55 engineering directives applied) |
+| **Status** | Pre-implementation draft |
 | **License** | PolyForm Noncommercial 1.0.0 |
 | **Repository** | github.com/fabriziosalmi/mixi |
 

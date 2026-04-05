@@ -149,10 +149,11 @@ export class MixiEngine {
 
     this.ctx = new AudioContext({ sampleRate: 44_100 });
 
-    // Build channel strips.
+    // Build channel strips with current EQ model.
+    const eqModel = useSettingsStore.getState().eqModel;
     this._channels = {
-      A: new DeckChannel(this.ctx, 'A'),
-      B: new DeckChannel(this.ctx, 'B'),
+      A: new DeckChannel(this.ctx, 'A', eqModel),
+      B: new DeckChannel(this.ctx, 'B', eqModel),
     };
 
     // Build master bus.
@@ -502,6 +503,13 @@ export class MixiEngine {
     this.channels[deck].setEq(band, db, this.ctx, rangeMin);
   }
 
+  /** Hot-swap EQ model on both channels. */
+  setEqModel(model: import('../store/settingsStore').EqModel): void {
+    if (!this.initialized) return;
+    this.channels.A.setEqModel(model);
+    this.channels.B.setEqModel(model);
+  }
+
   // ── Channel Volume (Line Fader) ────────────────────────────
 
   setDeckVolume(deck: DeckId, value: number): void {
@@ -675,6 +683,12 @@ export class MixiEngine {
   }
 
   // ── Distortion ─────────────────────────────────────────────
+
+  /** Set master EQ band in dB. */
+  setMasterEq(band: 'low' | 'mid' | 'high', db: number): void {
+    if (!this.initialized) return;
+    this.master.setMasterEq(band, db, this.ctx);
+  }
 
   /** Set master filter (-1 = full LPF, 0 = bypass, +1 = full HPF). */
   setMasterFilter(knob: number): void {
