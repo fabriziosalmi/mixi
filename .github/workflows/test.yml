@@ -82,6 +82,9 @@ jobs:
       - name: Install deps
         run: npm install --no-audit --no-fund
 
+      - name: Build for preview
+        run: npx vite build
+
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
 
