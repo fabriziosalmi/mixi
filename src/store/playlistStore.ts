@@ -14,12 +14,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+/** Smart playlist filter criteria. If set, trackIds is auto-populated. */
+export interface SmartFilter {
+  bpmMin?: number;
+  bpmMax?: number;
+  keys?: string[];       // e.g. ['8A', '9A', '8B'] — Camelot codes
+  ratingMin?: number;    // 1–5
+  colorTags?: string[];  // hex colors to include
+}
+
 export interface Playlist {
   id: string;
   name: string;
   trackIds: string[];
   createdAt: number;
   updatedAt: number;
+  /** If set, this is a smart playlist — trackIds are computed from filter. */
+  smart?: SmartFilter;
 }
 
 interface PlaylistState {
@@ -30,6 +41,8 @@ interface PlaylistState {
 
 interface PlaylistActions {
   createPlaylist: (name: string) => void;
+  createSmartPlaylist: (name: string, filter: SmartFilter) => void;
+  updateSmartFilter: (id: string, filter: SmartFilter) => void;
   deletePlaylist: (id: string) => void;
   renamePlaylist: (id: string, name: string) => void;
   addTrack: (playlistId: string, trackId: string) => void;
@@ -39,6 +52,19 @@ interface PlaylistActions {
 }
 
 export type PlaylistStore = PlaylistState & PlaylistActions;
+
+/** Check if a track matches a smart filter. */
+export function matchesSmartFilter(
+  track: { bpm: number; key: string; rating: number; colorTag: string },
+  filter: SmartFilter,
+): boolean {
+  if (filter.bpmMin != null && track.bpm < filter.bpmMin) return false;
+  if (filter.bpmMax != null && track.bpm > filter.bpmMax) return false;
+  if (filter.keys?.length && !filter.keys.includes(track.key)) return false;
+  if (filter.ratingMin != null && track.rating < filter.ratingMin) return false;
+  if (filter.colorTags?.length && !filter.colorTags.includes(track.colorTag)) return false;
+  return true;
+}
 
 let _plCounter = 0;
 
@@ -56,6 +82,22 @@ export const usePlaylistStore = create<PlaylistStore>()(
           selectedId: id,
         }));
       },
+
+      createSmartPlaylist: (name, filter) => {
+        const id = `spl-${Date.now()}-${++_plCounter}`;
+        const now = Date.now();
+        set((s) => ({
+          playlists: [...s.playlists, { id, name, trackIds: [], createdAt: now, updatedAt: now, smart: filter }],
+          selectedId: id,
+        }));
+      },
+
+      updateSmartFilter: (id, filter) =>
+        set((s) => ({
+          playlists: s.playlists.map((p) =>
+            p.id === id ? { ...p, smart: filter, updatedAt: Date.now() } : p,
+          ),
+        })),
 
       deletePlaylist: (id) =>
         set((s) => ({

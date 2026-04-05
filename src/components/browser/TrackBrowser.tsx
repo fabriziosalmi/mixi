@@ -17,7 +17,7 @@
 
 import { useState, useCallback, useRef, useEffect, type FC, type FormEvent, type DragEvent } from 'react';
 import { useBrowserStore, TAG_COLORS, type TrackEntry } from '../../store/browserStore';
-import { usePlaylistStore } from '../../store/playlistStore';
+import { usePlaylistStore, matchesSmartFilter, type SmartFilter } from '../../store/playlistStore';
 import { BatchAnalyzer } from '../../audio/BatchAnalyzer';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
@@ -253,9 +253,11 @@ export const TrackBrowser: FC = () => {
 
   // ── Filter + sort ─────────────────────────────────────────
 
-  // Playlist filter first
+  // Playlist filter first — smart playlists compute matches dynamically
   const playlistTracks = selectedPlaylist
-    ? tracks.filter((t) => selectedPlaylist.trackIds.includes(t.id))
+    ? selectedPlaylist.smart
+      ? tracks.filter((t) => matchesSmartFilter(t, selectedPlaylist.smart!))
+      : tracks.filter((t) => selectedPlaylist.trackIds.includes(t.id))
     : tracks;
 
   const q = search.toLowerCase();
@@ -425,7 +427,7 @@ export const TrackBrowser: FC = () => {
                   borderLeft: isSelected ? '2px solid var(--clr-master)' : '2px solid transparent',
                 }}
               >
-                {pl.name} <span className="text-zinc-600">({pl.trackIds.length})</span>
+                {pl.smart ? '⚡' : ''}{pl.name} <span className="text-zinc-600">({pl.smart ? tracks.filter((t) => matchesSmartFilter(t, pl.smart!)).length : pl.trackIds.length})</span>
               </button>
               <button
                 type="button"
@@ -448,9 +450,27 @@ export const TrackBrowser: FC = () => {
             const name = prompt('Playlist name:');
             if (name?.trim()) createPlaylist(name.trim());
           }}
-          className="mt-auto px-2 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-600 hover:text-zinc-300 transition-colors border-t border-zinc-800/30"
+          className="px-2 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-600 hover:text-zinc-300 transition-colors border-t border-zinc-800/30"
         >
           + NEW
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const name = prompt('Smart playlist name:');
+            if (!name?.trim()) return;
+            const bpmMinStr = prompt('Min BPM (leave empty to skip):');
+            const bpmMaxStr = prompt('Max BPM (leave empty to skip):');
+            const ratingStr = prompt('Min rating 1-5 (leave empty to skip):');
+            const filter: SmartFilter = {};
+            if (bpmMinStr) filter.bpmMin = parseInt(bpmMinStr);
+            if (bpmMaxStr) filter.bpmMax = parseInt(bpmMaxStr);
+            if (ratingStr) filter.ratingMin = parseInt(ratingStr);
+            usePlaylistStore.getState().createSmartPlaylist(name.trim(), filter);
+          }}
+          className="mt-auto px-2 py-1 text-[8px] font-mono font-bold uppercase tracking-wider text-zinc-700 hover:text-cyan-400 transition-colors"
+        >
+          + SMART
         </button>
       </div>
 
