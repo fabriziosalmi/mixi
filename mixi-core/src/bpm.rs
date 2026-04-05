@@ -90,12 +90,15 @@ fn compute_energy(samples: &[f32], window_size: usize) -> Vec<f32> {
     for i in 0..num_frames {
         let offset = i * window_size;
         let end = (offset + window_size).min(samples.len());
+        let actual_size = end - offset; // CATCH 3: divide by actual samples, not window_size
         let mut sum: f32 = 0.0;
         for j in offset..end {
             let s = samples[j];
             if s.is_finite() { sum += s * s; }
         }
-        energy.push(sum / window_size as f32); // squared energy
+        if actual_size > 0 {
+            energy.push(sum / actual_size as f32);
+        }
     }
     energy
 }
@@ -269,32 +272,37 @@ fn comb_filter_bpm(energy: &[f32], sample_rate: f32, window_size: usize) -> (f32
             continue;
         }
 
-        // Accumulate with float position + linear interpolation
+        // CATCH 2: Branchless inner loop — stop 1 frame early, handle last outside.
+        // Avoids if-branch inside tight loop that kills SIMD and branch predictor.
+        let limit = energy.len().saturating_sub(1);
         let mut acc: f32 = 0.0;
         let mut count: usize = 0;
         let mut pos_f: f32 = 0.0;
-        while (pos_f as usize) < energy.len() {
+        while (pos_f as usize) < limit {
             let idx = pos_f as usize;
-            let frac = pos_f.fract();
-            acc += if idx + 1 < energy.len() {
-                energy[idx] + frac * (energy[idx + 1] - energy[idx]) // lerp
-            } else { energy[idx] };
+            let frac = pos_f - idx as f32; // faster than .fract()
+            acc += energy[idx] + frac * (energy[idx + 1] - energy[idx]);
             count += 1;
             pos_f += period_frames_f;
         }
+        if (pos_f as usize) < energy.len() {
+            acc += energy[pos_f as usize];
+            count += 1;
+        }
 
-        // Half-period off-beat check (also lerp)
+        // Half-period off-beat check (also branchless)
         let half_period_f = period_frames_f * 0.5;
         if half_period_f >= 1.0 {
             let mut sub_acc: f32 = 0.0;
             pos_f = half_period_f;
-            while (pos_f as usize) < energy.len() {
+            while (pos_f as usize) < limit {
                 let idx = pos_f as usize;
-                let frac = pos_f.fract();
-                sub_acc += if idx + 1 < energy.len() {
-                    energy[idx] + frac * (energy[idx + 1] - energy[idx])
-                } else { energy[idx] };
+                let frac = pos_f - idx as f32;
+                sub_acc += energy[idx] + frac * (energy[idx + 1] - energy[idx]);
                 pos_f += period_frames_f;
+            }
+            if (pos_f as usize) < energy.len() {
+                sub_acc += energy[pos_f as usize];
             }
             acc -= sub_acc * 0.3;
         }
@@ -338,29 +346,30 @@ fn pll_grid_offset(energy: &[f32], bpm: f32, sample_rate: f32, window_size: usiz
 
     let mut best_phase_sec: f32 = 0.0;
     let mut best_score: f32 = 0.0;
+    let limit = energy.len().saturating_sub(1);
 
-    let mut phase = 0.0_f32;
-    while phase < 1.0 {
+    // CATCH 4: Integer iterator prevents float drift from summing phase_step
+    for p in 0..num_tests {
+        let phase = p as f32 * phase_step; // fresh float each iteration
         let mut score: f32 = 0.0;
-        // Walk through the track at exact beat intervals from this phase
         let mut beat_time = phase * beat_period_sec;
+        // CATCH 2: Branchless lerp — stop 1 frame early
         while beat_time < total_sec {
             let pos = beat_time * frame_rate;
             let idx = pos as usize;
-            if idx < energy.len() {
-                let frac = pos.fract();
-                score += if idx + 1 < energy.len() {
-                    energy[idx] + frac * (energy[idx + 1] - energy[idx])
-                } else { energy[idx] };
+            if idx < limit {
+                let frac = pos - idx as f32;
+                score += energy[idx] + frac * (energy[idx + 1] - energy[idx]);
+            } else if idx < energy.len() {
+                score += energy[idx];
             }
-            beat_time += beat_period_sec; // float — no drift
+            beat_time += beat_period_sec;
         }
 
         if score > best_score {
             best_score = score;
             best_phase_sec = phase * beat_period_sec;
         }
-        phase += phase_step;
     }
 
     best_phase_sec
@@ -718,8 +727,14 @@ pub fn detect_bpm(
     // If chunks agree (within 3 BPM), use weighted average
     // Otherwise fall back to full analysis
     let (mut bpm, mut confidence) = if chunk_bpms.len() >= 2 {
-        let avg_bpm = chunk_bpms.iter().map(|(b, _)| b).sum::<f32>() / chunk_bpms.len() as f32;
-        let all_agree = chunk_bpms.iter().all(|(b, _)| (b - avg_bpm).abs() < 3.0);
+        // CATCH 1: Normalize to same octave before comparing.
+        // If intro=170 and breakdown=85, raw avg=127.5 which fails the ±3 check.
+        // Map everything ≥100 for comparison so octave variants still agree.
+        let normalized: Vec<f32> = chunk_bpms.iter()
+            .map(|(b, _)| if *b < 100.0 { *b * 2.0 } else { *b })
+            .collect();
+        let avg_bpm = normalized.iter().sum::<f32>() / normalized.len() as f32;
+        let all_agree = normalized.iter().all(|b| (b - avg_bpm).abs() < 3.0);
 
         if all_agree {
             // Weighted average by confidence
