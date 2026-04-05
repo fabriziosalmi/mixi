@@ -85,6 +85,13 @@ export interface MixiActions {
   triggerHotCue: (deck: DeckId, index: number) => void;
   deleteHotCue: (deck: DeckId, index: number) => void;
 
+  // Beat Jump
+  beatJump: (deck: DeckId, beats: number) => void;
+  // Vinyl Brake
+  vinylBrake: (deck: DeckId) => void;
+  // Slip Mode
+  setSlipMode: (deck: DeckId, active: boolean) => void;
+
   // Auto Loop
   setAutoLoop: (deck: DeckId, beats: number) => void;
   exitLoop: (deck: DeckId) => void;
@@ -138,6 +145,7 @@ function defaultDeck() {
     activeLoop: null as LoopState | null,
     quantize: true,
     keyLock: false,
+    slipModeActive: false,
     cueActive: false,
     trackName: '',
     dropBeats: [] as number[],
@@ -530,6 +538,44 @@ export const useMixiStore = create<MixiStore>()(
      *
      * Calls engine.setLoop() directly for immediate engagement.
      */
+    beatJump: (deck, beats) => {
+      const s = get();
+      const d = s.decks[deck];
+      if (!d.isTrackLoaded) return;
+      if (d.bpm <= 0) return;
+
+      const engine = MixiEngine.getInstance();
+      if (!engine.isInitialized) return;
+
+      const currentTime = engine.getCurrentTime(deck);
+      const beatPeriod = 60 / d.bpm;
+      const jumpSeconds = beats * beatPeriod;
+      const newTime = Math.max(0, Math.min(d.duration, currentTime + jumpSeconds));
+      engine.seek(deck, newTime);
+    },
+
+    vinylBrake: (deck) => {
+      const s = get();
+      const d = s.decks[deck];
+      if (!d.isTrackLoaded || !d.isPlaying) return;
+      const engine = MixiEngine.getInstance();
+      if (!engine.isInitialized) return;
+      engine.vinylBrake(deck);
+    },
+
+    setSlipMode: (deck, active) => {
+      const engine = MixiEngine.getInstance();
+      if (!engine.isInitialized) return;
+      if (active) {
+        engine.enterSlipMode(deck);
+      } else {
+        engine.exitSlipMode(deck);
+      }
+      set((s) => ({
+        decks: { ...s.decks, [deck]: { ...s.decks[deck], slipModeActive: active } },
+      }));
+    },
+
     setAutoLoop: (deck, beats) => {
       const s = get();
       const d = s.decks[deck];

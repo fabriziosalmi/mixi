@@ -340,6 +340,24 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       ctx.fillRect(playheadX - 1, 0, 3, 2);
       ctx.fillRect(playheadX - 1, height - 2, 3, 2);
 
+      // ── Slip mode ghost playhead (dim cyan) ─────────────
+      if (engine.isInitialized && engine.isSlipActive(deckId)) {
+        const slipRealTime = engine.getSlipRealTime(deckId);
+        if (slipRealTime >= 0 && waveform) {
+          const slipDataIndex = slipRealTime * POINTS_PER_SECOND;
+          const slipBarOffset = ((slipDataIndex - startIndexRef.current) / zoomRef.current) | 0;
+          const slipX = (slipBarOffset * BAR_STEP) | 0;
+          if (slipX >= 0 && slipX < width) {
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = '#22d3ee';
+            ctx.fillRect(slipX - 1, 0, 3, height);
+            ctx.globalAlpha = 0.12;
+            ctx.fillRect(slipX - 4, 0, 9, height);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
       // ── Next frame ───────────────────────────────────────
       rafRef.current = requestAnimationFrame(draw);
     }

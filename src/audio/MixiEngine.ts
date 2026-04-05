@@ -54,6 +54,10 @@ interface DeckTransport {
   offset: number;
   startedAt: number;
   playbackRate: number;
+  /** Slip mode: ctx.currentTime when slip started (null = not slipping). */
+  slipStartTime: number | null;
+  /** Slip mode: transport offset at the moment slip was engaged. */
+  slipRealOffset: number;
 }
 
 function createTransport(): DeckTransport {
@@ -63,6 +67,8 @@ function createTransport(): DeckTransport {
     offset: 0,
     startedAt: 0,
     playbackRate: 1.0,
+    slipStartTime: null,
+    slipRealOffset: 0,
   };
 }
 
@@ -557,6 +563,114 @@ export class MixiEngine {
   setColorFx(deck: DeckId, value: number): void {
     this.assertReady();
     this.channels[deck].setColorFx(value, this.ctx);
+  }
+
+  // ── Vinyl Brake / Backspin ─────────────────────────────────
+
+  private _brakeTimers: Record<DeckId, ReturnType<typeof setTimeout> | null> = { A: null, B: null };
+
+  /**
+   * Vinyl brake effect: ramp playbackRate down to 0 over `durationMs`,
+   * then pause the deck. Simulates a turntable stopping.
+   */
+  vinylBrake(deck: DeckId, durationMs = 500): void {
+    if (!this.initialized) return;
+    const transport = this.transports[deck];
+    if (!transport.source) return;
+
+    // Cancel any pending brake
+    if (this._brakeTimers[deck]) {
+      clearTimeout(this._brakeTimers[deck]!);
+      this._brakeTimers[deck] = null;
+    }
+
+    const startRate = transport.playbackRate;
+    const now = this.ctx.currentTime;
+    const durationSec = durationMs / 1000;
+
+    // Ramp playbackRate to near-zero using exponential curve
+    transport.source.playbackRate.cancelScheduledValues(now);
+    transport.source.playbackRate.setValueAtTime(startRate, now);
+    // exponentialRampToValueAtTime can't reach 0, so ramp to 0.001
+    transport.source.playbackRate.exponentialRampToValueAtTime(0.001, now + durationSec);
+
+    // After the ramp completes, pause and restore original rate
+    this._brakeTimers[deck] = setTimeout(() => {
+      this._brakeTimers[deck] = null;
+      this.pause(deck);
+      // Restore original playback rate so next play is normal
+      transport.playbackRate = startRate;
+      if (transport.source) {
+        transport.source.playbackRate.value = startRate;
+      }
+      useMixiStore.getState().setDeckPlaying(deck, false);
+    }, durationMs + 20);
+  }
+
+  /** Cancel a vinyl brake in progress (e.g., if user presses play again). */
+  cancelBrake(deck: DeckId): void {
+    if (this._brakeTimers[deck]) {
+      clearTimeout(this._brakeTimers[deck]!);
+      this._brakeTimers[deck] = null;
+      // Restore playback rate
+      const transport = this.transports[deck];
+      if (transport.source) {
+        transport.source.playbackRate.cancelScheduledValues(this.ctx.currentTime);
+        transport.source.playbackRate.value = transport.playbackRate;
+      }
+    }
+  }
+
+  // ── Slip Mode ──────────────────────────────────────────────
+
+  /**
+   * Enter slip mode: save the current "real" playback position.
+   * While slipping, the user can seek/loop/jump freely.
+   * Audio continues playing normally — only the "snap-back" position is tracked.
+   */
+  enterSlipMode(deck: DeckId): void {
+    if (!this.initialized) return;
+    const transport = this.transports[deck];
+    if (transport.slipStartTime !== null) return; // already slipping
+
+    transport.slipRealOffset = this.getCurrentTime(deck);
+    transport.slipStartTime = this.ctx.currentTime;
+  }
+
+  /**
+   * Exit slip mode: snap audio to where it "would have been" if
+   * the user hadn't touched anything since entering slip.
+   */
+  exitSlipMode(deck: DeckId): void {
+    if (!this.initialized) return;
+    const transport = this.transports[deck];
+    if (transport.slipStartTime === null) return; // not slipping
+
+    const realTime = this.getSlipRealTime(deck);
+    transport.slipStartTime = null;
+    transport.slipRealOffset = 0;
+
+    // Snap audio to the real position
+    if (transport.source && realTime >= 0) {
+      const duration = transport.buffer?.duration ?? 0;
+      this.seek(deck, Math.min(realTime, duration));
+    }
+  }
+
+  /**
+   * Get the "real" background position during slip mode.
+   * This is where audio would be if the user hadn't touched the deck.
+   */
+  getSlipRealTime(deck: DeckId): number {
+    const transport = this.transports[deck];
+    if (transport.slipStartTime === null) return -1;
+    const elapsed = (this.ctx.currentTime - transport.slipStartTime) * transport.playbackRate;
+    return transport.slipRealOffset + elapsed;
+  }
+
+  /** Is slip mode active on this deck? */
+  isSlipActive(deck: DeckId): boolean {
+    return this.transports[deck].slipStartTime !== null;
   }
 
   // ── Playback Rate (Pitch/Tempo) ────────────────────────────

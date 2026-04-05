@@ -90,6 +90,8 @@ export interface DeckState {
   quantize: boolean;
   /** When true, pitch stays locked while tempo changes. */
   keyLock: boolean;
+  /** Slip mode active — audio position continues in background. */
+  slipModeActive: boolean;
   /** PFL (Pre-Fader Listen) cue button state. */
   cueActive: boolean;
   /** Name of the loaded track. */

@@ -28,7 +28,6 @@ import {
   type QuantizeResolution,
 } from '../../store/settingsStore';
 import { useMidiStore } from '../../store/midiStore';
-import { AKAI_MIDI_MIX_PRESET } from '../../midi/presets/akaiMidiMix';
 import { MixiEngine } from '../../audio/MixiEngine';
 
 // ── Tabs ─────────────────────────────────────────────────────
@@ -199,11 +198,12 @@ const AudioTab: FC = () => {
 // ── Tab: MIDI ───────────────────────────────────────────────
 
 import type { MidiAction } from '../../midi/MidiManager';
+import { MIDI_CONTROLLER_PRESETS } from '../../midi/presets';
 
 const MIDI_PRESETS = [
   { id: 'manual', label: 'Manual (MIDI Learn)' },
-  { id: 'akai-midimix', label: 'Akai MIDI Mix' },
-] as const;
+  ...MIDI_CONTROLLER_PRESETS.map((p) => ({ id: p.id, label: p.label })),
+];
 
 /** All learnable parameters, organized by section. */
 const MIDI_PARAMS: { section: string; params: { label: string; action: MidiAction }[] }[] = [
@@ -268,8 +268,9 @@ const MidiTab: FC = () => {
   const removeMapping = useMidiStore((s) => s.removeMapping);
 
   const handlePreset = (presetId: string) => {
-    if (presetId === 'akai-midimix') {
-      loadPreset('Akai MIDI Mix', AKAI_MIDI_MIX_PRESET);
+    const preset = MIDI_CONTROLLER_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      loadPreset(preset.label, preset.mappings);
     } else {
       clearMappings();
     }
@@ -295,7 +296,7 @@ const MidiTab: FC = () => {
       {/* Preset selector */}
       <div className="flex justify-between items-center">
         <select
-          value={activePreset === 'Akai MIDI Mix' ? 'akai-midimix' : 'manual'}
+          value={MIDI_CONTROLLER_PRESETS.find((p) => p.label === activePreset)?.id ?? 'manual'}
           onChange={(e) => handlePreset(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-300 font-mono"
         >

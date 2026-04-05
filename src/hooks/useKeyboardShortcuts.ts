@@ -102,6 +102,31 @@ export function useKeyboardShortcuts() {
           break;
         }
 
+        // ── X: toggle slip mode ─────────────────────────────
+        case 'KeyX': {
+          e.preventDefault();
+          const sd: 'A' | 'B' = e.shiftKey ? 'B' : 'A';
+          store.setSlipMode(sd, !store.decks[sd].slipModeActive);
+          break;
+        }
+
+        // ── V: vinyl brake ────────────────────────────────────
+        case 'KeyV':
+          e.preventDefault();
+          store.vinylBrake(e.shiftKey ? 'B' : 'A');
+          break;
+
+        // ── Arrow Left/Right: beat jump Deck A ──────────────
+        // Shift: ±4 beats (1 bar), no shift: ±1 beat
+        case 'ArrowLeft':
+          e.preventDefault();
+          store.beatJump('A', e.shiftKey ? -4 : -1);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          store.beatJump('A', e.shiftKey ? 4 : 1);
+          break;
+
         default:
           break;
       }
