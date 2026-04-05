@@ -3,29 +3,112 @@
  * MIXI is licensed under the PolyForm Noncommercial License 1.0.0.
  */
 
+// ─────────────────────────────────────────────────────────────
+// JS303 Deck — SOTA UI (Iter 4 + Iter 3/5 controls)
+//
+// Industrial chassis, VFD display, LED glow sequencer,
+// filter visualizer, macro knobs, pattern bank, ghost sequence.
+// ─────────────────────────────────────────────────────────────
+
 import { useState, useEffect, useRef, useCallback, type FC } from 'react';
 import { JS303Engine } from './JS303Engine';
 import {
   type JS303Snapshot, type SynthParamId, type FxKnobId,
-  defaultSynth, defaultFx, defaultSteps, STEP_COUNT,
+  defaultSynth, defaultFx, defaultSteps,
+  STEP_COUNT, MAX_STEPS, BANK_COUNT, PATTERNS_PER_BANK, SCALE_NAMES,
 } from './types';
+import { BANK_NAMES } from './JS303Patterns';
 import { Knob } from '../../components/controls/Knob';
 import type { HouseDeckProps } from '../index';
+
+// ── Helpers ─────────────────────────────────────────────────
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function midiToName(n: number): string {
   return `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
 }
 
+// VFD-style green-cyan glow color
+const VFD = '#00e5c8';
+const ACID = '#00ff88';
+const ACCENT_CLR = '#f59e0b';
+const SLIDE_CLR = '#06b6d4';
+const DIST_CLR = '#ef4444';
+
+// ── Filter Visualizer ───────────────────────────────────────
+
+function drawFilterCurve(
+  canvas: HTMLCanvasElement,
+  cutoff: number,
+  resonance: number,
+  color: string,
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    const x = (w * i) / 4;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+
+  // Compute LP response curve
+  const cutoffHz = 80 * Math.pow(200, cutoff);
+  const Q = 1 + resonance * 25;
+  ctx.beginPath();
+  for (let i = 0; i < w; i++) {
+    // Log frequency: 20Hz → 20kHz
+    const freq = 20 * Math.pow(1000, i / w);
+    const ratio = freq / cutoffHz;
+    const mag = 1 / Math.sqrt(Math.pow(1 - ratio * ratio, 2) + Math.pow(ratio / Q, 2));
+    // dB to pixels: 0dB = center, ±24dB = top/bottom
+    const dB = 20 * Math.log10(Math.max(mag, 0.001));
+    const y = h / 2 - (dB / 24) * (h / 2);
+    if (i === 0) ctx.moveTo(i, Math.max(0, Math.min(h, y)));
+    else ctx.lineTo(i, Math.max(0, Math.min(h, y)));
+  }
+
+  // Glow layer
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Bright line on top
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.9;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// ── Component ───────────────────────────────────────────────
+
 export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }) => {
   const [snapshot, setSnapshot] = useState<JS303Snapshot>({
     isPlaying: false, currentStep: -1, bpm: 130, syncToMaster: true,
     steps: defaultSteps(), synth: defaultSynth(), fx: defaultFx(),
     masterVolume: 0.8, swing: 0,
+    patternLength: 16, transpose: 0, acidMacro: 0,
+    currentBank: 0, currentPattern: 0,
+    crossfaderLink: false, ghostSequenceReady: false,
   });
 
   const engineRef = useRef<JS303Engine | null>(null);
+  const filterCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [showNoteEditor, setShowNoteEditor] = useState<number | null>(null);
+  const [scaleIdx, setScaleIdx] = useState(4); // minorPent
+  const [stepMode, setStepMode] = useState<16 | 32>(16); // 16 or 32 step view
 
+  // ── Engine lifecycle ──────────────────────────────────────
   useEffect(() => {
     const engine = new JS303Engine(deckId);
     engine.init();
@@ -35,10 +118,23 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
       setSnapshot(s => ({ ...s, currentStep: step }));
     };
 
+    engine.onGhostReady = (ready) => {
+      setSnapshot(s => ({ ...s, ghostSequenceReady: ready }));
+    };
+
     return () => engine.destroy();
   }, [deckId]);
 
-  // ALL hooks MUST be called before any conditional return
+  // ── Filter visualizer ────────────────────────────────────
+  useEffect(() => {
+    const canvas = filterCanvasRef.current;
+    if (canvas) {
+      drawFilterCurve(canvas, snapshot.synth.cutoff, snapshot.synth.resonance, color);
+    }
+  }, [snapshot.synth.cutoff, snapshot.synth.resonance, color]);
+
+  // ── Callbacks (ALL before any conditional return) ─────────
+
   const togglePlay = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -66,11 +162,10 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
   const toggleAccent = useCallback((idx: number) => {
     const engine = engineRef.current;
     if (!engine) return;
-    const step = snapshot.steps[idx];
-    engine.updateStep(idx, { accent: !step.accent });
+    engine.updateStep(idx, { accent: !snapshot.steps[idx].accent });
     setSnapshot(s => {
       const newSteps = [...s.steps];
-      newSteps[idx] = { ...newSteps[idx], accent: !step.accent };
+      newSteps[idx] = { ...newSteps[idx], accent: !newSteps[idx].accent };
       return { ...s, steps: newSteps };
     });
   }, [snapshot.steps]);
@@ -78,14 +173,48 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
   const toggleSlide = useCallback((idx: number) => {
     const engine = engineRef.current;
     if (!engine) return;
-    const step = snapshot.steps[idx];
-    engine.updateStep(idx, { slide: !step.slide });
+    engine.updateStep(idx, { slide: !snapshot.steps[idx].slide });
     setSnapshot(s => {
       const newSteps = [...s.steps];
-      newSteps[idx] = { ...newSteps[idx], slide: !step.slide };
+      newSteps[idx] = { ...newSteps[idx], slide: !newSteps[idx].slide };
       return { ...s, steps: newSteps };
     });
   }, [snapshot.steps]);
+
+  const toggleUp = useCallback((idx: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const newUp = !snapshot.steps[idx].up;
+    engine.updateStep(idx, { up: newUp, down: false });
+    setSnapshot(s => {
+      const newSteps = [...s.steps];
+      newSteps[idx] = { ...newSteps[idx], up: newUp, down: false };
+      return { ...s, steps: newSteps };
+    });
+  }, [snapshot.steps]);
+
+  const toggleDown = useCallback((idx: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const newDown = !snapshot.steps[idx].down;
+    engine.updateStep(idx, { down: newDown, up: false });
+    setSnapshot(s => {
+      const newSteps = [...s.steps];
+      newSteps[idx] = { ...newSteps[idx], down: newDown, up: false };
+      return { ...s, steps: newSteps };
+    });
+  }, [snapshot.steps]);
+
+  const setStepNote = useCallback((idx: number, note: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.updateStep(idx, { note });
+    setSnapshot(s => {
+      const newSteps = [...s.steps];
+      newSteps[idx] = { ...newSteps[idx], note };
+      return { ...s, steps: newSteps };
+    });
+  }, []);
 
   const setSynth = useCallback((id: SynthParamId, v: number) => {
     engineRef.current?.setSynthParam(id, v);
@@ -97,131 +226,630 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
     setSnapshot(s => ({ ...s, fx: { ...s.fx, [id]: v } }));
   }, []);
 
+  const loadPattern = useCallback((bank: number, pattern: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.loadPattern(bank, pattern);
+    setSnapshot(s => ({
+      ...s,
+      steps: engine.steps.map(st => ({ ...st })),
+      currentBank: bank,
+      currentPattern: pattern,
+    }));
+  }, []);
+
+  const doRandomize = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const scale = SCALE_NAMES[scaleIdx] ?? 'minorPent';
+    engine.randomize(scale, 36 + (snapshot.transpose % 12));
+    setSnapshot(s => ({ ...s, steps: engine.steps.map(st => ({ ...st })) }));
+  }, [scaleIdx, snapshot.transpose]);
+
+  const doMutate = useCallback((amount: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.mutate(amount);
+    setSnapshot(s => ({ ...s, steps: engine.steps.map(st => ({ ...st })) }));
+  }, []);
+
   // Now safe to early-return
   if (!engineRef.current) return null;
 
   const bpm = snapshot.syncToMaster ? (engineRef.current?.bpm ?? snapshot.bpm) : snapshot.bpm;
+  const patternName = engineRef.current.getPatternName();
+
+  // ── Inline Styles ─────────────────────────────────────────
+
+  const chassis: React.CSSProperties = {
+    background: 'linear-gradient(180deg, #1a1a1e 0%, #111114 50%, #0d0d10 100%)',
+    fontSize: 11,
+    // Subtle metallic noise texture via repeating gradient
+    backgroundImage: `
+      linear-gradient(180deg, #1a1a1e 0%, #111114 50%, #0d0d10 100%),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.008) 2px, rgba(255,255,255,0.008) 4px)
+    `,
+  };
+
+  const sectionBorder = '1px solid rgba(255,255,255,0.06)';
+  const screwDot: React.CSSProperties = {
+    width: 4, height: 4, borderRadius: '50%',
+    background: 'radial-gradient(circle, #333 0%, #1a1a1a 100%)',
+    border: '0.5px solid #444',
+    flexShrink: 0,
+  };
 
   return (
-    <div className="flex flex-col h-full w-full select-none overflow-hidden" style={{ fontSize: 11 }}>
-      {/* HEADER */}
-      <div className="flex items-center justify-between px-3 py-1.5" style={{ borderBottom: '1px solid var(--brd-default)' }}>
+    <div className="flex flex-col h-full w-full select-none overflow-hidden" style={chassis}>
+      {/* ═══ HEADER — VFD Display ════════════════════════════ */}
+      <div className="flex items-center justify-between px-3 py-1.5"
+        style={{ borderBottom: sectionBorder }}>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full" style={{ background: snapshot.isPlaying ? color : 'var(--txt-muted)' }} />
+          <div style={screwDot} />
+          <span className="w-2 h-2 rounded-full transition-all duration-300"
+            style={{
+              background: snapshot.isPlaying ? color : 'var(--txt-muted)',
+              boxShadow: snapshot.isPlaying ? `0 0 8px ${color}, 0 0 3px ${color}` : 'none',
+            }} />
           <span className="font-bold tracking-widest text-[10px]" style={{ color }}>{deckId}</span>
           <span className="text-[10px] font-bold tracking-wider" style={{ color }}>TURBOBASS</span>
-          <span className="text-[10px] font-mono tabular-nums" style={{ color: 'var(--txt-muted)' }}>{bpm.toFixed(1)} BPM</span>
+          {/* VFD Display */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded"
+            style={{
+              background: 'rgba(0,0,0,0.6)',
+              border: '1px solid rgba(0,229,200,0.15)',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.8)',
+            }}>
+            <span className="font-mono text-[10px] font-bold tracking-wider"
+              style={{ color: VFD, textShadow: `0 0 6px ${VFD}66, 0 0 2px ${VFD}44` }}>
+              {BANK_NAMES[snapshot.currentBank]}-{String(snapshot.currentPattern + 1).padStart(2, '0')}
+            </span>
+            <span className="text-[8px] font-mono" style={{ color: `${VFD}88` }}>│</span>
+            <span className="font-mono text-[9px]"
+              style={{ color: `${VFD}aa`, textShadow: `0 0 4px ${VFD}33` }}>
+              {patternName}
+            </span>
+            <span className="text-[8px] font-mono" style={{ color: `${VFD}88` }}>│</span>
+            <span className="font-mono text-[10px] tabular-nums font-bold"
+              style={{ color: VFD, textShadow: `0 0 6px ${VFD}66` }}>
+              {bpm.toFixed(1)}
+            </span>
+            {snapshot.transpose !== 0 && (
+              <>
+                <span className="text-[8px] font-mono" style={{ color: `${VFD}88` }}>│</span>
+                <span className="font-mono text-[9px] font-bold"
+                  style={{ color: ACCENT_CLR, textShadow: `0 0 4px ${ACCENT_CLR}44` }}>
+                  {snapshot.transpose > 0 ? '+' : ''}{snapshot.transpose}
+                </span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {snapshot.ghostSequenceReady && (
+            <button type="button"
+              onClick={() => {
+                engineRef.current?.acceptGhostSequence();
+                setSnapshot(s => ({
+                  ...s,
+                  steps: engineRef.current!.steps.map(st => ({ ...st })),
+                  ghostSequenceReady: false,
+                }));
+              }}
+              className="text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse"
+              style={{
+                color: '#a855f7',
+                border: '1px solid rgba(168,85,247,0.4)',
+                background: 'rgba(168,85,247,0.1)',
+                textShadow: '0 0 6px rgba(168,85,247,0.6)',
+              }}>
+              GHOST
+            </button>
+          )}
           <button type="button"
             onClick={() => {
               const e = engineRef.current;
-              if (e) { e.syncToMaster = !snapshot.syncToMaster; }
+              if (e) e.syncToMaster = !snapshot.syncToMaster;
               setSnapshot(s => ({ ...s, syncToMaster: !s.syncToMaster }));
             }}
             className="text-[9px] font-bold px-1.5 py-0.5 rounded"
             style={{
-              color: snapshot.syncToMaster ? color : 'var(--txt-muted)',
-              border: `1px solid ${snapshot.syncToMaster ? color + '44' : 'var(--brd-default)'}`,
-            }}
-          >SYNC</button>
-          <button type="button" onClick={onSwitchToTrack} className="text-[9px] text-zinc-500 hover:text-white px-1">EJECT</button>
+              color: snapshot.syncToMaster ? VFD : 'var(--txt-muted)',
+              border: `1px solid ${snapshot.syncToMaster ? VFD + '44' : 'rgba(255,255,255,0.08)'}`,
+              textShadow: snapshot.syncToMaster ? `0 0 4px ${VFD}66` : 'none',
+            }}>SYNC</button>
+          <button type="button" onClick={onSwitchToTrack}
+            className="text-[9px] text-zinc-500 hover:text-white px-1 transition-colors">EJECT</button>
+          <div style={screwDot} />
         </div>
       </div>
 
-      {/* SEQUENCER */}
-      <div className="flex gap-0.5 px-2 py-2" style={{ borderBottom: '1px solid var(--brd-default)' }}>
-        {snapshot.steps.map((step, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center cursor-pointer select-none"
-            style={{ gap: 1, marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0 }}>
-            <div onClick={() => toggleGate(i)} className="w-full rounded-sm transition-all"
-              style={{
-                height: 20,
-                background: step.gate ? color : 'rgba(255,255,255,0.04)',
-                opacity: step.gate ? 0.8 : 0.3,
-                borderTop: snapshot.currentStep === i ? '2px solid white' : '2px solid transparent',
-              }} />
-            <div onClick={() => toggleAccent(i)} className="w-1.5 h-1.5 rounded-full cursor-pointer"
-              style={{ background: step.accent && step.gate ? '#f59e0b' : 'rgba(255,255,255,0.08)' }} title="Accent" />
-            <div onClick={() => toggleSlide(i)} className="w-1.5 h-1.5 rounded-full cursor-pointer"
-              style={{ background: step.slide && step.gate ? '#06b6d4' : 'rgba(255,255,255,0.08)' }} title="Slide" />
-            <span className="text-[7px] text-zinc-600">{step.gate ? midiToName(step.note) : ''}</span>
+      {/* ═══ SEQUENCER — Roland-style horizontal rows ════════ */}
+      <div className="px-2 py-1 flex-1 flex flex-col min-h-0" style={{ borderBottom: sectionBorder }}>
+        {/* Render 1 or 2 pages of 16 steps depending on stepMode */}
+        {Array.from({ length: stepMode === 32 ? 2 : 1 }, (_, row) => {
+          const offset = row * STEP_COUNT;
+          const stepsInRow = snapshot.steps.slice(offset, offset + STEP_COUNT);
+
+          return (
+            <div key={`page-${row}`} className="flex flex-col flex-1 min-h-0"
+              style={{ marginBottom: row === 0 && stepMode === 32 ? 3 : 0 }}>
+
+              {/* Row label for 32-step mode */}
+              {stepMode === 32 && (
+                <div className="text-[7px] font-mono mb-0.5"
+                  style={{ color: `${VFD}66` }}>{row === 0 ? '1-16' : '17-32'}</div>
+              )}
+
+              {/* ── LED row ──────────────────────────────────── */}
+              <div className="flex gap-0.5 mb-0.5 pl-[22px]">
+                {stepsInRow.map((step, i) => {
+                  const idx = offset + i;
+                  const active = snapshot.currentStep === idx;
+                  const dimmed = idx >= snapshot.patternLength;
+                  return (
+                    <div key={`led-${idx}`} className="flex-1 flex justify-center"
+                      style={{ marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0 }}>
+                      <div className="rounded-full transition-all duration-75"
+                        style={{
+                          width: 5, height: 5,
+                          background: dimmed ? 'rgba(255,255,255,0.03)'
+                            : active ? '#fff'
+                            : step.gate ? (step.accent ? ACCENT_CLR : color)
+                            : 'rgba(255,255,255,0.06)',
+                          boxShadow: dimmed ? 'none'
+                            : active ? `0 0 6px #fff, 0 0 10px ${color}`
+                            : step.gate ? `0 0 4px ${step.accent ? ACCENT_CLR : color}66`
+                            : 'none',
+                        }} />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── GATE buttons (fill available height) ───── */}
+              <div className="flex gap-0.5 flex-1 min-h-0 pl-[22px]">
+                {stepsInRow.map((step, i) => {
+                  const idx = offset + i;
+                  const active = snapshot.currentStep === idx;
+                  const dimmed = idx >= snapshot.patternLength;
+                  return (
+                    <div key={`gate-${idx}`}
+                      onClick={() => toggleGate(idx)}
+                      onContextMenu={(e) => { e.preventDefault(); setShowNoteEditor(showNoteEditor === idx ? null : idx); }}
+                      className="flex-1 rounded-sm cursor-pointer transition-all duration-75 active:scale-95 relative"
+                      style={{
+                        minHeight: stepMode === 32 ? 16 : 24,
+                        marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0,
+                        opacity: dimmed ? 0.2 : 1,
+                        background: step.gate
+                          ? `linear-gradient(180deg, ${color}dd 0%, ${color}88 100%)`
+                          : 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
+                        boxShadow: step.gate
+                          ? `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 3px rgba(0,0,0,0.4)${active ? `, 0 0 8px ${color}66` : ''}`
+                          : 'inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04)',
+                        borderTop: active ? '2px solid #fff' : '2px solid transparent',
+                      }}>
+                      {/* Note editor popup */}
+                      {showNoteEditor === idx && (
+                        <div className="absolute z-50 p-1 rounded"
+                          style={{
+                            top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 4,
+                            background: 'rgba(0,0,0,0.95)',
+                            border: `1px solid ${color}44`,
+                            boxShadow: `0 4px 12px rgba(0,0,0,0.8), 0 0 8px ${color}22`,
+                          }}>
+                          <div className="grid grid-cols-4 gap-0.5" style={{ width: 80 }}>
+                            {Array.from({ length: 24 }, (_, n) => 36 + n).map(note => (
+                              <button key={note} type="button"
+                                onClick={(e) => { e.stopPropagation(); setStepNote(idx, note); setShowNoteEditor(null); }}
+                                className="text-[7px] font-mono px-0.5 py-0.5 rounded hover:opacity-100 transition-opacity"
+                                style={{
+                                  opacity: step.note === note ? 1 : 0.5,
+                                  color: step.note === note ? color : '#888',
+                                  background: step.note === note ? `${color}22` : 'transparent',
+                                }}>
+                                {midiToName(note)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── NOTE names row ──────────────────────────── */}
+              <div className="flex gap-0.5 mt-0.5 pl-[22px]">
+                {stepsInRow.map((step, i) => (
+                  <div key={`note-${offset + i}`} className="flex-1 text-center"
+                    style={{ marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0 }}>
+                    <span className="text-[6px] font-mono"
+                      style={{ color: step.gate ? 'rgba(255,255,255,0.4)' : 'transparent' }}>
+                      {midiToName(step.note)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── ACCENT row ──────────────────────────────── */}
+              <StepParamRow
+                label="ACC" labelColor={ACCENT_CLR}
+                steps={stepsInRow} offset={offset}
+                isActive={(s) => s.accent && s.gate}
+                activeColor={ACCENT_CLR}
+                onToggle={(idx) => toggleAccent(idx)}
+                patternLength={snapshot.patternLength}
+              />
+
+              {/* ── SLIDE row ──────────────────────────────── */}
+              <StepParamRow
+                label="SLD" labelColor={SLIDE_CLR}
+                steps={stepsInRow} offset={offset}
+                isActive={(s) => s.slide && s.gate}
+                activeColor={SLIDE_CLR}
+                onToggle={(idx) => toggleSlide(idx)}
+                patternLength={snapshot.patternLength}
+              />
+
+              {/* ── OCTAVE UP row ──────────────────────────── */}
+              <StepParamRow
+                label="UP" labelColor={ACCENT_CLR}
+                steps={stepsInRow} offset={offset}
+                isActive={(s) => s.up && s.gate}
+                activeColor={ACCENT_CLR}
+                onToggle={(idx) => toggleUp(idx)}
+                patternLength={snapshot.patternLength}
+              />
+
+              {/* ── OCTAVE DOWN row ────────────────────────── */}
+              <StepParamRow
+                label="DN" labelColor={SLIDE_CLR}
+                steps={stepsInRow} offset={offset}
+                isActive={(s) => s.down && s.gate}
+                activeColor={SLIDE_CLR}
+                onToggle={(idx) => toggleDown(idx)}
+                patternLength={snapshot.patternLength}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ═══ SYNTH + FX KNOBS ════════════════════════════════ */}
+      <div className="flex items-center overflow-hidden" style={{ borderBottom: sectionBorder }}>
+        {/* Filter Visualizer */}
+        <div className="flex flex-col items-center justify-center px-2" style={{ minWidth: 80 }}>
+          <canvas ref={filterCanvasRef} width={72} height={40}
+            className="rounded"
+            style={{
+              background: 'rgba(0,0,0,0.4)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }} />
+          <span className="text-[6px] text-zinc-600 mt-0.5">FILTER</span>
+        </div>
+
+        {/* Synth Knobs */}
+        <div className="flex items-center gap-1.5 px-1 py-1">
+          <MiniKnob label="CUT" value={snapshot.synth.cutoff} onChange={(v: number) => setSynth('cutoff', v)} color={color} />
+          <MiniKnob label="RES" value={snapshot.synth.resonance} onChange={(v: number) => setSynth('resonance', v)} color={color} />
+          <MiniKnob label="ENV" value={snapshot.synth.envMod} onChange={(v: number) => setSynth('envMod', v)} color={color} />
+          <MiniKnob label="DEC" value={snapshot.synth.decay} onChange={(v: number) => setSynth('decay', v)} color={color} />
+          <MiniKnob label="ACC" value={snapshot.synth.accent} onChange={(v: number) => setSynth('accent', v)} color={ACCENT_CLR} />
+          <MiniKnob label="DRV" value={snapshot.synth.drive} onChange={(v: number) => setSynth('drive', v)} color={DIST_CLR} />
+          <MiniKnob label="SUB" value={snapshot.synth.subLevel} onChange={(v: number) => setSynth('subLevel', v)} color={color} />
+        </div>
+
+        {/* Divider */}
+        <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+        {/* FX Knobs */}
+        <div className="flex items-center gap-1.5 px-1 py-1">
+          <MiniKnob label="DST" value={snapshot.fx.distShape} onChange={(v: number) => setFx('distShape', v)} color={DIST_CLR} />
+          <MiniKnob label="DLY" value={snapshot.fx.delaySend} onChange={(v: number) => setFx('delaySend', v)} color={SLIDE_CLR} />
+          <MiniKnob label="FB" value={snapshot.fx.delayFeedback} onChange={(v: number) => setFx('delayFeedback', v)} color={SLIDE_CLR} />
+          <MiniKnob label="REV" value={snapshot.fx.reverbSend} onChange={(v: number) => setFx('reverbSend', v)} color="#a855f7" />
+          <MiniKnob label="CHO" value={snapshot.fx.chorusMix} onChange={(v: number) => setFx('chorusMix', v)} color="#a855f7" />
+          <MiniKnob label="PAN" value={snapshot.fx.autoPan} onChange={(v: number) => setFx('autoPan', v)} color="#a855f7" />
+          <MiniKnob label="LFO" value={snapshot.fx.filterLfoDepth} onChange={(v: number) => setFx('filterLfoDepth', v)} color={color} />
+        </div>
+
+        {/* Divider */}
+        <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+        {/* Macro + Controls */}
+        <div className="flex items-center gap-2 px-2 py-1">
+          {/* ACID Macro — big knob */}
+          <div className="flex flex-col items-center gap-0.5">
+            <Knob value={snapshot.acidMacro} min={0} max={1}
+              onChange={(v: number) => {
+                engineRef.current!.acidMacro = v;
+                setSnapshot(s => ({
+                  ...s, acidMacro: v,
+                  synth: { ...engineRef.current!.synthParams },
+                }));
+              }}
+              color={ACID} scale={0.8} />
+            <span className="text-[8px] font-bold tracking-wider"
+              style={{ color: ACID, textShadow: `0 0 4px ${ACID}44` }}>ACID</span>
           </div>
-        ))}
+
+          {/* Wave toggle + Tune */}
+          <div className="flex flex-col gap-1">
+            <button type="button"
+              onClick={() => setSynth('waveform', snapshot.synth.waveform > 0.5 ? 0 : 1)}
+              className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded"
+              style={{
+                color, border: `1px solid ${color}33`,
+                background: `${color}0a`,
+              }}>
+              {snapshot.synth.waveform > 0.5 ? 'SQR' : 'SAW'}
+            </button>
+            <MiniKnob label="TUNE" value={snapshot.synth.tuning}
+              onChange={(v: number) => setSynth('tuning', v)} color={color} bipolar />
+          </div>
+        </div>
       </div>
 
-      {/* SYNTH KNOBS */}
-      <div className="flex items-center justify-center gap-3 px-3 py-3 flex-1">
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.cutoff} min={0} max={1} onChange={(v: number) => setSynth('cutoff', v)} color={color} scale={0.7} />
-          <span className="text-[8px] text-zinc-500">CUT</span>
+      {/* ═══ PERFORMANCE BAR ═════════════════════════════════ */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5" style={{ borderBottom: sectionBorder }}>
+        {/* Pattern Bank */}
+        <div className="flex gap-0.5">
+          {Array.from({ length: BANK_COUNT }, (_, b) => (
+            <button key={b} type="button"
+              onClick={() => loadPattern(b, snapshot.currentPattern)}
+              className="text-[8px] font-bold px-1 py-0.5 rounded transition-all"
+              style={{
+                color: b === snapshot.currentBank ? VFD : '#555',
+                background: b === snapshot.currentBank ? `${VFD}15` : 'transparent',
+                border: `1px solid ${b === snapshot.currentBank ? VFD + '44' : '#333'}`,
+                textShadow: b === snapshot.currentBank ? `0 0 4px ${VFD}66` : 'none',
+              }}>
+              {BANK_NAMES[b]}
+            </button>
+          ))}
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.resonance} min={0} max={1} onChange={(v: number) => setSynth('resonance', v)} color={color} scale={0.7} />
-          <span className="text-[8px] text-zinc-500">RES</span>
+
+        {/* Pattern Select */}
+        <div className="flex gap-0.5">
+          {Array.from({ length: PATTERNS_PER_BANK }, (_, p) => (
+            <button key={p} type="button"
+              onClick={() => loadPattern(snapshot.currentBank, p)}
+              className="text-[7px] font-mono px-0.5 rounded transition-all"
+              style={{
+                color: p === snapshot.currentPattern ? color : '#444',
+                background: p === snapshot.currentPattern ? `${color}15` : 'transparent',
+                border: `1px solid ${p === snapshot.currentPattern ? color + '33' : 'transparent'}`,
+              }}>
+              {p + 1}
+            </button>
+          ))}
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.envMod} min={0} max={1} onChange={(v: number) => setSynth('envMod', v)} color={color} scale={0.7} />
-          <span className="text-[8px] text-zinc-500">ENV</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.decay} min={0} max={1} onChange={(v: number) => setSynth('decay', v)} color={color} scale={0.7} />
-          <span className="text-[8px] text-zinc-500">DEC</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.accent} min={0} max={1} onChange={(v: number) => setSynth('accent', v)} color="#f59e0b" scale={0.7} />
-          <span className="text-[8px] text-zinc-500">ACC</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.synth.tuning} min={0} max={1} center={0.5} bipolar onChange={(v: number) => setSynth('tuning', v)} color={color} scale={0.7} />
-          <span className="text-[8px] text-zinc-500">TUNE</span>
-        </div>
-        <button type="button" onClick={() => setSynth('waveform', snapshot.synth.waveform > 0.5 ? 0 : 1)}
-          className="flex flex-col items-center gap-1 px-2 py-1 rounded" style={{ border: '1px solid var(--brd-default)' }}>
-          <span className="text-[10px] font-mono" style={{ color }}>{snapshot.synth.waveform > 0.5 ? 'SQR' : 'SAW'}</span>
-          <span className="text-[7px] text-zinc-500">WAVE</span>
+
+        <div className="w-px h-4" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+        {/* Shift L/R */}
+        <button type="button" onClick={() => {
+          engineRef.current?.shiftLeft();
+          setSnapshot(s => ({ ...s, steps: engineRef.current!.steps.map(st => ({ ...st })) }));
+        }}
+          className="text-[9px] font-bold text-zinc-500 hover:text-white px-1 transition-colors">◀</button>
+        <button type="button" onClick={() => {
+          engineRef.current?.shiftRight();
+          setSnapshot(s => ({ ...s, steps: engineRef.current!.steps.map(st => ({ ...st })) }));
+        }}
+          className="text-[9px] font-bold text-zinc-500 hover:text-white px-1 transition-colors">▶</button>
+
+        {/* 16/32 toggle */}
+        <button type="button"
+          onClick={() => {
+            const next = stepMode === 16 ? 32 : 16;
+            setStepMode(next);
+            // If switching to 32 and patternLength was 16, extend it
+            if (next === 32 && snapshot.patternLength <= 16) {
+              engineRef.current!.patternLength = 32;
+              setSnapshot(s => ({ ...s, patternLength: 32 }));
+            } else if (next === 16 && snapshot.patternLength > 16) {
+              engineRef.current!.patternLength = 16;
+              setSnapshot(s => ({ ...s, patternLength: 16 }));
+            }
+          }}
+          className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded transition-all"
+          style={{
+            color: stepMode === 32 ? ACCENT_CLR : '#666',
+            border: `1px solid ${stepMode === 32 ? ACCENT_CLR + '44' : '#333'}`,
+          }}>
+          {stepMode}
         </button>
-        <div className="w-px h-8 bg-zinc-800 mx-1" />
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.fx.distShape} min={0} max={1} onChange={(v: number) => setFx('distShape', v)} color="#ef4444" scale={0.6} />
-          <span className="text-[8px] text-zinc-500">DIST</span>
+
+        {/* Length */}
+        <div className="flex items-center gap-0.5">
+          <span className="text-[7px] text-zinc-600">LEN</span>
+          <button type="button" onClick={() => {
+            const len = Math.max(1, snapshot.patternLength - 1);
+            engineRef.current!.patternLength = len;
+            setSnapshot(s => ({ ...s, patternLength: len }));
+          }}
+            className="text-[8px] text-zinc-500 hover:text-white px-0.5">-</button>
+          <span className="text-[9px] font-mono font-bold tabular-nums" style={{ color, minWidth: 14, textAlign: 'center' }}>
+            {snapshot.patternLength}
+          </span>
+          <button type="button" onClick={() => {
+            const len = Math.min(MAX_STEPS, snapshot.patternLength + 1);
+            engineRef.current!.patternLength = len;
+            setSnapshot(s => ({ ...s, patternLength: len }));
+          }}
+            className="text-[8px] text-zinc-500 hover:text-white px-0.5">+</button>
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.fx.delaySend} min={0} max={1} onChange={(v: number) => setFx('delaySend', v)} color="#06b6d4" scale={0.6} />
-          <span className="text-[8px] text-zinc-500">DLY</span>
+
+        <div className="w-px h-4" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+        {/* Transpose */}
+        <div className="flex items-center gap-0.5">
+          <span className="text-[7px] text-zinc-600">KEY</span>
+          <button type="button" onClick={() => {
+            const t = snapshot.transpose - 1;
+            engineRef.current!.transpose = t;
+            setSnapshot(s => ({ ...s, transpose: t }));
+          }}
+            className="text-[8px] text-zinc-500 hover:text-white px-0.5">-</button>
+          <span className="text-[9px] font-mono font-bold tabular-nums"
+            style={{ color: ACCENT_CLR, minWidth: 18, textAlign: 'center' }}>
+            {snapshot.transpose > 0 ? '+' : ''}{snapshot.transpose}
+          </span>
+          <button type="button" onClick={() => {
+            const t = snapshot.transpose + 1;
+            engineRef.current!.transpose = t;
+            setSnapshot(s => ({ ...s, transpose: t }));
+          }}
+            className="text-[8px] text-zinc-500 hover:text-white px-0.5">+</button>
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <Knob value={snapshot.fx.delayFeedback} min={0} max={1} onChange={(v: number) => setFx('delayFeedback', v)} color="#06b6d4" scale={0.6} />
-          <span className="text-[8px] text-zinc-500">FB</span>
-        </div>
+
+        {/* Scale selector for randomizer */}
+        <button type="button"
+          onClick={() => setScaleIdx((scaleIdx + 1) % SCALE_NAMES.length)}
+          className="text-[7px] font-mono text-zinc-500 hover:text-white px-1 rounded"
+          style={{ border: '1px solid #333' }}>
+          {SCALE_NAMES[scaleIdx]}
+        </button>
       </div>
 
-      {/* TRANSPORT */}
-      <div className="flex items-center justify-between px-3 py-2" style={{ borderTop: '1px solid var(--brd-default)' }}>
+      {/* ═══ TRANSPORT ═══════════════════════════════════════ */}
+      <div className="flex items-center justify-between px-3 py-1.5">
         <button type="button" onClick={togglePlay}
           className="px-4 py-1.5 rounded font-bold text-[10px] tracking-widest transition-all active:scale-95"
           style={{
-            border: `1px solid ${snapshot.isPlaying ? color : 'var(--brd-default)'}`,
-            color: snapshot.isPlaying ? color : 'var(--txt-muted)',
-            background: snapshot.isPlaying ? color + '15' : 'transparent',
+            border: `1px solid ${snapshot.isPlaying ? color : 'rgba(255,255,255,0.1)'}`,
+            color: snapshot.isPlaying ? '#fff' : 'var(--txt-muted)',
+            background: snapshot.isPlaying
+              ? `linear-gradient(180deg, ${color}33 0%, ${color}11 100%)`
+              : 'transparent',
+            boxShadow: snapshot.isPlaying ? `0 0 12px ${color}33, inset 0 1px 0 rgba(255,255,255,0.1)` : 'none',
+            textShadow: snapshot.isPlaying ? `0 0 8px ${color}` : 'none',
           }}>
-          {snapshot.isPlaying ? 'STOP' : 'ENGAGE'}
+          {snapshot.isPlaying ? '■ STOP' : '▶ ENGAGE'}
         </button>
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-center gap-0.5">
-            <Knob value={snapshot.swing} min={0} max={0.5} onChange={(v: number) => { engineRef.current!.swing = v; setSnapshot(s => ({ ...s, swing: v })); }} color="var(--txt-muted)" scale={0.5} />
-            <span className="text-[7px] text-zinc-600">SWG</span>
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <Knob value={snapshot.masterVolume} min={0} max={1} onChange={(v: number) => { engineRef.current!.masterVolume = v; setSnapshot(s => ({ ...s, masterVolume: v })); }} color="var(--txt-muted)" scale={0.5} />
-            <span className="text-[7px] text-zinc-600">VOL</span>
-          </div>
-          <button type="button" onClick={() => { engineRef.current?.clearPattern(); setSnapshot(s => ({ ...s, steps: s.steps.map(st => ({ ...st, gate: false })) })); }}
-            className="text-[8px] font-bold text-zinc-500 hover:text-red-400 px-1.5 py-0.5 rounded border border-zinc-800 active:scale-95">CLR</button>
-          <button type="button" onClick={() => { engineRef.current?.resetPattern(); setSnapshot(s => ({ ...s, steps: defaultSteps() })); }}
-            className="text-[8px] font-bold text-zinc-500 hover:text-white px-1.5 py-0.5 rounded border border-zinc-800 active:scale-95">ACID</button>
+
+        <div className="flex items-center gap-2">
+          <MiniKnob label="SWG" value={snapshot.swing}
+            onChange={(v: number) => { engineRef.current!.swing = v; setSnapshot(s => ({ ...s, swing: v })); }}
+            color="var(--txt-muted)" max={0.5} />
+          <MiniKnob label="VOL" value={snapshot.masterVolume}
+            onChange={(v: number) => { engineRef.current!.masterVolume = v; setSnapshot(s => ({ ...s, masterVolume: v })); }}
+            color="var(--txt-muted)" />
+          <MiniKnob label="DFT" value={snapshot.synth.drift}
+            onChange={(v: number) => setSynth('drift', v)} color="#666" />
+
+          <div className="w-px h-4" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          {/* Action Buttons */}
+          <button type="button" onClick={doRandomize}
+            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
+            style={{ color: ACID, border: `1px solid ${ACID}33` }}>RND</button>
+          <button type="button" onClick={() => doMutate(0.3)}
+            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
+            style={{ color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}>MUT</button>
+          <button type="button"
+            onClick={() => { engineRef.current?.clearPattern(); setSnapshot(s => ({ ...s, steps: s.steps.map(st => ({ ...st, gate: false })) })); }}
+            className="text-[8px] font-bold text-zinc-500 hover:text-red-400 px-1.5 py-0.5 rounded active:scale-95"
+            style={{ border: '1px solid #333' }}>CLR</button>
+          <button type="button"
+            onClick={() => { engineRef.current?.resetPattern(); setSnapshot(s => ({ ...s, steps: defaultSteps() })); }}
+            className="text-[8px] font-bold text-zinc-500 hover:text-white px-1.5 py-0.5 rounded active:scale-95"
+            style={{ border: '1px solid #333' }}>RST</button>
+
+          {/* PANIC */}
+          <button type="button"
+            onClick={() => {
+              engineRef.current?.panic();
+              setSnapshot(s => ({
+                ...s,
+                synth: { ...defaultSynth() },
+                fx: { ...defaultFx() },
+                acidMacro: 0,
+              }));
+            }}
+            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
+            style={{
+              color: DIST_CLR,
+              border: `1px solid ${DIST_CLR}44`,
+              textShadow: `0 0 4px ${DIST_CLR}44`,
+            }}>PANIC</button>
+
+          {/* Crossfader Link */}
+          <button type="button"
+            onClick={() => {
+              const e = engineRef.current;
+              if (e) e.crossfaderLink = !snapshot.crossfaderLink;
+              setSnapshot(s => ({ ...s, crossfaderLink: !s.crossfaderLink }));
+            }}
+            className="text-[8px] font-bold px-1 py-0.5 rounded"
+            style={{
+              color: snapshot.crossfaderLink ? ACCENT_CLR : '#555',
+              border: `1px solid ${snapshot.crossfaderLink ? ACCENT_CLR + '44' : '#333'}`,
+            }}>X↔F</button>
         </div>
       </div>
     </div>
   );
 };
+
+// ── Step Parameter Row (ACC / SLD / UP / DN) ────────────────
+
+const StepParamRow: FC<{
+  label: string;
+  labelColor: string;
+  steps: import('./types').JS303Step[];
+  offset: number;
+  isActive: (step: import('./types').JS303Step) => boolean;
+  activeColor: string;
+  onToggle: (idx: number) => void;
+  patternLength: number;
+}> = ({ label, labelColor, steps, offset, isActive, activeColor, onToggle, patternLength }) => (
+  <div className="flex items-center gap-0.5 mt-px">
+    <span className="text-[6px] font-bold w-5 text-right pr-0.5 shrink-0"
+      style={{ color: `${labelColor}66` }}>{label}</span>
+    {steps.map((step, i) => {
+      const idx = offset + i;
+      const active = isActive(step);
+      const dimmed = idx >= patternLength;
+      return (
+        <div key={`${label}-${idx}`}
+          onClick={() => onToggle(idx)}
+          className="flex-1 cursor-pointer rounded-sm transition-all active:scale-90"
+          style={{
+            height: 16,
+            marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0,
+            opacity: dimmed ? 0.15 : 1,
+            background: active
+              ? activeColor
+              : 'rgba(255,255,255,0.04)',
+            boxShadow: active
+              ? `0 0 4px ${activeColor}66, inset 0 1px 0 rgba(255,255,255,0.2)`
+              : 'inset 0 1px 1px rgba(0,0,0,0.2)',
+          }}
+        />
+      );
+    })}
+  </div>
+);
+
+// ── Mini Knob wrapper ───────────────────────────────────────
+
+const MiniKnob: FC<{
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
+  min?: number;
+  max?: number;
+  bipolar?: boolean;
+}> = ({ label, value, onChange, color, min = 0, max = 1, bipolar }) => (
+  <div className="flex flex-col items-center gap-0.5">
+    <Knob value={value} min={min} max={max} onChange={onChange}
+      color={color} scale={0.55}
+      bipolar={bipolar} center={bipolar ? (min + max) / 2 : undefined} />
+    <span className="text-[7px] font-bold tracking-wide" style={{ color: '#555' }}>{label}</span>
+  </div>
+);

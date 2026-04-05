@@ -245,4 +245,10 @@ Commercial use requires a separate license. Contact: fabrizio.salmi@gmail.com
 
 ---
 
+## Acknowledgements
+
+- **[js303](https://github.com/thedjinn/js303)** by thedjinn — the original Web Audio TB-303 emulation that inspired the TurboBass deck. Awesome bass.
+
+---
+
 Built by [Fabrizio Salmi](https://github.com/fabriziosalmi)
