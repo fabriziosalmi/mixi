@@ -419,9 +419,11 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
       }
     }
     const result = wasmModule.detect_bpm(flat, numCh, spc, sampleRate, bpmMin, bpmMax);
-    const bpm = result[0];
-    const firstBeatOffset = result[1];
-    const confidence = result[2];
+    // v2: detect_bpm returns BpmResult struct { bpm, offset, confidence }
+    // Legacy fallback: if result is a Vec (old wasm), access by index
+    const bpm = result.bpm ?? result[0];
+    const firstBeatOffset = result.offset ?? result[1];
+    const confidence = result.confidence ?? result[2];
 
     const elapsed = (performance.now() - t0).toFixed(0);
     log.success(
