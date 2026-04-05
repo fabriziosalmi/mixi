@@ -153,7 +153,7 @@ const App: FC = () => {
     // Reset per-deck FX
     if (engine.isInitialized) {
       for (const d of ['A', 'B'] as const) {
-        for (const fx of ['flt', 'dly', 'rev', 'pha', 'flg', 'gate'] as const) {
+        for (const fx of ['flt', 'dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const) {
           engine.setDeckFx(d, fx, 0, false);
         }
       }

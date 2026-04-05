@@ -221,17 +221,17 @@ const BeatCounter: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) =
 const GATE_LABELS = ['1/32', '1/16', '1/8', '1/4', '1/2'];
 function snapGate(v: number): number { return Math.round(v); }
 
-const FX_IDS = ['flt', 'dly', 'rev', 'pha', 'flg', 'gate'] as const;
+const FX_IDS = ['flt', 'dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const;
 
 const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
-  const [fx, setFx] = useState([0, 0, 0, 0, 0, 0]);
-  const [active, setActive] = useState([false, false, false, false, false, false]);
+  const [fx, setFx] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const [active, setActive] = useState([false, false, false, false, false, false, false, false, false, false]);
   const fxRef = useRef(fx);
   useEffect(() => { fxRef.current = fx; }, [fx]);
   const activeRef = useRef(active);
   useEffect(() => { activeRef.current = active; }, [active]);
 
-  const labels = ['FLT', 'DLY', 'REV', 'PHA', 'FLG', 'GATE'];
+  const labels = ['FLT', 'DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH', 'TAP', 'NOI'];
 
   const toggleFx = useCallback((i: number) => {
     setActive((a) => {
@@ -251,14 +251,14 @@ const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
 
   return (
     <div
-      className="mixi-fx-strip flex flex-col items-center justify-center gap-1.5 shrink-0 py-2 px-1 rounded-md bg-zinc-900/50"
+      className="mixi-fx-strip flex flex-col items-center gap-1 shrink-0 py-1 px-1 rounded-md bg-zinc-900/50 overflow-y-auto"
       style={{
         width: 48,
         border: '1px solid rgba(255,255,255,0.04)',
         boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.02)',
       }}
     >
-      {[0, 1, 2, 3, 4, 5].map((i) => {
+      {FX_IDS.map((_, i) => {
         const isGate = i === 5;
         return (
           <FxSlot

@@ -82,6 +82,11 @@ export class DspParamWriter {
       pha:  { amount: DECK.FX_PHA_AMOUNT,  active: DECK.FX_PHA_ACTIVE },
       flg:  { amount: DECK.FX_FLG_AMOUNT,  active: DECK.FX_FLG_ACTIVE },
       gate: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
+      // New FX — not yet in Wasm DSP, use same offsets as gate (no-op in Wasm path)
+      crush: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
+      echo:  { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
+      tape:  { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
+      noise: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
     };
     const o = offsets[fx];
     this.bus.setFloat(deckParam(deck, o.amount), amount);

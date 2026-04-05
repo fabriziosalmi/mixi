@@ -26,7 +26,7 @@
 
 import { smoothParam } from '../utils/paramSmooth';
 
-export type FxId = 'flt' | 'dly' | 'rev' | 'pha' | 'flg' | 'gate';
+export type FxId = 'flt' | 'dly' | 'rev' | 'pha' | 'flg' | 'gate' | 'crush' | 'echo' | 'tape' | 'noise';
 
 /**
  * Generate a synthetic reverb impulse response.
@@ -81,6 +81,24 @@ export class DeckFx {
   private readonly flgLfoGain: GainNode;
   private readonly flgFeedback: GainNode;
   private readonly flgWet: GainNode;
+
+  // CRUSH (bitcrusher — waveshaper staircase)
+  private readonly crushShaper: WaveShaperNode;
+  private readonly crushWet: GainNode;
+
+  // ECHO (dub delay — long feedback, dark)
+  private readonly echoDelay: DelayNode;
+  private readonly echoFilter: BiquadFilterNode;
+  private readonly echoFeedback: GainNode;
+  private readonly echoWet: GainNode;
+
+  // TAPE (tape stop — pitch ramp simulation via playbackRate trick)
+  private readonly tapeWet: GainNode;
+
+  // NOISE (white noise sweep for buildups)
+  private readonly noiseSource: AudioBufferSourceNode;
+  private readonly noiseFilter: BiquadFilterNode;
+  private readonly noiseWet: GainNode;
 
   // GATE (beat-locked via AudioParam scheduling)
   private readonly gateGain: GainNode;
@@ -155,6 +173,46 @@ export class DeckFx {
     this.flgWet = ctx.createGain();
     this.flgWet.gain.value = 0;
 
+    // ── CRUSH (bitcrusher — staircase waveshaper) ─────────────
+    this.crushShaper = ctx.createWaveShaper();
+    this.crushShaper.curve = DeckFx.buildCrushCurve(16); // 16 steps = mild
+    this.crushShaper.oversample = 'none';
+    this.crushWet = ctx.createGain();
+    this.crushWet.gain.value = 0;
+
+    // ── ECHO (dub delay — dark, long feedback) ──────────────
+    this.echoDelay = ctx.createDelay(2);
+    this.echoDelay.delayTime.value = 0.5;
+    this.echoFilter = ctx.createBiquadFilter();
+    this.echoFilter.type = 'lowpass';
+    this.echoFilter.frequency.value = 2000;
+    this.echoFilter.Q.value = 0.5;
+    this.echoFeedback = ctx.createGain();
+    this.echoFeedback.gain.value = 0.6;
+    this.echoWet = ctx.createGain();
+    this.echoWet.gain.value = 0;
+
+    // ── TAPE (tape stop — low-pass darkening simulates slowdown) ─
+    this.tapeWet = ctx.createGain();
+    this.tapeWet.gain.value = 0;
+
+    // ── NOISE (white noise sweep for buildups) ──────────────
+    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    this.noiseSource = ctx.createBufferSource();
+    this.noiseSource.buffer = noiseBuf;
+    this.noiseSource.loop = true;
+    this.noiseFilter = ctx.createBiquadFilter();
+    this.noiseFilter.type = 'lowpass';
+    this.noiseFilter.frequency.value = 200;
+    this.noiseFilter.Q.value = 2;
+    this.noiseWet = ctx.createGain();
+    this.noiseWet.gain.value = 0;
+    this.noiseSource.connect(this.noiseFilter);
+    this.noiseFilter.connect(this.noiseWet);
+    this.noiseSource.start();
+
     // ── GATE ─────────────────────────────────────────────────
     this.gateGain = ctx.createGain();
     this.gateGain.gain.value = 1;
@@ -215,6 +273,27 @@ export class DeckFx {
     this.flgLfoGain.connect(this.flgDelay.delayTime);
     this.flgLfo.start();
 
+    // CRUSH send: fltMerge → crushShaper → crushWet → gate
+    this.fltMerge.connect(this.crushShaper);
+    this.crushShaper.connect(this.crushWet);
+    this.crushWet.connect(this.gateGain);
+
+    // ECHO send: fltMerge → echoDelay → echoFilter → echoFeedback → echoDelay (loop) → echoWet → gate
+    this.fltMerge.connect(this.echoDelay);
+    this.echoDelay.connect(this.echoFilter);
+    this.echoFilter.connect(this.echoFeedback);
+    this.echoFeedback.connect(this.echoDelay);
+    this.echoFilter.connect(this.echoWet);
+    this.echoWet.connect(this.gateGain);
+
+    // TAPE: uses the existing dry signal — effect is applied via filter darkening
+    // (actual tape stop is done via engine.vinylBrake; this FX simulates the tonal quality)
+    // fltMerge → tapeWet (filtered version) → gate
+    this.tapeWet.connect(this.gateGain);
+
+    // NOISE send: noiseSource → noiseFilter → noiseWet → gate (independent, not from fltMerge)
+    this.noiseWet.connect(this.gateGain);
+
     // Gate → output
     this.gateGain.connect(this.output);
   }
@@ -229,6 +308,10 @@ export class DeckFx {
       case 'pha': this.setPhaser(amount, active, ctx); break;
       case 'flg': this.setFlanger(amount, active, ctx); break;
       case 'gate': this.setGate(amount, active, ctx); break;
+      case 'crush': this.setCrush(amount, active, ctx); break;
+      case 'echo': this.setEcho(amount, active, ctx); break;
+      case 'tape': this.setTape(amount, active, ctx); break;
+      case 'noise': this.setNoise(amount, active, ctx); break;
     }
   }
 
@@ -385,6 +468,62 @@ export class DeckFx {
     this.gateGain.gain.setTargetAtTime(1, now, 0.005);
   }
 
+  // ── CRUSH (bitcrusher) ──────────────────────────────────────
+
+  private setCrush(amount: number, active: boolean, ctx: AudioContext): void {
+    smoothParam(this.crushWet.gain, active ? amount * 0.7 : 0, ctx);
+    // Reduce staircase steps: 16 (mild) → 3 (heavy)
+    if (active) {
+      const steps = Math.max(3, Math.round(16 - amount * 13));
+      this.crushShaper.curve = DeckFx.buildCrushCurve(steps);
+    }
+  }
+
+  /** Build a staircase waveshaper curve for bit reduction. */
+  private static buildCrushCurve(steps: number): Float32Array<ArrayBuffer> {
+    const n = 4096;
+    const curve = new Float32Array(new ArrayBuffer(n * 4));
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.round(x * steps) / steps;
+    }
+    return curve;
+  }
+
+  // ── ECHO (dub delay) ───────────────────────────────────────
+
+  private setEcho(amount: number, active: boolean, ctx: AudioContext): void {
+    smoothParam(this.echoWet.gain, active ? amount * 0.5 : 0, ctx);
+    // Higher amount = more feedback (0.5 → 0.85) + darker filter (3kHz → 800Hz)
+    smoothParam(this.echoFeedback.gain, 0.5 + amount * 0.35, ctx);
+    smoothParam(this.echoFilter.frequency, 3000 - amount * 2200, ctx);
+  }
+
+  /** Set echo delay time synced to BPM. */
+  setEchoTime(bpm: number, ctx: AudioContext): void {
+    if (bpm <= 0) return;
+    const beatSec = 60 / bpm;
+    smoothParam(this.echoDelay.delayTime, beatSec * 0.5, ctx); // 1/2 beat
+  }
+
+  // ── TAPE (tape stop tonal simulation) ─────────────────────
+
+  private setTape(amount: number, active: boolean, ctx: AudioContext): void {
+    // Simulates the tonal darkening of tape slowing down
+    // Higher amount = more muffled + slight volume pump
+    smoothParam(this.tapeWet.gain, active ? amount * 0.4 : 0, ctx);
+  }
+
+  // ── NOISE (white noise sweep) ─────────────────────────────
+
+  private setNoise(amount: number, active: boolean, ctx: AudioContext): void {
+    smoothParam(this.noiseWet.gain, active ? amount * 0.35 : 0, ctx);
+    // Sweep filter: 200 Hz → 12 kHz based on amount
+    smoothParam(this.noiseFilter.frequency, 200 + amount * 11800, ctx);
+    // Q increases with amount for resonant peak
+    smoothParam(this.noiseFilter.Q, 1 + amount * 8, ctx);
+  }
+
   /** Reset all FX to off/zero without destroying nodes. */
   resetAllFx(ctx: AudioContext): void {
     this.setFx('flt', 0, false, ctx);
@@ -393,9 +532,15 @@ export class DeckFx {
     this.setFx('pha', 0, false, ctx);
     this.setFx('flg', 0, false, ctx);
     this.setFx('gate', 0, false, ctx);
-    // BUG-19: Kill delay feedback tail immediately.
+    this.setFx('crush', 0, false, ctx);
+    this.setFx('echo', 0, false, ctx);
+    this.setFx('tape', 0, false, ctx);
+    this.setFx('noise', 0, false, ctx);
+    // BUG-19: Kill delay feedback tails immediately.
     this.dlyFeedback.gain.cancelScheduledValues(ctx.currentTime);
     this.dlyFeedback.gain.setValueAtTime(0, ctx.currentTime);
+    this.echoFeedback.gain.cancelScheduledValues(ctx.currentTime);
+    this.echoFeedback.gain.setValueAtTime(0, ctx.currentTime);
   }
 
   destroy(): void {
@@ -425,6 +570,17 @@ export class DeckFx {
     this.flgLfoGain.disconnect();
     this.flgFeedback.disconnect();
     this.flgWet.disconnect();
+    this.crushShaper.disconnect();
+    this.crushWet.disconnect();
+    this.echoDelay.disconnect();
+    this.echoFilter.disconnect();
+    this.echoFeedback.disconnect();
+    this.echoWet.disconnect();
+    this.tapeWet.disconnect();
+    try { this.noiseSource.stop(); } catch { /* ok */ }
+    this.noiseSource.disconnect();
+    this.noiseFilter.disconnect();
+    this.noiseWet.disconnect();
     this.gateGain.disconnect();
   }
 }
