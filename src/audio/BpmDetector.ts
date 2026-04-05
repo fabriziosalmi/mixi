@@ -418,9 +418,10 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
         flat.set(lowBandBuffer.getChannelData(ch), ch * spc);
       }
     }
-    const result = wasmModule.detect_bpm(flat, numCh, spc, sampleRate, bpmMin, bpmMax);
-    // v2: detect_bpm returns BpmResult struct { bpm, offset, confidence }
-    // Legacy fallback: if result is a Vec (old wasm), access by index
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = wasmModule.detect_bpm(flat, numCh, spc, sampleRate, bpmMin, bpmMax);
+    // v3: detect_bpm returns BpmResult struct { bpm, offset, confidence }
+    // Legacy fallback: if result is a Vec/Float32Array (old wasm), access by index
     const bpm = result.bpm ?? result[0];
     const firstBeatOffset = result.offset ?? result[1];
     const confidence = result.confidence ?? result[2];

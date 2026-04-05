@@ -75,22 +75,24 @@ export class DspParamWriter {
   // ── Per-deck FX ──────────────────────────────────────────
 
   setDeckFx(deck: DeckId, fx: FxId, amount: number, active: boolean): void {
-    const offsets: Record<FxId, { amount: number; active: number }> = {
+    // FX with Wasm DSP counterparts — write to SharedArrayBuffer
+    const offsets: Partial<Record<FxId, { amount: number; active: number }>> = {
       flt:  { amount: DECK.FX_FLT_AMOUNT,  active: DECK.FX_FLT_ACTIVE },
       dly:  { amount: DECK.FX_DLY_AMOUNT,  active: DECK.FX_DLY_ACTIVE },
       rev:  { amount: DECK.FX_REV_AMOUNT,  active: DECK.FX_REV_ACTIVE },
       pha:  { amount: DECK.FX_PHA_AMOUNT,  active: DECK.FX_PHA_ACTIVE },
       flg:  { amount: DECK.FX_FLG_AMOUNT,  active: DECK.FX_FLG_ACTIVE },
       gate: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
-      // New FX — not yet in Wasm DSP, use same offsets as gate (no-op in Wasm path)
-      crush: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
-      echo:  { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
-      tape:  { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
-      noise: { amount: DECK.FX_GATE_AMOUNT, active: DECK.FX_GATE_ACTIVE },
+      // crush, echo, tape, noise: WebAudio-only, no Wasm counterpart.
+      // Do NOT alias to GATE offsets — that corrupts gate parameters.
     };
     const o = offsets[fx];
-    this.bus.setFloat(deckParam(deck, o.amount), amount);
-    this.bus.setBool(deckParam(deck, o.active), active);
+    if (o) {
+      this.bus.setFloat(deckParam(deck, o.amount), amount);
+      this.bus.setBool(deckParam(deck, o.active), active);
+    }
+    // WebAudio-only FX (crush/echo/tape/noise) are handled directly
+    // by DeckFx.setFx() and don't need param bus writes.
   }
 
   // ── Master parameters ────────────────────────────────────

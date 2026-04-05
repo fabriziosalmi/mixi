@@ -122,24 +122,31 @@ export const useBrowserStore = create<BrowserStore>()(
         const { tracks } = get();
         if (!tracks.length) return;
         set({ hydrating: true });
-        const updated = await Promise.all(
+
+        // Build a map of id → blob URL (does not touch store state)
+        const urlMap = new Map<string, string>();
+        await Promise.all(
           tracks.map(async (t) => {
-            // Skip tracks that already have a working URL (just added this session).
             if (t.audioUrl && t.audioUrl.startsWith('blob:')) {
-              return t;
+              urlMap.set(t.id, t.audioUrl);
+              return;
             }
             try {
               const blob = await getTrackBlob(t.id);
-              if (blob) {
-                return { ...t, audioUrl: URL.createObjectURL(blob) };
-              }
+              if (blob) urlMap.set(t.id, URL.createObjectURL(blob));
             } catch { /* noop */ }
-            // Blob not found — mark as stale (empty URL).
-            return { ...t, audioUrl: '' };
           }),
         );
-        // Remove tracks whose blobs are gone.
-        set({ tracks: updated.filter((t) => t.audioUrl !== ''), hydrating: false });
+
+        // Merge into current state (not the stale snapshot from before async work).
+        // Tracks added during hydration are preserved — we only update audioUrl
+        // for tracks that existed when hydration started.
+        set((s) => ({
+          tracks: s.tracks
+            .map((t) => urlMap.has(t.id) ? { ...t, audioUrl: urlMap.get(t.id)! } : t)
+            .filter((t) => t.audioUrl !== '' || !tracks.find((old) => old.id === t.id)),
+          hydrating: false,
+        }));
       },
     }),
     {

@@ -286,9 +286,8 @@ export class DeckFx {
     this.echoFilter.connect(this.echoWet);
     this.echoWet.connect(this.gateGain);
 
-    // TAPE: uses the existing dry signal — effect is applied via filter darkening
-    // (actual tape stop is done via engine.vinylBrake; this FX simulates the tonal quality)
-    // fltMerge → tapeWet (filtered version) → gate
+    // TAPE: fltMerge → tapeWet → gate (simulates tape saturation/darkening)
+    this.fltMerge.connect(this.tapeWet);
     this.tapeWet.connect(this.gateGain);
 
     // NOISE send: noiseSource → noiseFilter → noiseWet → gate (independent, not from fltMerge)
