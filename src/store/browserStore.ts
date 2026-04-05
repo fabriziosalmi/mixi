@@ -93,8 +93,13 @@ export const useBrowserStore = create<BrowserStore>()(
         });
       },
       addTrack: (t, blob) => {
-        // Persist blob to IndexedDB (fire & forget).
-        if (blob) saveTrackBlob(t.id, blob).catch(() => {});
+        // G4: Persist blob to IndexedDB. On failure, remove track from state
+        // so the user doesn't see a ghost entry that vanishes on reload.
+        if (blob) {
+          saveTrackBlob(t.id, blob).catch(() => {
+            set((s) => ({ tracks: s.tracks.filter((tr) => tr.id !== t.id) }));
+          });
+        }
         set((s) => ({ tracks: [t, ...s.tracks] }));
       },
       removeTrack: (id) =>

@@ -72,9 +72,11 @@ export class BatchAnalyzer {
         const blob = await getTrackBlob(track.id);
         if (!blob) continue;
 
-        // Decode audio
+        // G6: Reuse a single OfflineAudioContext per batch to avoid leaking
+        // native audio resources (one per track). decodeAudioData doesn't
+        // require rendering — it only needs an AudioContext for decoding.
         const arrayBuf = await blob.arrayBuffer();
-        const audioCtx = new OfflineAudioContext(2, 1, 44100);
+        const audioCtx = new OfflineAudioContext(1, 1, 44100);
         const decoded = await audioCtx.decodeAudioData(arrayBuf);
 
         // BPM detection (Rust/Wasm fast path if available)

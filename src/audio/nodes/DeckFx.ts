@@ -299,6 +299,10 @@ export class DeckFx {
 
   // ── Public API ────────────────────────────────────────────
 
+  // G1: Track active wet gain to compensate dry level.
+  // Without this, dry(1.0) + wet FX are summed, causing gain > 1.0.
+  private _activeWetSum = 0;
+
   setFx(id: FxId, amount: number, active: boolean, ctx: AudioContext): void {
     switch (id) {
       case 'flt': this.setFilter(amount, active, ctx); break;
@@ -312,6 +316,15 @@ export class DeckFx {
       case 'tape': this.setTape(amount, active, ctx); break;
       case 'noise': this.setNoise(amount, active, ctx); break;
     }
+    // G1: Compensate dry gain — reduce proportionally to total wet send
+    this._activeWetSum = (
+      this.dlyWet.gain.value + this.revWet.gain.value +
+      this.phaWet.gain.value + this.flgWet.gain.value +
+      this.crushWet.gain.value + this.echoWet.gain.value +
+      this.tapeWet.gain.value + this.noiseWet.gain.value
+    );
+    const dryLevel = 1.0 / (1.0 + this._activeWetSum);
+    smoothParam(this.dryGain.gain, dryLevel, ctx);
   }
 
   // ── FLT ────────────────────────────────────────────────────
@@ -413,7 +426,8 @@ export class DeckFx {
     smoothParam(this.flgWet.gain, active ? amount * 0.6 : 0, ctx);
     smoothParam(this.flgLfo.frequency, 0.1 + amount * 1.5, ctx);
     smoothParam(this.flgLfoGain.gain, 0.001 + amount * 0.004, ctx);
-    smoothParam(this.flgFeedback.gain, 0.4 + amount * 0.4, ctx);
+    // G2: cap feedback at 0.6 to prevent resonant peaks above 0dB
+    smoothParam(this.flgFeedback.gain, 0.3 + amount * 0.3, ctx);
   }
 
   // ── GATE (beat-locked volume chop) ──────────────────────────
@@ -519,8 +533,8 @@ export class DeckFx {
     smoothParam(this.noiseWet.gain, active ? amount * 0.35 : 0, ctx);
     // Sweep filter: 200 Hz → 12 kHz based on amount
     smoothParam(this.noiseFilter.frequency, 200 + amount * 11800, ctx);
-    // Q increases with amount for resonant peak
-    smoothParam(this.noiseFilter.Q, 1 + amount * 8, ctx);
+    // G3: cap Q at 4 (~12dB peak) to prevent violent transients
+    smoothParam(this.noiseFilter.Q, 1 + amount * 3, ctx);
   }
 
   /** Reset all FX to off/zero without destroying nodes. */

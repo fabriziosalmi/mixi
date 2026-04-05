@@ -109,8 +109,9 @@ export const useSessionStore = create<SessionStore>()(
           store.setMasterEq('high', snap.master.eq.high);
         }
 
-        // Restore crossfader
+        // Restore crossfader + curve
         store.setCrossfader(snap.crossfader);
+        if (snap.crossfaderCurve) store.setCrossfaderCurve(snap.crossfaderCurve);
 
         // Restore per-deck state
         for (const d of ['A', 'B'] as const) {
