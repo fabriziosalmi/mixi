@@ -172,6 +172,8 @@ export class GrooveboxEngine {
     src.connect(velGain);
     velGain.connect(this._bus.getVoiceInput(voice));
     src.start(this.ctx.currentTime);
+    // M2: Cleanup nodes after playback to prevent GC pile-up
+    src.onended = () => { src.disconnect(); velGain.disconnect(); };
   }
 
   /** Push pattern volume values into the bus gain nodes. */
@@ -285,6 +287,7 @@ export class GrooveboxEngine {
     src.buffer = buf;
     src.connect(this._bus.getVoiceInput(voice));
     src.start(time);
+    src.onended = () => { src.disconnect(); };
   }
 
   // ── Helpers ────────────────────────────────────────────────

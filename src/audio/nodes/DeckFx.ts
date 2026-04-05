@@ -28,6 +28,10 @@ import { smoothParam } from '../utils/paramSmooth';
 
 export type FxId = 'flt' | 'dly' | 'rev' | 'pha' | 'flg' | 'gate' | 'crush' | 'echo' | 'tape' | 'noise';
 
+// M3+M4: Shared buffers — created once, reused by all DeckFx instances.
+let _sharedNoiseBuf: AudioBuffer | null = null;
+let _sharedReverbIR: AudioBuffer | null = null;
+
 /**
  * Generate a synthetic reverb impulse response.
  * Short decay (~1s), diffuse, suitable for DJ use.
@@ -140,7 +144,9 @@ export class DeckFx {
 
     // ── REV ──────────────────────────────────────────────────
     this.revConvolver = ctx.createConvolver();
-    this.revConvolver.buffer = createReverbIR(ctx);
+    // M4: Share reverb IR between decks (211KB saved)
+    if (!_sharedReverbIR) _sharedReverbIR = createReverbIR(ctx);
+    this.revConvolver.buffer = _sharedReverbIR;
     this.revWet = ctx.createGain();
     this.revWet.gain.value = 0;
 
@@ -197,11 +203,14 @@ export class DeckFx {
     this.tapeWet.gain.value = 0;
 
     // ── NOISE (white noise sweep for buildups) ──────────────
-    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const nd = noiseBuf.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    // M3: Share noise buffer between decks (352KB saved)
+    if (!_sharedNoiseBuf) {
+      _sharedNoiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const nd = _sharedNoiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    }
     this.noiseSource = ctx.createBufferSource();
-    this.noiseSource.buffer = noiseBuf;
+    this.noiseSource.buffer = _sharedNoiseBuf;
     this.noiseSource.loop = true;
     this.noiseFilter = ctx.createBiquadFilter();
     this.noiseFilter.type = 'lowpass';

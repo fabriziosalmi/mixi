@@ -200,17 +200,8 @@ export class DeckChannel {
     mid.connect(hi);
     hi.connect(this.eqMerge);
 
-    // For DJ Peak, gain nodes are bypassed (always 1.0).
-    // EQ is applied directly via BiquadFilter.gain.
-    // Connect gain nodes to merge so they're in the graph (for consistency)
-    // but they pass through unchanged.
-    this.eqLow.connect(this.eqMerge);
-    this.eqMid.connect(this.eqMerge);
-    this.eqHigh.connect(this.eqMerge);
-    // Disconnect gain from merge — they're not in the signal path for this model
-    this.eqLow.disconnect();
-    this.eqMid.disconnect();
-    this.eqHigh.disconnect();
+    // M5: DJ Peak uses filter.gain directly — gain nodes are NOT in signal path.
+    // Don't connect/disconnect them uselessly.
   }
 
   // ── Model 3: Xone Kill (48dB/oct full-kill isolator) ──────
