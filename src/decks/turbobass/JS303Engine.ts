@@ -51,10 +51,17 @@ export class JS303Engine {
   }
 
   init(): void {
-    this.ctx = MixiEngine.getInstance().getAudioContext();
+    const engine = MixiEngine.getInstance();
+    this.ctx = engine.getAudioContext();
     this.bus = new JS303Bus(this.ctx);
     this.synth = new JS303Synth(this.ctx);
     this.synth.connect(this.bus.input);
+
+    // Connect bus output → DeckChannel input (into mixer chain)
+    const channel = engine.getChannel(this.deckId);
+    if (channel) {
+      this.bus.output.connect(channel.input);
+    }
 
     // Apply initial params
     for (const k of Object.keys(this._synthParams) as SynthParamId[]) {
