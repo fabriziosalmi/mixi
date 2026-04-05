@@ -161,7 +161,58 @@ const MixerTab: FC = () => {
           onChange={setQuantizeRes}
         />
       </SettingRow>
+
+      <Divider />
+
+      {/* ── Sessions ─────────────────────────────────────────── */}
+      <SettingRow label="Sessions" description="Save and restore mixer state">
+        <SessionManager />
+      </SettingRow>
     </>
+  );
+};
+
+// ── Session Manager ─────────────────────────────────────────
+
+import { useSessionStore } from '../../store/sessionStore';
+
+const SessionManager: FC = () => {
+  const sessions = useSessionStore((s) => s.sessions);
+  const saveSession = useSessionStore((s) => s.saveSession);
+  const loadSession = useSessionStore((s) => s.loadSession);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
+
+  return (
+    <div className="flex flex-col gap-1.5 w-full">
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            const name = prompt('Session name:');
+            if (name?.trim()) saveSession(name.trim());
+          }}
+          className="rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all active:scale-95"
+          style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee', border: '1px solid #22d3ee33' }}
+        >
+          SAVE CURRENT
+        </button>
+      </div>
+      {sessions.length > 0 && (
+        <div className="flex flex-col gap-0.5 max-h-[120px] overflow-y-auto">
+          {sessions.map((s) => (
+            <div key={s.id} className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-zinc-800/40 group" style={{ background: 'var(--srf-deep)' }}>
+              <span className="text-[9px] font-mono text-zinc-300 flex-1 truncate">{s.name}</span>
+              <span className="text-[8px] font-mono text-zinc-600">{new Date(s.savedAt).toLocaleDateString()}</span>
+              <button type="button" onClick={() => loadSession(s.id)} className="text-[8px] font-bold text-cyan-400 hover:text-cyan-300 px-1 opacity-0 group-hover:opacity-100 transition-opacity">LOAD</button>
+              <button type="button" onClick={() => deleteSession(s.id)} className="text-[8px] text-zinc-600 hover:text-red-400 px-0.5 opacity-0 group-hover:opacity-100 transition-opacity">x</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {sessions.length === 0 && (
+        <span className="text-[9px] text-zinc-600 font-mono">No saved sessions</span>
+      )}
+    </div>
   );
 };
 

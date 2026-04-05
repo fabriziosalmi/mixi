@@ -16,7 +16,9 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect, type FC, type FormEvent, type DragEvent } from 'react';
-import { useBrowserStore, type TrackEntry } from '../../store/browserStore';
+import { useBrowserStore, TAG_COLORS, type TrackEntry } from '../../store/browserStore';
+import { usePlaylistStore } from '../../store/playlistStore';
+import { BatchAnalyzer } from '../../audio/BatchAnalyzer';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
 import { detectBpm } from '../../audio/BpmDetector';
@@ -54,6 +56,18 @@ export const TrackBrowser: FC = () => {
   const addTrack = useBrowserStore((s) => s.addTrack);
   const removeTrack = useBrowserStore((s) => s.removeTrack);
   const hydrateAudioUrls = useBrowserStore((s) => s.hydrateAudioUrls);
+  const setTrackRating = useBrowserStore((s) => s.setTrackRating);
+  const setTrackColorTag = useBrowserStore((s) => s.setTrackColorTag);
+
+  // Playlists
+  const playlists = usePlaylistStore((s) => s.playlists);
+  const selectedPlaylistId = usePlaylistStore((s) => s.selectedId);
+  const selectPlaylist = usePlaylistStore((s) => s.selectPlaylist);
+  const createPlaylist = usePlaylistStore((s) => s.createPlaylist);
+  const deletePlaylist = usePlaylistStore((s) => s.deletePlaylist);
+  const addTrackToPlaylist = usePlaylistStore((s) => s.addTrack);
+  const removeTrackFromPlaylist = usePlaylistStore((s) => s.removeTrack);
+  const selectedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) ?? null;
 
   // Hydrate audio blob URLs from IndexedDB on first mount.
   useEffect(() => { hydrateAudioUrls(); }, [hydrateAudioUrls]);
@@ -62,6 +76,22 @@ export const TrackBrowser: FC = () => {
   const [importError, setImportError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
+
+  // Batch analysis
+  const analyzerRef = useRef<BatchAnalyzer | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; title: string } | null>(null);
+
+  const startBatchAnalysis = useCallback(() => {
+    if (analyzerRef.current?.isRunning) {
+      analyzerRef.current.cancel();
+      return;
+    }
+    const analyzer = new BatchAnalyzer();
+    analyzerRef.current = analyzer;
+    analyzer.onProgress = (current, total, title) => setBatchProgress({ current, total, title });
+    analyzer.onComplete = () => { setBatchProgress(null); analyzerRef.current = null; };
+    analyzer.analyzeAll();
+  }, []);
 
   // ── Import from URL (yt-dlp) ────────────────────────────
 
@@ -122,6 +152,9 @@ export const TrackBrowser: FC = () => {
           duration: decoded.duration,
           audioUrl,
           addedAt: Date.now(),
+          rating: 0,
+          colorTag: '',
+          analyzedAt: Date.now(),
         };
 
         addTrack(entry, blob);
@@ -193,6 +226,9 @@ export const TrackBrowser: FC = () => {
           duration: decoded.duration,
           audioUrl,
           addedAt: Date.now(),
+          rating: 0,
+          colorTag: '',
+          analyzedAt: Date.now(),
         }, blob);
       } catch (err) {
         log.error('TrackBrowser', `Failed to import ${file.name}`, err);
@@ -217,15 +253,20 @@ export const TrackBrowser: FC = () => {
 
   // ── Filter + sort ─────────────────────────────────────────
 
+  // Playlist filter first
+  const playlistTracks = selectedPlaylist
+    ? tracks.filter((t) => selectedPlaylist.trackIds.includes(t.id))
+    : tracks;
+
   const q = search.toLowerCase();
   let filtered = q
-    ? tracks.filter(
+    ? playlistTracks.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
           t.artist.toLowerCase().includes(q) ||
           t.key.toLowerCase().includes(q),
       )
-    : tracks;
+    : playlistTracks;
 
   filtered = [...filtered].sort((a, b) => {
     const va = a[sortCol];
@@ -315,40 +356,168 @@ export const TrackBrowser: FC = () => {
           <span className="text-[9px] text-red-400 font-mono">{importError}</span>
         )}
 
+        {/* Batch analysis */}
+        <button
+          type="button"
+          onClick={startBatchAnalysis}
+          disabled={tracks.length === 0}
+          className="rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-30 ml-auto"
+          style={{
+            background: batchProgress ? 'rgba(239,68,68,0.15)' : 'rgba(34,211,238,0.12)',
+            color: batchProgress ? '#ef4444' : '#22d3ee',
+            border: `1px solid ${batchProgress ? '#ef444433' : '#22d3ee33'}`,
+          }}
+        >
+          {batchProgress ? `STOP (${batchProgress.current}/${batchProgress.total})` : 'ANALYZE ALL'}
+        </button>
+
         {/* Track count */}
-        <span className="text-[9px] font-mono text-zinc-600 ml-auto">
+        <span className="text-[9px] font-mono text-zinc-600">
           {tracks.length} tracks
         </span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-auto" style={{ height: 'calc(100% - 36px)' }}>
+      {/* Body: Sidebar + Table */}
+      <div className="flex" style={{ height: 'calc(100% - 36px)' }}>
+
+      {/* ── Playlist Sidebar ────────────────────────────────── */}
+      <div
+        className="shrink-0 flex flex-col overflow-y-auto border-r border-zinc-800/30"
+        style={{ width: 130, background: 'var(--srf-deep)' }}
+      >
+        {/* All Tracks */}
+        <button
+          type="button"
+          onClick={() => selectPlaylist(null)}
+          className="text-left px-2 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-colors"
+          style={{
+            background: selectedPlaylistId === null ? 'rgba(168,85,247,0.12)' : 'transparent',
+            color: selectedPlaylistId === null ? 'var(--clr-master)' : 'var(--txt-secondary)',
+            borderLeft: selectedPlaylistId === null ? '2px solid var(--clr-master)' : '2px solid transparent',
+          }}
+        >
+          ALL <span className="text-zinc-600 font-normal">({tracks.length})</span>
+        </button>
+
+        {/* User playlists */}
+        {playlists.map((pl) => {
+          const isSelected = selectedPlaylistId === pl.id;
+          return (
+            <div
+              key={pl.id}
+              className="flex items-center group"
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = 'rgba(168,85,247,0.15)'; }}
+              onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.background = '';
+                const trackId = e.dataTransfer.getData('text/track-id');
+                if (trackId) addTrackToPlaylist(pl.id, trackId);
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => selectPlaylist(pl.id)}
+                className="flex-1 text-left px-2 py-1.5 text-[10px] font-mono truncate transition-colors"
+                style={{
+                  background: isSelected ? 'rgba(168,85,247,0.12)' : 'transparent',
+                  color: isSelected ? 'var(--clr-master)' : 'var(--txt-muted)',
+                  borderLeft: isSelected ? '2px solid var(--clr-master)' : '2px solid transparent',
+                }}
+              >
+                {pl.name} <span className="text-zinc-600">({pl.trackIds.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Delete "${pl.name}"?`)) deletePlaylist(pl.id);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-[9px] text-zinc-600 hover:text-red-400 px-1 transition-opacity"
+                title="Delete playlist"
+              >
+                x
+              </button>
+            </div>
+          );
+        })}
+
+        {/* Create new */}
+        <button
+          type="button"
+          onClick={() => {
+            const name = prompt('Playlist name:');
+            if (name?.trim()) createPlaylist(name.trim());
+          }}
+          className="mt-auto px-2 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-600 hover:text-zinc-300 transition-colors border-t border-zinc-800/30"
+        >
+          + NEW
+        </button>
+      </div>
+
+      {/* ── Track Table ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-auto">
         <table className="w-full text-zinc-400 text-[11px] font-mono">
           <thead className="sticky top-0 bg-zinc-900/90 backdrop-blur-sm border-b border-zinc-800/30">
             <tr>
-              <th className="w-8" />
+              <th className="w-6" />
+              <th className="w-5" title="Color tag" />
               <ColHead col="title" label="Title" />
-              <ColHead col="artist" label="Artist" w="180px" />
-              <ColHead col="bpm" label="BPM" w="60px" />
-              <ColHead col="key" label="Key" w="55px" />
-              <ColHead col="duration" label="Duration" w="70px" />
-              <th className="w-24" />
+              <ColHead col="artist" label="Artist" w="160px" />
+              <ColHead col="bpm" label="BPM" w="55px" />
+              <ColHead col="key" label="Key" w="50px" />
+              <ColHead col="duration" label="Dur" w="55px" />
+              <ColHead col="rating" label="Rating" w="70px" />
+              <th className="w-20" />
             </tr>
           </thead>
           <tbody>
             {filtered.map((t, i) => (
               <tr
                 key={t.id}
-                className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors group"
+                className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors group cursor-grab"
+                draggable
+                onDragStart={(e) => { e.dataTransfer.setData('text/track-id', t.id); e.dataTransfer.effectAllowed = 'copy'; }}
               >
-                <td className="px-2 py-1 text-zinc-600 text-center">{i + 1}</td>
-                <td className="px-2 py-1 text-zinc-200 font-medium truncate max-w-[200px]">
+                <td className="px-1 py-1 text-zinc-600 text-center text-[9px]">{i + 1}</td>
+                {/* Color tag dot */}
+                <td className="px-1 py-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const idx = TAG_COLORS.indexOf(t.colorTag as typeof TAG_COLORS[number]);
+                      setTrackColorTag(t.id, idx < TAG_COLORS.length - 1 ? TAG_COLORS[idx + 1] : '');
+                    }}
+                    className="w-3 h-3 rounded-full inline-block transition-all hover:scale-125"
+                    style={{
+                      background: t.colorTag || 'var(--srf-light)',
+                      boxShadow: t.colorTag ? `0 0 4px ${t.colorTag}66` : 'none',
+                    }}
+                    title="Click to cycle color tag"
+                  />
+                </td>
+                <td className="px-2 py-1 text-zinc-200 font-medium truncate max-w-[180px]">
                   {t.title}
                 </td>
                 <td className="px-2 py-1 truncate">{t.artist}</td>
                 <td className="px-2 py-1 text-center">{t.bpm || '—'}</td>
                 <td className="px-2 py-1 text-center">{t.key || '—'}</td>
                 <td className="px-2 py-1 text-center">{fmtDuration(t.duration)}</td>
+                {/* Star rating */}
+                <td className="px-1 py-1 text-center">
+                  <div className="flex gap-0 justify-center">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setTrackRating(t.id, t.rating === star ? 0 : star)}
+                        className="text-[10px] leading-none transition-colors hover:scale-110"
+                        style={{ color: star <= (t.rating || 0) ? '#f59e0b' : '#333' }}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </td>
                 <td className="px-2 py-1 text-right">
                   <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
@@ -375,11 +544,21 @@ export const TrackBrowser: FC = () => {
                     >
                       DECK B
                     </button>
+                    {selectedPlaylist && (
+                      <button
+                        type="button"
+                        onClick={() => removeTrackFromPlaylist(selectedPlaylist.id, t.id)}
+                        className="rounded px-1 py-0.5 text-[9px] text-zinc-600 hover:text-amber-400 transition-colors"
+                        title="Remove from playlist"
+                      >
+                        −
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => removeTrack(t.id)}
                       className="rounded px-1 py-0.5 text-[9px] text-zinc-600 hover:text-red-400 transition-colors"
-                      title="Remove"
+                      title="Remove from library"
                     >
                       ✕
                     </button>
@@ -389,7 +568,7 @@ export const TrackBrowser: FC = () => {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-zinc-600 text-[11px]">
+                <td colSpan={9} className="px-4 py-6 text-center text-zinc-600 text-[11px]">
                   {tracks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-4 py-8">
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
@@ -413,6 +592,8 @@ export const TrackBrowser: FC = () => {
           </tbody>
         </table>
       </div>
+
+      </div>{/* end flex body */}
     </div>
   );
 };

@@ -21,6 +21,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { saveTrackBlob, deleteTrackBlob, getTrackBlob } from './trackDb';
 
+/** Fixed color palette for track tags (Rekordbox-style). */
+export const TAG_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'] as const;
+
 export interface TrackEntry {
   id: string;
   title: string;
@@ -31,13 +34,19 @@ export interface TrackEntry {
   /** Runtime-only object URL — regenerated from IndexedDB on reload. */
   audioUrl: string;
   addedAt: number;
+  /** Star rating 0–5 (0 = unrated). */
+  rating: number;
+  /** Hex color tag, or empty string if none. */
+  colorTag: string;
+  /** Timestamp of last BPM/key analysis (0 = never analyzed via batch). */
+  analyzedAt: number;
 }
 
 interface BrowserState {
   open: boolean;
   tracks: TrackEntry[];
   search: string;
-  sortCol: keyof Pick<TrackEntry, 'title' | 'artist' | 'bpm' | 'key' | 'duration'>;
+  sortCol: keyof Pick<TrackEntry, 'title' | 'artist' | 'bpm' | 'key' | 'duration' | 'rating'>;
   sortAsc: boolean;
   /** True while hydrating blobs from IndexedDB after page reload. */
   hydrating: boolean;
@@ -53,6 +62,12 @@ interface BrowserActions {
   removeTrack: (id: string) => void;
   /** Re-create object URLs from IndexedDB after page reload. */
   hydrateAudioUrls: () => Promise<void>;
+  /** Set star rating (0–5) for a track. */
+  setTrackRating: (id: string, rating: number) => void;
+  /** Set color tag (hex string or '' to clear). */
+  setTrackColorTag: (id: string, color: string) => void;
+  /** Update BPM/key from batch analysis. */
+  updateTrackAnalysis: (id: string, bpm: number, key: string) => void;
 }
 
 export type BrowserStore = BrowserState & BrowserActions;
@@ -91,6 +106,18 @@ export const useBrowserStore = create<BrowserStore>()(
           deleteTrackBlob(id).catch(() => {});
           return { tracks: s.tracks.filter((t) => t.id !== id) };
         }),
+      setTrackRating: (id, rating) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => t.id === id ? { ...t, rating: Math.max(0, Math.min(5, rating)) } : t),
+        })),
+      setTrackColorTag: (id, color) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => t.id === id ? { ...t, colorTag: color } : t),
+        })),
+      updateTrackAnalysis: (id, bpm, key) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => t.id === id ? { ...t, bpm, key, analyzedAt: Date.now() } : t),
+        })),
       hydrateAudioUrls: async () => {
         const { tracks } = get();
         if (!tracks.length) return;
