@@ -1,77 +1,192 @@
-# Mixi Decks & Instruments Development Guide
+# MIXI Decks — Architecture and Development Guide
 
-Welcome to the **Mixi Engine Ecosystem**. This documentation serves as a bootstrap guide for developers looking to build Custom Decks, Samplers, Grooveboxes, or Virtual Instruments for Mixi.
+## Overview
 
-Mixi operates on an **Open Core / Modular Expansion** model. The core Audio Pipeline, DSP, and global state management are strictly safeguarded in the main repository. However, you can seamlessly plug in new visual components and distinct instrument behaviors by following this standardized Component Integration Architecture.
+MIXI uses a pluggable deck system. Each deck slot (A or B) can load either the standard Track player or a custom instrument module (Groovebox, TurboKick, TurboBass, or community-built decks).
 
-## 1. Architectural Philosophy
-In Mixi, a "Deck" or "Instrument" is simply a React component that:
-1. Receives a `deckId` (e.g., `'deckA'`, `'deckB'`).
-2. Subscribes to the unified Zustand State (`mixiStore`).
-3. Optionally hooks into the Web Audio API context (`MixiEngine`) to process or visualize distinct audio streams.
+Custom decks live in a separate open-source repository under the MIT license:
 
-You do **not** need to worry about global Master output routing, Crossfaders, or OS abstractions; the Core Engine handles all of that. 
+- **Custom decks repo**: [github.com/fabriziosalmi/mixi-decks](https://github.com/fabriziosalmi/mixi-decks) (MIT)
+- **Main MIXI repo**: [github.com/fabriziosalmi/mixi](https://github.com/fabriziosalmi/mixi) (PolyForm NC)
 
-## 2. Bootstrapping a New Instrument
+The standard Track deck and the deck loading infrastructure remain in the main repo.
 
-### Step 1: Fork and Clone the Core Repository
-To develop an instrument, fork and clone the official GitHub mirror repository (`https://github.com/fabriziosalmi/mixi`). This gives you local access to the `mixiStore` types and Web Audio instances you need to hook into.
+---
 
-```bash
-git clone https://github.com/fabriziosalmi/mixi.git
+## Deck Types
+
+| Deck | Mode Key | Location | License | Status |
+|------|----------|----------|---------|--------|
+| **Track** | `track` | `mixi/src/components/deck/` | PolyForm NC | Core (stays in main repo) |
+| **Groovebox** | `groovebox` | `mixi/src/groovebox/` | PolyForm NC | Bundled (migrating to mixi-decks) |
+| **TurboKick** | `turbokick` | `mixi/src/decks/turbokick/` | PolyForm NC | Bundled (migrating to mixi-decks) |
+| **TurboBass** | `js303` | `mixi/src/decks/turbobass/` | PolyForm NC | Bundled (migrating to mixi-decks) |
+| **Community** | user-defined | `mixi-decks/decks/` | MIT | Open for contributions |
+
+The Groovebox, TurboKick, and TurboBass decks are currently bundled in the main repo but will be migrated to `mixi-decks` once the SDK interface is finalized.
+
+---
+
+## Architecture
+
+### How Decks Are Loaded
+
+```
+App.tsx → DeckSlot
+  ├── mode === 'track'     → DeckSection (standard player)
+  └── mode === house deck  → lazy(() => import(deckComponent))
 ```
 
-### Step 2: Component Structure
-Navigate to `src/components/instruments/` (or create your own subfolder like `src/components/deck-vinyl/`). 
-Create your main entry point, keeping it decoupled from the core UI.
+All custom decks are registered in `src/decks/index.ts`:
 
-```tsx
-// src/components/instruments/MyCustomDeck.tsx
-import React, { FC } from 'react';
-import { useMixiStore } from '../../store/mixiStore';
-import type { DeckId } from '../../types';
+```typescript
+export const HOUSE_DECKS: HouseDeckEntry[] = [
+  { mode: 'groovebox', label: 'GROOVEBOX', accentColor: '#a855f7', component: lazy(() => import(...)) },
+  { mode: 'turbokick', label: 'TURBOKICK', accentColor: '#ef4444', component: lazy(() => import(...)) },
+  { mode: 'js303',     label: 'TURBOBASS', accentColor: '#00ff88', component: lazy(() => import(...)) },
+];
+```
 
-interface MyCustomDeckProps {
-  deckId: DeckId;
+The registry is consumed by:
+- `App.tsx` — renders the active deck via `DeckSlot` with `Suspense`
+- `TrackLoader.tsx` — shows the module picker when the user loads a deck slot
+
+### Component Interface
+
+Every deck component receives `HouseDeckProps`:
+
+```typescript
+export interface HouseDeckProps {
+  deckId: DeckId;              // 'A' or 'B'
+  color: string;               // Hex accent color
+  onSwitchToTrack: () => void; // Callback to eject and return to Track mode
 }
-
-export const MyCustomDeck: FC<MyCustomDeckProps> = ({ deckId }) => {
-  // Hook into the global engine state!
-  const isPlaying = useMixiStore((state) => state.decks[deckId].isPlaying);
-  const setDeckPlaying = useMixiStore((state) => state.setDeckPlaying);
-  const playbackRate = useMixiStore((state) => state.decks[deckId].playbackRate);
-
-  return (
-    <div className="w-full h-full bg-[var(--srf-mid)] p-4 rounded border border-[var(--brd-default)]">
-      <h3 style={{ color: `var(--clr-${deckId.charAt(4).toLowerCase()})` }}>
-        Deck {deckId.slice(-1).toUpperCase()} - Custom Synthesizer
-      </h3>
-      
-      <button 
-        onClick={() => setDeckPlaying(deckId, !isPlaying)}
-        className="px-4 py-2 mt-4 bg-white text-black"
-      >
-        {isPlaying ? 'PAUSE' : 'PLAY'}
-      </button>
-
-      <div>Tempo Multiplier: {playbackRate.toFixed(2)}x</div>
-    </div>
-  );
-};
 ```
 
-### Step 3: Audio Context Injection (Advanced)
-If your instrument synthesizes its own sound (e.g., a Drum Machine or Synth) rather than just pushing an `AudioBuffer` to the core store:
-- You must route your final `GainNode` output into `MixiEngine.getDeckChannel(deckId)`.
-- Never route directly to `audioContext.destination`. Let the Mixi Core EQ and Crossfader handle your output.
+### Audio Lifecycle
 
-## 3. Submitting to the Main Repository
+Every deck engine follows the same pattern:
 
-To guarantee stability, new Decks and Instruments are rigorously reviewed and merged via **Pull Requests**.
+```
+constructor(deckId)  → stores deck ID
+init()               → MixiEngine.getInstance() → AudioContext + DeckChannel
+                     → create synth + bus nodes
+                     → bus.output.connect(channel.input)
+destroy()            → stop playback, disconnect all nodes
+```
 
-1. Commit your self-contained component folder inside the `src/` tree.
-2. Ensure your component strictly relies on CSS Variables (refer to `SKINS.md`) so it respects the user's currently selected Theme.
-3. Open a PR to the `main` branch of the official GitHub mirror (`https://github.com/fabriziosalmi/mixi`). 
-4. Include a detailed description of the memory footprint of your instrument, specifically documenting any WebGL canvas usage or heavy WebAudio scheduling (e.g., `setInterval` audio loops).
+The deck connects to the mixer chain via `DeckChannel.input`. From there, the main mixer handles EQ, fader, crossfader, and master bus routing. The deck does not route to `audioContext.destination` directly.
 
-*Note: In the future, dynamic dropping of `.jsx`/`.tsx` plugins from the Desktop filesystem (`~/.mixi/plugins/`) will be supported. For now, we manually merge approved instruments into the core bundle to ensure aerospace-grade stability.*
+### Dependencies
+
+Each deck imports from the main MIXI app:
+
+| Dependency | TurboKick | TurboBass | Groovebox | Source |
+|------------|:---------:|:---------:|:---------:|--------|
+| `MixiEngine` | x | x | x | `src/audio/MixiEngine.ts` |
+| `useMixiStore` | x | x | x | `src/store/mixiStore.ts` |
+| `DeckId` type | x | x | x | `src/types/audio.ts` |
+| `HouseDeckProps` | x | x | x | `src/decks/index.ts` |
+| `Knob` component | x | x | x | `src/components/controls/Knob.tsx` |
+| `Fader` component | | | x | `src/components/controls/Fader.tsx` |
+| `SampleManager` | | | x | `src/audio/SampleManager.ts` |
+
+---
+
+## Building a Custom Deck
+
+Custom decks are developed in the [mixi-decks](https://github.com/fabriziosalmi/mixi-decks) repository.
+
+### Repo Structure
+
+```
+mixi-decks/
+  decks/
+    your-deck/
+      index.ts            ← exports the React component
+      YourDeck.tsx         ← UI (receives HouseDeckProps)
+      YourEngine.ts        ← audio scheduling + sequencer logic
+      YourBus.ts           ← WebAudio node chain
+      types.ts             ← TypeScript types and defaults
+      deck.json            ← metadata
+      README.md            ← documentation
+  shared/
+    Knob.tsx              ← shared UI components
+    Fader.tsx
+  sdk/
+    index.ts              ← HouseDeckProps, DeckId, SDK interfaces
+  LICENSE                 ← MIT
+```
+
+### deck.json Metadata
+
+Each deck must include a `deck.json` file:
+
+```json
+{
+  "id": "my-synth",
+  "name": "My Synth",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "A custom synthesizer deck",
+  "mode": "my-synth",
+  "label": "MY SYNTH",
+  "accentColor": "#ff6600",
+  "entry": "./index.ts",
+  "minMixiVersion": "0.2.9",
+  "license": "MIT",
+  "tags": ["synth", "instrument"]
+}
+```
+
+### Step-by-Step
+
+1. **Fork** [mixi-decks](https://github.com/fabriziosalmi/mixi-decks)
+2. **Create** a directory under `decks/` with your deck name
+3. **Implement** your deck component (must accept `HouseDeckProps`)
+4. **Route audio** through `DeckChannel.input` — never directly to `destination`
+5. **Use CSS variables** from `skin.css` so your deck respects all 17 MIXI skins
+6. **Add** `deck.json` with metadata
+7. **Submit** a pull request to `mixi-decks`
+
+### Rules
+
+- Route all audio output to `DeckChannel.input` via the bus pattern
+- Use CSS custom properties (not hardcoded colors) for skin compatibility
+- Do not import MIXI internals beyond the SDK interface
+- Document memory footprint, especially WebGL canvas or audio scheduling loops
+- Include at least one screenshot in your deck README
+
+---
+
+## Migration Plan
+
+The migration from bundled decks to the external repo follows these phases:
+
+1. **SDK extraction**: Create a narrow typed interface (`DeckAudioHost`, `DeckStoreHost`) that decks depend on instead of importing `MixiEngine` and `useMixiStore` directly
+2. **Refactor imports**: Update Groovebox, TurboKick, and TurboBass to use the SDK interface
+3. **Move to mixi-decks**: Copy deck directories, shared components, and SDK types
+4. **Dynamic loading**: Replace the hardcoded `HOUSE_DECKS` array with a loader that reads from a git submodule or npm package
+
+Full migration details, checklist, and risk analysis are in [DECKS_MARKETPLACE.md](DECKS_MARKETPLACE.md).
+
+---
+
+## Existing Deck Reference
+
+### Track (Standard Player)
+The default deck mode. Loads audio files, provides transport controls (play, pause, cue), waveform display, hot cues, loops, pitch/tempo adjustment. Core product, stays in the main repo permanently.
+
+### Groovebox
+4-voice drum machine (kick, snare, hi-hat, perc) with 16-step sequencer, per-voice drum synthesis, mute/solo, pan, independent bus. Synced to master BPM.
+
+### TurboKick
+Kick drum synthesizer with 16-step sequencer. Pitch/decay/click/drive synthesis, THUMP macro, dual valve distortion (tube + punch), filter + LFO, Berghain-style RUMBLE (dark reverb + sidechain pump).
+
+### TurboBass
+TB-303 acid synth (inspired by [js303](https://github.com/thedjinn/js303)). Saw/square + sub-oscillator, analog drift, pre-filter drive, resonant LP filter (Q 26) + filter LFO, accent click, exponential slide. Rat-style distortion, ducking spring reverb, chorus, auto-pan, BPM-synced delay. ACID macro, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer.
+
+---
+
+*For the AI-oriented deck creation guide, see [CREATE_DECKS_AI.md](CREATE_DECKS_AI.md).*
+*For migration planning details, see [DECKS_MARKETPLACE.md](DECKS_MARKETPLACE.md).*
