@@ -18,7 +18,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 import { saveTrackBlob, deleteTrackBlob, getTrackBlob } from './trackDb';
 
 /** Fixed color palette for track tags (Rekordbox-style). */
@@ -156,6 +157,7 @@ export const useBrowserStore = create<BrowserStore>()(
     }),
     {
       name: 'mixi-browser',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({
         tracks: s.tracks.map(({ audioUrl: _url, ...rest }) => ({
           ...rest,

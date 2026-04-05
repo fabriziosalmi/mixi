@@ -507,8 +507,9 @@ export class DeckFx {
 
   private setEcho(amount: number, active: boolean, ctx: AudioContext): void {
     smoothParam(this.echoWet.gain, active ? amount * 0.5 : 0, ctx);
-    // Higher amount = more feedback (0.5 → 0.85) + darker filter (3kHz → 800Hz)
-    smoothParam(this.echoFeedback.gain, 0.5 + amount * 0.35, ctx);
+    // M4: capped at 0.7 (was 0.85). At 0.85 with LP in the loop, low freqs
+    // decay very slowly and build up perceptibly. 0.7 is still long but stable.
+    smoothParam(this.echoFeedback.gain, 0.4 + amount * 0.3, ctx);
     smoothParam(this.echoFilter.frequency, 3000 - amount * 2200, ctx);
   }
 

@@ -12,7 +12,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 
 /** Smart playlist filter criteria. If set, trackIds is auto-populated. */
 export interface SmartFilter {
@@ -141,6 +142,7 @@ export const usePlaylistStore = create<PlaylistStore>()(
     }),
     {
       name: 'mixi-playlists',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({ playlists: s.playlists }),
     },
   ),

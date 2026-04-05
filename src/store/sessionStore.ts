@@ -14,7 +14,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 import { useMixiStore } from './mixiStore';
 import type { MasterState, EqState, DeckId, CrossfaderCurve, DeckMode } from '../types';
 
@@ -137,6 +138,6 @@ export const useSessionStore = create<SessionStore>()(
           sessions: s.sessions.map((ss) => ss.id === id ? { ...ss, name } : ss),
         })),
     }),
-    { name: 'mixi-sessions' },
+    { name: 'mixi-sessions', storage: createJSONStorage(() => safeStorage) },
   ),
 );

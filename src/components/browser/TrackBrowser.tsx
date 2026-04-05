@@ -195,18 +195,24 @@ export const TrackBrowser: FC = () => {
     if (!engine.isInitialized) return;
     const actx = engine.getAudioContext();
 
+    // M2: Process files one at a time with yield between each to keep UI responsive.
+    // detectBpm/detectKey are CPU-bound — without yielding, dropping 50 files
+    // freezes the main thread for the entire batch.
     for (const file of files) {
       try {
         const buf = await file.arrayBuffer();
         const decoded = await actx.decodeAudioData(buf.slice(0));
         const bpmPresetDrop = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
+
+        // Yield before CPU-bound analysis
+        await new Promise((r) => setTimeout(r, 0));
         const bpmResult = detectBpm(decoded, { bpmMin: bpmPresetDrop.min, bpmMax: bpmPresetDrop.max });
+        await new Promise((r) => setTimeout(r, 0));
         const keyResult = detectKey(decoded);
 
         const blob = new Blob([buf], { type: file.type });
         const audioUrl = URL.createObjectURL(blob);
 
-        // Try ID3 / metadata tags first.
         const meta = await parseTrackMeta(blob);
 
         let trackTitle = meta.title || file.name.replace(/\.[^.]+$/, '');
@@ -280,26 +286,7 @@ export const TrackBrowser: FC = () => {
       : String(vb).localeCompare(String(va));
   });
 
-  // ── Column header ─────────────────────────────────────────
-
-  const ColHead: FC<{
-    col: typeof sortCol;
-    label: string;
-    w?: string;
-  }> = ({ col, label, w }) => (
-    <th
-      className="px-2 py-1.5 text-left cursor-pointer select-none hover:text-zinc-200 transition-colors"
-      style={{ width: w }}
-      onClick={() => setSort(col)}
-    >
-      <span className="text-[10px] font-mono font-bold uppercase tracking-wider">
-        {label}
-        {sortCol === col && (
-          <span className="ml-1 text-zinc-500">{sortAsc ? '▲' : '▼'}</span>
-        )}
-      </span>
-    </th>
-  );
+  // ColHead extracted outside component (see bottom of file)
 
   // ── Render ─────────────────────────────────────────────────
 
@@ -481,12 +468,12 @@ export const TrackBrowser: FC = () => {
             <tr>
               <th className="w-6" />
               <th className="w-5" title="Color tag" />
-              <ColHead col="title" label="Title" />
-              <ColHead col="artist" label="Artist" w="160px" />
-              <ColHead col="bpm" label="BPM" w="55px" />
-              <ColHead col="key" label="Key" w="50px" />
-              <ColHead col="duration" label="Dur" w="55px" />
-              <ColHead col="rating" label="Rating" w="70px" />
+              <ColHead col="title" label="Title" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
+              <ColHead col="artist" label="Artist" w="160px" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
+              <ColHead col="bpm" label="BPM" w="55px" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
+              <ColHead col="key" label="Key" w="50px" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
+              <ColHead col="duration" label="Dur" w="55px" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
+              <ColHead col="rating" label="Rating" w="70px" sortCol={sortCol} sortAsc={sortAsc} onSort={setSort} />
               <th className="w-20" />
             </tr>
           </thead>
@@ -617,3 +604,28 @@ export const TrackBrowser: FC = () => {
     </div>
   );
 };
+
+// M1: Extracted outside TrackBrowser to prevent remount on every render.
+// React compares function identity — a FC defined inside render changes
+// identity each frame, causing full DOM teardown + rebuild.
+const ColHead: FC<{
+  col: string;
+  label: string;
+  w?: string;
+  sortCol: string;
+  sortAsc: boolean;
+  onSort: (col: any) => void;
+}> = ({ col, label, w, sortCol, sortAsc, onSort }) => (
+  <th
+    className="px-2 py-1.5 text-left cursor-pointer select-none hover:text-zinc-200 transition-colors"
+    style={{ width: w }}
+    onClick={() => onSort(col)}
+  >
+    <span className="text-[10px] font-mono font-bold uppercase tracking-wider">
+      {label}
+      {sortCol === col && (
+        <span className="ml-1 text-zinc-500">{sortAsc ? '▲' : '▼'}</span>
+      )}
+    </span>
+  </th>
+);

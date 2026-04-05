@@ -8,7 +8,8 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 import type { MidiAction, MidiMapping } from '../midi/MidiManager';
 
 interface MidiState {
@@ -58,6 +59,6 @@ export const useMidiStore = create<MidiState>()(
 
       exportMappings: () => JSON.stringify(get().mappings, null, 2),
     }),
-    { name: 'mixi-midi-bindings' }
+    { name: 'mixi-midi-bindings', storage: createJSONStorage(() => safeStorage) }
   )
 );

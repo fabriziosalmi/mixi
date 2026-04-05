@@ -21,7 +21,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { persist, subscribeWithSelector } from 'zustand/middleware';
+import { persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 import type {
   DeckId,
   DeckMode,
@@ -718,6 +719,7 @@ export const useMixiStore = create<MixiStore>()(
   }),
   {
     name: 'mixi-prefs',
+    storage: createJSONStorage(() => safeStorage),
     partialize: (s) => ({
       crossfaderCurve: s.crossfaderCurve,
       headphones: s.headphones,

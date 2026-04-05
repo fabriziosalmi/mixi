@@ -15,7 +15,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeStorage } from './safeStorage';
 import type { CustomSkin } from '../utils/skinLoader';
 
 /** Built-in skin presets. */
@@ -139,6 +140,7 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'mixi-settings',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({
         eqModel: s.eqModel,
         eqRange: s.eqRange,
