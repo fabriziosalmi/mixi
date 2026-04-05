@@ -290,8 +290,10 @@ export class MasterBus {
 
   /** Set master EQ band in dB (-12 to +12). */
   setMasterEq(band: 'low' | 'mid' | 'high', db: number, ctx: AudioContext): void {
+    // A7: Clamp to safe range — prevents extreme resonance/gain
+    const clamped = Math.max(-12, Math.min(12, db));
     const node = band === 'low' ? this.masterEqLow : band === 'mid' ? this.masterEqMid : this.masterEqHigh;
-    smoothParam(node.gain, db, ctx);
+    smoothParam(node.gain, clamped, ctx);
   }
 
   /**

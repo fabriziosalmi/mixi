@@ -21,6 +21,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeStorage } from './safeStorage';
 import { saveTrackBlob, deleteTrackBlob, getTrackBlob } from './trackDb';
+import { usePlaylistStore } from './playlistStore';
 
 /** Fixed color palette for track tags (Rekordbox-style). */
 export const TAG_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'] as const;
@@ -94,14 +95,22 @@ export const useBrowserStore = create<BrowserStore>()(
         });
       },
       addTrack: (t, blob) => {
-        // G4: Persist blob to IndexedDB. On failure, remove track from state
-        // so the user doesn't see a ghost entry that vanishes on reload.
+        // S8: Reject duplicate IDs
+        if (get().tracks.some((tr) => tr.id === t.id)) return;
+        // S3: Ensure new schema fields have defaults
+        const validated: TrackEntry = {
+          ...t,
+          rating: t.rating ?? 0,
+          colorTag: t.colorTag ?? '',
+          analyzedAt: t.analyzedAt ?? 0,
+        };
+        // G4: Persist blob to IndexedDB. On failure, remove track from state.
         if (blob) {
-          saveTrackBlob(t.id, blob).catch(() => {
-            set((s) => ({ tracks: s.tracks.filter((tr) => tr.id !== t.id) }));
+          saveTrackBlob(validated.id, blob).catch(() => {
+            set((s) => ({ tracks: s.tracks.filter((tr) => tr.id !== validated.id) }));
           });
         }
-        set((s) => ({ tracks: [t, ...s.tracks] }));
+        set((s) => ({ tracks: [validated, ...s.tracks] }));
       },
       removeTrack: (id) =>
         set((s) => {
@@ -110,6 +119,15 @@ export const useBrowserStore = create<BrowserStore>()(
             try { URL.revokeObjectURL(track.audioUrl); } catch { /* noop */ }
           }
           deleteTrackBlob(id).catch(() => {});
+          // S1: Cascade delete from all playlists
+          try {
+            const { playlists } = usePlaylistStore.getState();
+            for (const pl of playlists) {
+              if (pl.trackIds.includes(id)) {
+                usePlaylistStore.getState().removeTrack(pl.id, id);
+              }
+            }
+          } catch { /* playlistStore may not be initialized yet */ }
           return { tracks: s.tracks.filter((t) => t.id !== id) };
         }),
       setTrackRating: (id, rating) =>

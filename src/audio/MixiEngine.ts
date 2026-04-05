@@ -349,6 +349,14 @@ export class MixiEngine {
       this._gateTimer = null;
     }
 
+    // A1: Clear vinyl brake timers
+    for (const d of ['A', 'B'] as const) {
+      if (this._brakeTimers[d]) {
+        clearTimeout(this._brakeTimers[d]!);
+        this._brakeTimers[d] = null;
+      }
+    }
+
     if (this._keepAliveOsc) {
       this._keepAliveOsc.stop();
       this._keepAliveOsc.disconnect();
@@ -406,6 +414,7 @@ export class MixiEngine {
 
   async loadTrack(deck: DeckId, arrayBuffer: ArrayBuffer): Promise<void> {
     this.assertReady();
+    this._loadInProgress[deck] = true;
 
     // BUG-21: Increment load generation so stale async loads are discarded.
     const gen = ++this._loadGen[deck];
@@ -429,7 +438,7 @@ export class MixiEngine {
     }
 
     // BUG-21: If another load or eject happened while we were decoding, bail.
-    if (this._loadGen[deck] !== gen) return;
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; return; }
 
     const transport = this.transports[deck];
     const wasPlaying = !!transport.source;
@@ -446,7 +455,7 @@ export class MixiEngine {
     const analysis = await analyzeWaveform(buffer);
 
     // BUG-21: Check generation again after second await.
-    if (this._loadGen[deck] !== gen) return;
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; return; }
 
     const store = useMixiStore.getState();
     store.setDeckWaveform(deck, analysis.waveform, buffer.duration);
@@ -456,6 +465,8 @@ export class MixiEngine {
     // ── Auto-gain: normalise trim so all tracks peak at 0 dBFS ──
     this.autoGain[deck] = Math.min(2.0, Math.max(0.5, 1 / analysis.peakLevel));
     this.applyTrimGain(deck, useMixiStore.getState().decks[deck].gain);
+
+    this._loadInProgress[deck] = false;
 
     // BUG-09: If the deck was playing before load, restart playback.
     if (wasPlaying) {
@@ -467,6 +478,8 @@ export class MixiEngine {
 
   play(deck: DeckId): void {
     this.assertReady();
+    // A4: Don't play while loadTrack is still decoding
+    if (this._loadInProgress[deck]) return;
     const transport = this.transports[deck];
     if (!transport.buffer) return;
     if (transport.source) return;
@@ -577,6 +590,8 @@ export class MixiEngine {
   // ── Vinyl Brake / Backspin ─────────────────────────────────
 
   private _brakeTimers: Record<DeckId, ReturnType<typeof setTimeout> | null> = { A: null, B: null };
+  // A4: Guard against play() during async loadTrack()
+  private _loadInProgress: Record<DeckId, boolean> = { A: false, B: false };
 
   /**
    * Vinyl brake effect: ramp playbackRate down to 0 over `durationMs`,
@@ -687,6 +702,15 @@ export class MixiEngine {
   setPlaybackRate(deck: DeckId, rate: number): void {
     this.assertReady();
     const transport = this.transports[deck];
+
+    // A3: Preserve position continuity — snapshot current position before rate change.
+    // Without this, getCurrentTime() would use the new rate to calculate elapsed time
+    // since startedAt, producing an incorrect position for the period before the change.
+    if (transport.source) {
+      transport.offset = this.getCurrentTime(deck);
+      transport.startedAt = this.ctx.currentTime;
+    }
+
     transport.playbackRate = rate;
 
     if (transport.source) {
@@ -890,6 +914,8 @@ export class MixiEngine {
 
   seek(deck: DeckId, time: number): void {
     this.assertReady();
+    // A2: Cancel vinyl brake if in progress (prevents delayed pause overwriting seek)
+    this.cancelBrake(deck);
     const transport = this.transports[deck];
     if (!transport.buffer) return;
 

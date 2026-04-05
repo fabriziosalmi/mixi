@@ -224,8 +224,8 @@ function snapGate(v: number): number { return Math.round(v); }
 const FX_IDS = ['flt', 'dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const;
 
 const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
-  const [fx, setFx] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  const [active, setActive] = useState([false, false, false, false, false, false, false, false, false, false]);
+  const [fx, setFx] = useState(() => Array<number>(FX_IDS.length).fill(0));
+  const [active, setActive] = useState(() => Array<boolean>(FX_IDS.length).fill(false));
   const fxRef = useRef(fx);
   useEffect(() => { fxRef.current = fx; }, [fx]);
   const activeRef = useRef(active);

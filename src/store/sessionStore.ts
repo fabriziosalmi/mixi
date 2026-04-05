@@ -99,34 +99,43 @@ export const useSessionStore = create<SessionStore>()(
 
         const store = useMixiStore.getState();
 
+        // S2: Stop playback on both decks FIRST to avoid audio artifacts
+        for (const d of ['A', 'B'] as const) {
+          if (store.decks[d].isPlaying) {
+            store.setDeckPlaying(d, false);
+          }
+        }
+
         // Restore master
-        store.setMasterVolume(snap.master.volume);
-        store.setMasterFilter(snap.master.filter);
-        store.setMasterDistortion(snap.master.distortion);
-        store.setMasterPunch(snap.master.punch);
+        store.setMasterVolume(snap.master.volume ?? 1);
+        store.setMasterFilter(snap.master.filter ?? 0);
+        store.setMasterDistortion(snap.master.distortion ?? 0);
+        store.setMasterPunch(snap.master.punch ?? 0);
         if (snap.master.eq) {
-          store.setMasterEq('low', snap.master.eq.low);
-          store.setMasterEq('mid', snap.master.eq.mid);
-          store.setMasterEq('high', snap.master.eq.high);
+          store.setMasterEq('low', snap.master.eq.low ?? 0);
+          store.setMasterEq('mid', snap.master.eq.mid ?? 0);
+          store.setMasterEq('high', snap.master.eq.high ?? 0);
         }
 
         // Restore crossfader + curve
-        store.setCrossfader(snap.crossfader);
+        store.setCrossfader(snap.crossfader ?? 0.5);
         if (snap.crossfaderCurve) store.setCrossfaderCurve(snap.crossfaderCurve);
 
-        // Restore per-deck state
+        // S6: Restore per-deck state with defensive defaults
         for (const d of ['A', 'B'] as const) {
-          const ds = snap.decks[d];
-          store.setDeckGain(d, ds.gain);
-          store.setDeckVolume(d, ds.volume);
-          store.setDeckEq(d, 'low', ds.eq.low);
-          store.setDeckEq(d, 'mid', ds.eq.mid);
-          store.setDeckEq(d, 'high', ds.eq.high);
-          store.setDeckColorFx(d, ds.colorFx);
-          store.setDeckPlaybackRate(d, ds.playbackRate);
-          store.setKeyLock(d, ds.keyLock);
-          store.setQuantize(d, ds.quantize);
-          store.setDeckMode(d, ds.deckMode);
+          const ds = snap.decks?.[d];
+          if (!ds) continue; // Skip if deck snapshot missing
+          store.setDeckGain(d, ds.gain ?? 0);
+          store.setDeckVolume(d, ds.volume ?? 1);
+          const eq = ds.eq ?? { low: 0, mid: 0, high: 0 };
+          store.setDeckEq(d, 'low', eq.low ?? 0);
+          store.setDeckEq(d, 'mid', eq.mid ?? 0);
+          store.setDeckEq(d, 'high', eq.high ?? 0);
+          store.setDeckColorFx(d, ds.colorFx ?? 0);
+          store.setDeckPlaybackRate(d, ds.playbackRate ?? 1);
+          store.setKeyLock(d, ds.keyLock ?? false);
+          store.setQuantize(d, ds.quantize ?? false);
+          store.setDeckMode(d, ds.deckMode ?? 'track');
         }
       },
 

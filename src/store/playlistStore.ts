@@ -138,7 +138,12 @@ export const usePlaylistStore = create<PlaylistStore>()(
           ),
         })),
 
-      selectPlaylist: (id) => set({ selectedId: id }),
+      selectPlaylist: (id) =>
+        set((s) => {
+          // S7: Verify playlist exists before selecting
+          if (id !== null && !s.playlists.find((p) => p.id === id)) return { selectedId: null };
+          return { selectedId: id };
+        }),
     }),
     {
       name: 'mixi-playlists',

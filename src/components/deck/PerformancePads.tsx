@@ -298,6 +298,7 @@ const LoopRollPad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) =
       onPointerDown={handleDown}
       onPointerUp={handleUp}
       onPointerLeave={handleUp}
+      onPointerCancel={handleUp}
       className="mixi-pad relative flex items-center justify-center rounded-[6px] h-11 text-[10px] font-bold transition-all select-none touch-none"
       style={{
         background: held ? `${ROLL_COLOR}15` : 'var(--srf-mid)',
