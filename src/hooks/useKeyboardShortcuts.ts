@@ -27,6 +27,8 @@
 //   ↑/↓      = nudge Deck A ±4% (hold), Ctrl: fine ±1%
 //   Shift+↑/↓= nudge Deck B ±4% (hold), Ctrl: fine ±1%
 //   [ / ]    = shift beatgrid ±1 beat (Deck A), Shift: Deck B
+//   T        = tap tempo (sets Deck A BPM from tap rhythm)
+//   D        = align drops (seek Deck B so drops coincide)
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect } from 'react';
@@ -37,6 +39,11 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     // Track active nudge keys to avoid repeat events
     const activeNudge = new Set<string>();
+
+    // Tap tempo state
+    const tapTimes: number[] = [];
+    const TAP_TIMEOUT = 2000;  // reset if no tap for 2s
+    const TAP_COUNT = 8;       // average last 8 taps
 
     function handleKeyDown(e: KeyboardEvent) {
       // Ignore if typing in an input field.
@@ -156,6 +163,44 @@ export function useKeyboardShortcuts() {
         case 'BracketRight':
           e.preventDefault();
           store.shiftGrid(e.shiftKey ? 'B' : 'A', 1);
+          break;
+
+        // ── T: Tap Tempo ──────────────────────────────────────
+        // Tap T key rhythmically; average of last 8 taps sets BPM
+        case 'KeyT': {
+          if (e.shiftKey) break;  // reserved
+          e.preventDefault();
+          const now = performance.now();
+          // Reset if too long since last tap
+          if (tapTimes.length > 0 && now - tapTimes[tapTimes.length - 1] > TAP_TIMEOUT) {
+            tapTimes.length = 0;
+          }
+          tapTimes.push(now);
+          if (tapTimes.length > TAP_COUNT) tapTimes.shift();
+
+          if (tapTimes.length >= 2) {
+            // Average interval
+            let sum = 0;
+            for (let i = 1; i < tapTimes.length; i++) {
+              sum += tapTimes[i] - tapTimes[i - 1];
+            }
+            const avgMs = sum / (tapTimes.length - 1);
+            const tappedBpm = Math.round(60000 / avgMs * 10) / 10;
+            if (tappedBpm > 30 && tappedBpm < 300) {
+              const deck: 'A' | 'B' = 'A';  // tap always targets deck A
+              const d = store.decks[deck];
+              store.setDeckBpm(deck, tappedBpm, d.firstBeatOffset);
+            }
+          }
+          break;
+        }
+
+        // ── D: Align Drops ─────────────────────────────────────
+        case 'KeyD':
+          if (!e.shiftKey) {
+            e.preventDefault();
+            store.alignDrops();
+          }
           break;
 
         default:

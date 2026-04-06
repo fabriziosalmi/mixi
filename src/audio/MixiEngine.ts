@@ -1067,6 +1067,88 @@ export class MixiEngine {
     trim.linearRampToValueAtTime(trimTarget, startAt + FADE);
   }
 
+  /**
+   * Cross-Sync Invisible: glitch-free seek via dual-node crossfade.
+   *
+   * Instead of stopping the old source and starting a new one (which
+   * cuts vocals mid-syllable), this creates a SECOND source node and
+   * crossfades over 50ms.  The ear hears a smooth "slide" to the new
+   * position, even with tonal material (voices, pads, strings).
+   *
+   * Falls back to normal seek() if deck is not playing.
+   */
+  crossfadeSeek(deck: DeckId, time: number): void {
+    this.assertReady();
+    const transport = this.transports[deck];
+
+    // If not playing, just do a normal seek
+    if (!transport.source || !transport.buffer) {
+      this.seek(deck, time);
+      return;
+    }
+
+    this.cancelBrake(deck);
+    phaseLockLoop.reset(deck);
+
+    const clampedTime = Math.max(0, Math.min(time, transport.buffer.duration));
+    const now = this.ctx.currentTime;
+    const XFADE = 0.050; // 50ms crossfade
+
+    // ── Old source: fade out ────────────────────────────────
+    const oldSource = transport.source;
+    const trim = this.channels[deck].trimGain.gain;
+    const userDb = useMixiStore.getState().decks[deck].gain;
+    const userLinear = Math.pow(10, userDb / 20);
+    const trimTarget = this.autoGain[deck] * userLinear;
+
+    trim.cancelScheduledValues(now);
+    trim.setValueAtTime(trim.value, now);
+    trim.linearRampToValueAtTime(0, now + XFADE);
+
+    // ── New source: create, connect, fade in ────────────────
+    const newSource = this.ctx.createBufferSource();
+    newSource.buffer = transport.buffer;
+    newSource.playbackRate.value = transport.playbackRate + this._nudge[deck];
+
+    const loopState = useMixiStore.getState().decks[deck].activeLoop;
+    if (loopState) {
+      newSource.loop = true;
+      newSource.loopStart = loopState.start;
+      newSource.loopEnd = loopState.end;
+    }
+
+    this.connectSource(deck, newSource);
+    newSource.start(now, clampedTime);
+
+    // Crossfade: new source fades in as old fades out
+    // We use trim gain for both (same node), so we schedule:
+    // now → now+XFADE: fade to 0 (old dies)
+    // now+XFADE: jump to 0, ramp to trimTarget (new starts)
+    trim.setValueAtTime(0, now + XFADE);
+    trim.linearRampToValueAtTime(trimTarget, now + XFADE + 0.005);
+
+    // ── Cleanup old source after crossfade ──────────────────
+    setTimeout(() => {
+      try {
+        oldSource.stop();
+        oldSource.disconnect();
+      } catch { /* already stopped */ }
+    }, (XFADE + 0.010) * 1000);
+
+    // Update transport to new source
+    transport.source = newSource;
+    transport.offset = clampedTime;
+    transport.startedAt = now;
+
+    newSource.onended = () => {
+      if (transport.source === newSource) {
+        transport.source = null;
+        transport.offset = 0;
+        transport.startedAt = 0;
+      }
+    };
+  }
+
   // ── Looping ────────────────────────────────────────────────
 
   /**

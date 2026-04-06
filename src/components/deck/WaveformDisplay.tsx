@@ -389,6 +389,16 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       const dataIndex = startIndexRef.current + barIndex * zoomRef.current;
       const seekTime = dataIndex / POINTS_PER_SECOND;
 
+      // Shift+Click: set first downbeat (beatgrid editing)
+      if (e.shiftKey && seekTime >= 0) {
+        const store = useMixiStore.getState();
+        const d = store.decks[deckId];
+        if (d.bpm > 0) {
+          store.setDeckBpm(deckId, d.bpm, seekTime);
+        }
+        return;
+      }
+
       const engine = MixiEngine.getInstance();
       if (engine.isInitialized && seekTime >= 0) {
         engine.seek(deckId, seekTime);

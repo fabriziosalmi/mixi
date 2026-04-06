@@ -98,6 +98,9 @@ export interface MixiActions {
   // Slip Mode
   setSlipMode: (deck: DeckId, active: boolean) => void;
 
+  // Drop-to-Drop align
+  alignDrops: () => void;
+
   // Auto Loop
   setAutoLoop: (deck: DeckId, beats: number) => void;
   exitLoop: (deck: DeckId) => void;
@@ -577,6 +580,46 @@ export const useMixiStore = create<MixiStore>()(
       set((s) => ({
         decks: { ...s.decks, [deck]: { ...s.decks[deck], syncMode: mode } },
       })),
+
+    alignDrops: () => {
+      const s = get();
+      const master = s.decks.A;
+      const slave = s.decks.B;
+      const engine = MixiEngine.getInstance();
+      if (!engine.isInitialized) return;
+      if (!master.isTrackLoaded || !slave.isTrackLoaded) return;
+      if (master.bpm <= 0 || slave.bpm <= 0) return;
+      if (!master.isPlaying) return;
+
+      // Find the next drop on the master
+      const masterBeatPeriod = 60 / master.bpm;
+      const masterTime = engine.getCurrentTime('A');
+      const masterBeat = (masterTime - master.firstBeatOffset) / masterBeatPeriod;
+      const masterDropBeat = master.dropBeats.find((d) => d > masterBeat);
+      if (masterDropBeat === undefined) return;
+
+      // Find the first drop on the slave (usually the main drop)
+      const slaveDropBeat = slave.dropBeats[0];
+      if (slaveDropBeat === undefined) return;
+
+      // Beats remaining until master's drop
+      const masterBeatsToGo = masterDropBeat - masterBeat;
+
+      // Position slave so both drops hit at the same time
+      const slaveBeatPeriod = 60 / slave.bpm;
+      const slaveStartBeat = slaveDropBeat - masterBeatsToGo;
+      const slaveStartTime = slave.firstBeatOffset + slaveStartBeat * slaveBeatPeriod;
+
+      // If insufficient intro, can't align
+      if (slaveStartTime < 0) return;
+
+      // Seek slave and activate sync
+      engine.seek('B', slaveStartTime);
+      // Auto-sync after alignment
+      if (!slave.isSynced) {
+        get().syncDeck('B');
+      }
+    },
 
     beatJump: (deck, beats) => {
       const s = get();
