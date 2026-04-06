@@ -14,7 +14,7 @@
 // Each knob has an SVG icon above and smart label/value below.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useState, useEffect, useRef, type FC } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { Knob } from '../controls/Knob';
@@ -112,6 +112,7 @@ export const MasterHud: FC = () => {
         defaultValue={1}
         iconScale={0.8}
       />
+      <MiniVu />
       <HudKnob
         value={filterKnob} min={-1} max={1}
         onChange={onFilterChange}
@@ -186,6 +187,54 @@ const HudKnob: FC<HudKnobProps> = ({
   );
 };
 
+// ── Mini Master VU (2 bars, direct DOM at 30fps) ──────────
+
+const MiniVu: FC = () => {
+  const barLRef = useRef<HTMLDivElement>(null);
+  const barRRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let raf = 0;
+    function tick() {
+      const engine = MixiEngine.getInstance();
+      if (engine.isInitialized && barLRef.current && barRRef.current) {
+        const level = engine.getMasterLevel();
+        // Clamp 0-1, apply slight log curve for visual punch
+        const pct = Math.min(100, Math.max(0, level * 100));
+        const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
+        barLRef.current.style.width = `${pct}%`;
+        barLRef.current.style.backgroundColor = color;
+        barRRef.current.style.width = `${pct}%`;
+        barRRef.current.style.backgroundColor = color;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const barStyle = useMemo(() => ({
+    height: 3,
+    width: '0%',
+    borderRadius: 1,
+    transition: 'none',
+  }), []);
+
+  const trackStyle = useMemo(() => ({
+    width: 40,
+    height: 3,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  }), []);
+
+  return (
+    <div className="flex flex-col gap-[2px] justify-center" title="Master Level">
+      <div style={trackStyle}><div ref={barLRef} style={barStyle} /></div>
+      <div style={trackStyle}><div ref={barRRef} style={barStyle} /></div>
+    </div>
+  );
+};
+
 // ── Limiter Dot ────────────────────────────────────────────
 
 const LimiterDot: FC = () => {
@@ -203,9 +252,13 @@ const LimiterDot: FC = () => {
 
   useEffect(() => {
     if (!enabled) return;
-    const interval = setInterval(() => {
+    let raf = 0;
+    function tick() {
       const engine = MixiEngine.getInstance();
-      if (!engine.isInitialized || !dotRef.current) return;
+      if (!engine.isInitialized || !dotRef.current) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const reduction = engine.getLimiterReduction();
       const absGR = Math.abs(reduction);
       const el = dotRef.current;
@@ -217,7 +270,6 @@ const LimiterDot: FC = () => {
       //   emergency:  >3 dB       → red flash (peak rescue, safety)
 
       if (absGR > 3.0) {
-        // ── EMERGENCY: Red flash (Hermite peak rescue) ──
         const intensity = Math.min(1, absGR / 8);
         const pulse = 0.8 + Math.random() * 0.2;
         el.style.backgroundColor = `rgba(220,38,38,${0.6 + intensity * 0.4})`;
@@ -226,7 +278,6 @@ const LimiterDot: FC = () => {
         const clip = document.getElementById('mixi-clip-flash');
         if (clip) clip.style.opacity = String(intensity * 0.15);
       } else if (absGR > 0.3) {
-        // ── GENTLE: Amber glow (RMS compression, musical) ──
         const intensity = Math.min(1, (absGR - 0.3) / 2.7);
         el.style.backgroundColor = `rgba(245,158,11,${0.3 + intensity * 0.5})`;
         el.style.boxShadow = `0 0 ${2 + intensity * 6}px rgba(245,158,11,${0.2 + intensity * 0.3}), inset 0 0 2px rgba(255,200,100,${intensity * 0.2})`;
@@ -234,18 +285,19 @@ const LimiterDot: FC = () => {
         const clip = document.getElementById('mixi-clip-flash');
         if (clip) clip.style.opacity = '0';
       } else {
-        // ── IDLE: Dark/off ──
         el.style.backgroundColor = 'var(--clr-limiter-bg)';
         el.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.5)';
         if (glow) glow.style.opacity = '0';
         const clip = document.getElementById('mixi-clip-flash');
         if (clip) clip.style.opacity = '0';
       }
-    }, 50); // 20Hz update rate (smooth enough, low CPU)
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
     const cleanupDot = dotRef.current;
     const cleanupGlow = glowRef.current;
     return () => {
-      clearInterval(interval);
+      cancelAnimationFrame(raf);
       const clip = document.getElementById('mixi-clip-flash');
       if (clip) clip.style.opacity = '0';
       if (cleanupDot) {

@@ -95,6 +95,7 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
   const learningAction = useMidiStore((s) => s.learningAction);
 
   const [cpuAlert, setCpuAlert] = useState<AlertLevel>('nominal');
+  const [cpuPct, setCpuPct] = useState(0);
   const [latAlert, setLatAlert] = useState<AlertLevel>('nominal');
   const [midiConnected, setMidiConnected] = useState(false);
   const [wasmReady, setWasmReady] = useState(isWasmReady());
@@ -171,6 +172,7 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
       hist.push(cpu);
       if (hist.length > HISTORY_SIZE) hist.shift();
       setCpuAlert(detectCpuAlert(hist, cpu));
+      setCpuPct(Math.round(cpu * 100));
 
       const engine = MixiEngine.getInstance();
       if (engine.isInitialized) {
@@ -208,10 +210,11 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
         <span className="text-[8px] font-mono text-zinc-500">...</span>
       ) : (
         <>
-          {/* CPU: icon + dot */}
-          <div className="flex items-center gap-1" title="CPU">
+          {/* CPU: icon + dot + percentage */}
+          <div className="flex items-center gap-1" title={`CPU: ${cpuPct}%`}>
             <CpuIcon color="var(--txt-muted)" />
             <StatusDot alert={cpuAlert} />
+            <span className="text-[8px] font-mono tabular-nums" style={{ color: DOT_COLORS[cpuAlert], minWidth: 22 }}>{cpuPct}%</span>
           </div>
 
           {/* LAT: icon + dot */}

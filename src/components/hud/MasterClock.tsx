@@ -60,6 +60,8 @@ export const MasterClock: FC = () => {
   const bpmB = useMixiStore((s) => s.decks.B.bpm);
   const playingA = useMixiStore((s) => s.decks.A.isPlaying);
   const playingB = useMixiStore((s) => s.decks.B.isPlaying);
+  const syncA = useMixiStore((s) => s.decks.A.isSynced);
+  const syncB = useMixiStore((s) => s.decks.B.isSynced);
 
   const [midiActive, setMidiActive] = useState(false);
   const [midiPort, setMidiPort] = useState<string>('');
@@ -79,10 +81,15 @@ export const MasterClock: FC = () => {
   const beatFlashRef = useRef(false);
 
   // ── Derive master BPM ──────────────────────────────────────
+  // When both decks play: the sync *leader* (non-synced deck) owns the BPM.
+  // If A is synced → B is the master. If B is synced → A is the master.
+  // If both or neither are synced, default to A.
 
   let masterBpm = 0;
   if (playingA && playingB) {
-    masterBpm = bpmA || bpmB;
+    if (syncA && !syncB) masterBpm = bpmB;
+    else if (syncB && !syncA) masterBpm = bpmA;
+    else masterBpm = bpmA || bpmB;
   } else if (playingA) {
     masterBpm = bpmA;
   } else if (playingB) {

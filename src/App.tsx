@@ -46,6 +46,39 @@ import { COLOR_DECK_A, COLOR_DECK_B } from './theme';
 const CYAN = COLOR_DECK_A;
 const ORANGE = COLOR_DECK_B;
 
+// ── Global Quantize toggle (topbar center group) ────────────
+
+const QuantizeToggle: FC = () => {
+  const qA = useMixiStore((s) => s.decks.A.quantize);
+  const qB = useMixiStore((s) => s.decks.B.quantize);
+  const setQuantize = useMixiStore((s) => s.setQuantize);
+  const active = qA && qB;
+  const partial = qA || qB;
+
+  const toggle = useCallback(() => {
+    const next = !active;
+    setQuantize('A', next);
+    setQuantize('B', next);
+  }, [active, setQuantize]);
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
+      style={{
+        color: active ? '#000' : partial ? 'var(--status-warn)' : 'var(--txt-muted)',
+        backgroundColor: active ? 'var(--status-ok)' : partial ? 'rgba(245,158,11,0.15)' : 'transparent',
+        border: `1px solid ${active ? 'var(--status-ok)' : partial ? 'var(--status-warn)' : 'rgba(255,255,255,0.1)'}`,
+        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
+      }}
+      title={`Quantize: ${active ? 'ON (all decks)' : partial ? 'Partial' : 'OFF'}`}
+    >
+      Q
+    </button>
+  );
+};
+
 // ── Deck slot: renders track deck or groovebox per slot mode ─
 
 const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
@@ -81,6 +114,7 @@ const App: FC = () => {
   const browserOpen = useBrowserStore((s) => s.open);
   const [audioStarted, setAudioStarted] = useState(false);
   const [vfxActive, setVfxActive] = useState(false);
+  const [panicFlash, setPanicFlash] = useState(false);
 
   const handleStart = useCallback(async () => {
     try {
@@ -174,6 +208,10 @@ const App: FC = () => {
 
     // VFX off
     setVfxActive(false);
+
+    // Visual flash feedback
+    setPanicFlash(true);
+    setTimeout(() => setPanicFlash(false), 200);
   }, []);
 
   // Escape key binding
@@ -206,7 +244,10 @@ const App: FC = () => {
       {/* VFX visual overlay — audio-reactive canvas */}
       <VfxCanvas active={vfxActive} />
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-3">
+      <header
+        className="flex items-center justify-between border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-3 transition-colors duration-200"
+        style={panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : undefined}
+      >
         {/* ── Group: Telemetry + Master FX + Skin + AI + Intent ── */}
         <div className="mixi-hud-group">
           <SystemHud mcpConnected={mcpConnected} />
@@ -220,8 +261,10 @@ const App: FC = () => {
           <IntentDisplay engineState={aiState} />
         </div>
 
-        {/* ── Group: Master Clock + REC ────────────────────── */}
+        {/* ── Group: Quantize + Master Clock + REC ─────────── */}
         <div className="mixi-hud-group">
+          <QuantizeToggle />
+          <div className="h-4 border-r border-zinc-700/40" />
           <MasterClock />
           <div className="h-4 border-r border-zinc-700/40" />
           <RecPanel />
