@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState, type FC } from 'react'
 import { useMixiStore } from '../../store/mixiStore';
 import { MasterVuMeter } from './MasterVuMeter';
 import { MasterLedScreen } from './MasterLedScreen';
+import { PhaseMeter } from './PhaseMeter';
 import { VuMeter } from './VuMeter';
 import { Fader } from '../controls/Fader';
 import { Knob } from '../controls/Knob';
@@ -285,6 +286,59 @@ const IcColor: FC = () => (
   </div>
 );
 
+// ── HUD Screen (tabbed: Phase Meter / Vectorscope) ─────────
+
+type HudPage = 'phase' | 'scope';
+
+const HUD_TABS: { id: HudPage; label: string }[] = [
+  { id: 'phase', label: 'PHASE' },
+  { id: 'scope', label: 'SCOPE' },
+];
+
+const MixerHud: FC = () => {
+  const [page, setPage] = useState<HudPage>('phase');
+
+  return (
+    <div
+      className="mixi-led-screen w-full flex flex-col shrink-0"
+      style={{
+        borderRadius: 8,
+        background: 'var(--srf-deep)',
+        border: '1px solid var(--srf-mid)',
+        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.5)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Tab bar */}
+      <div className="flex items-center justify-center gap-0 shrink-0" style={{ height: 16, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        {HUD_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setPage(tab.id)}
+            className="flex-1 text-[7px] font-mono font-bold uppercase tracking-widest transition-all"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: page === tab.id ? '1px solid var(--clr-master)' : '1px solid transparent',
+              color: page === tab.id ? 'var(--clr-master)' : 'var(--txt-dim)',
+              padding: '2px 4px',
+              cursor: 'pointer',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Page content */}
+      <div className="flex items-center justify-center" style={{ height: 48 }}>
+        {page === 'phase' ? <PhaseMeter /> : <MasterLedScreen />}
+      </div>
+    </div>
+  );
+};
+
 // ── Main Component ──────────────────────────────────────────
 
 export const MixerSection: FC = () => {
@@ -297,19 +351,8 @@ export const MixerSection: FC = () => {
 
   return (
     <div className="flex flex-col items-center gap-2 mixi-mixer-glow px-3 py-3 h-full overflow-hidden">
-      {/* ── LED Screen (top of mixer column) ─────────────────── */}
-      <div
-        className="mixi-led-screen w-full flex flex-col items-center justify-center shrink-0"
-        style={{
-          height: 64,
-          borderRadius: 8,
-          background: 'var(--srf-deep)',
-          border: '1px solid var(--srf-mid)',
-          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.5)',
-        }}
-      >
-        <MasterLedScreen />
-      </div>
+      {/* ── HUD Screen (top of mixer column) — tabbed pages ──── */}
+      <MixerHud />
 
       {/* ── Channel strip panel — 3×9 CSS Grid ───────────────── */}
       <div
@@ -421,11 +464,8 @@ export const MixerSection: FC = () => {
         </div>
       </div>
 
-      {/* ── Headphone strip ──────────────────────────────────── */}
-      <HeadphoneStrip />
-
-      {/* ── Master EQ (3-band) ──────────────────────────────── */}
-      <MasterEqStrip />
+      {/* ── HP / Master EQ (toggled, saves vertical space) ──── */}
+      <HpMasterStrip />
 
       {/* Crossfader */}
       <div className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/50 px-3 py-2 border border-zinc-800/40">
@@ -440,12 +480,18 @@ export const MixerSection: FC = () => {
   );
 };
 
-// ── Headphone Strip: [CUE_A] [MIX] [SPLIT] [VOL] [CUE_B] ──
+// ── HP / Master EQ — unified strip with toggle ─────────────
 
-const HeadphoneStrip: FC = () => {
+type StripPage = 'hp' | 'meq';
+const COLOR_MST = '#a855f7';
+
+const HpMasterStrip: FC = () => {
+  const [page, setPage] = useState<StripPage>('hp');
+
+  // Headphone state
   const cueA = useMixiStore((s) => s.decks.A.cueActive);
   const cueB = useMixiStore((s) => s.decks.B.cueActive);
-  const toggleCueA = useMixiStore((s) => s.toggleCue);
+  const toggleCue = useMixiStore((s) => s.toggleCue);
   const hpMix = useMixiStore((s) => s.headphones.mix);
   const hpLevel = useMixiStore((s) => s.headphones.level);
   const splitMode = useMixiStore((s) => s.headphones.splitMode);
@@ -453,61 +499,81 @@ const HeadphoneStrip: FC = () => {
   const setHpLevel = useMixiStore((s) => s.setHeadphoneLevel);
   const toggleSplit = useMixiStore((s) => s.toggleSplitMode);
 
-  return (
-    <div
-      className="w-full flex items-center justify-center rounded-md bg-zinc-900/50 border border-zinc-800/40 px-2 py-1.5"
-    >
-      {/* CUE A */}
-      <div className="flex-1 flex justify-center">
-        <CueBtn active={cueA} color={CYAN} onClick={() => toggleCueA('A')} title="CUE A" />
-      </div>
-      <div className="w-px self-stretch bg-zinc-800/40" />
-      {/* MIX */}
-      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-        <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.55} label="MIX" />
-      </div>
-      <div className="w-px self-stretch bg-zinc-800/40" />
-      {/* SPLIT */}
-      <div className="flex-1 flex justify-center">
-        <SplitBtn active={splitMode} onClick={toggleSplit} />
-      </div>
-      <div className="w-px self-stretch bg-zinc-800/40" />
-      {/* VOL */}
-      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-        <Knob value={hpLevel} min={0} max={1} onChange={setHpLevel} color={COLOR_HP} scale={0.55} label="VOL" />
-      </div>
-      <div className="w-px self-stretch bg-zinc-800/40" />
-      {/* CUE B */}
-      <div className="flex-1 flex justify-center">
-        <CueBtn active={cueB} color={ORANGE} onClick={() => toggleCueA('B')} title="CUE B" />
-      </div>
-    </div>
-  );
-};
-
-// ── Master EQ Strip: [HI] [MID] [LOW] — 3-band shelving ────
-
-const COLOR_MST = '#a855f7';
-
-const MasterEqStrip: FC = () => {
+  // Master EQ state
   const eqLow = useMixiStore((s) => s.master.eq.low);
   const eqMid = useMixiStore((s) => s.master.eq.mid);
   const eqHigh = useMixiStore((s) => s.master.eq.high);
   const setMasterEq = useMixiStore((s) => s.setMasterEq);
 
+  const togglePage = useCallback(() => setPage((p) => p === 'hp' ? 'meq' : 'hp'), []);
+  const railColor = page === 'hp' ? COLOR_HP : COLOR_MST;
+
   return (
-    <div className="w-full flex items-center justify-center rounded-md bg-zinc-900/50 border border-zinc-800/40 px-2 py-1.5 gap-1">
-      <span className="text-[6px] font-mono font-bold tracking-wider shrink-0" style={{ color: 'var(--txt-muted)' }}>MST EQ</span>
-      <div className="w-px self-stretch bg-zinc-800/40" />
-      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-        <Knob value={eqHigh} min={-12} max={12} center={0} onChange={(v) => setMasterEq('high', v)} bipolar color={COLOR_MST} scale={0.5} label="HI" />
+    <div className="w-full flex items-stretch rounded-md bg-zinc-900/50 border border-zinc-800/40 overflow-hidden">
+      {/* Left rail toggle */}
+      <button
+        type="button"
+        onClick={togglePage}
+        className="shrink-0 transition-all active:brightness-125"
+        style={{
+          width: 5,
+          background: `linear-gradient(180deg, ${railColor}44, ${railColor}cc, ${railColor}44)`,
+          border: 'none',
+          cursor: 'pointer',
+          borderRadius: '6px 0 0 6px',
+        }}
+        title={page === 'hp' ? 'Switch to Master EQ' : 'Switch to Headphones'}
+      />
+
+      {/* Content */}
+      <div className="flex-1 flex items-center justify-center px-1 py-1.5 gap-0">
+        {page === 'hp' ? (
+          <>
+            <div className="flex-1 flex justify-center">
+              <CueBtn active={cueA} color={CYAN} onClick={() => toggleCue('A')} title="CUE A" />
+            </div>
+            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+              <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.5} label="MIX" />
+            </div>
+            <div className="flex-1 flex justify-center">
+              <SplitBtn active={splitMode} onClick={toggleSplit} />
+            </div>
+            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+              <Knob value={hpLevel} min={0} max={1} onChange={setHpLevel} color={COLOR_HP} scale={0.5} label="VOL" />
+            </div>
+            <div className="flex-1 flex justify-center">
+              <CueBtn active={cueB} color={ORANGE} onClick={() => toggleCue('B')} title="CUE B" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+              <Knob value={eqHigh} min={-12} max={12} center={0} onChange={(v) => setMasterEq('high', v)} bipolar color={COLOR_MST} scale={0.5} label="HI" />
+            </div>
+            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+              <Knob value={eqMid} min={-12} max={12} center={0} onChange={(v) => setMasterEq('mid', v)} bipolar color={COLOR_MST} scale={0.5} label="MID" />
+            </div>
+            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
+              <Knob value={eqLow} min={-12} max={12} center={0} onChange={(v) => setMasterEq('low', v)} bipolar color={COLOR_MST} scale={0.5} label="LO" />
+            </div>
+          </>
+        )}
       </div>
-      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-        <Knob value={eqMid} min={-12} max={12} center={0} onChange={(v) => setMasterEq('mid', v)} bipolar color={COLOR_MST} scale={0.5} label="MID" />
-      </div>
-      <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-        <Knob value={eqLow} min={-12} max={12} center={0} onChange={(v) => setMasterEq('low', v)} bipolar color={COLOR_MST} scale={0.5} label="LO" />
-      </div>
+
+      {/* Right rail toggle */}
+      <button
+        type="button"
+        onClick={togglePage}
+        className="shrink-0 transition-all active:brightness-125"
+        style={{
+          width: 5,
+          background: `linear-gradient(180deg, ${railColor}44, ${railColor}cc, ${railColor}44)`,
+          border: 'none',
+          cursor: 'pointer',
+          borderRadius: '0 6px 6px 0',
+        }}
+        title={page === 'hp' ? 'Switch to Master EQ' : 'Switch to Headphones'}
+      />
     </div>
   );
 };

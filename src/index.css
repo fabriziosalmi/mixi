@@ -475,6 +475,14 @@ body::after {
   }
 }
 
+/* ── Phase meter shake animation ─────────────────────────── */
+
+@keyframes phase-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-1px); }
+  75%      { transform: translateX(1px); }
+}
+
 /* ── DSP engine pulse (SYNC OK indicator) ────────────────── */
 
 @keyframes dsp-pulse {
