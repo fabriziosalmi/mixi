@@ -76,7 +76,7 @@ export interface MixiActions {
   setDeckWaveform: (deck: DeckId, data: WaveformPoint[] | null, duration: number) => void;
 
   // BPM & Sync
-  setDeckBpm: (deck: DeckId, bpm: number, firstBeatOffset: number) => void;
+  setDeckBpm: (deck: DeckId, bpm: number, firstBeatOffset: number, bpmConfidence?: number) => void;
   setDeckAnalysis: (deck: DeckId, dropBeats: number[], musicalKey: string) => void;
   setDeckTrackName: (deck: DeckId, name: string) => void;
   syncDeck: (deck: DeckId) => void;
@@ -149,6 +149,7 @@ function defaultDeck() {
     bpm: 0,
     originalBpm: 0,
     firstBeatOffset: 0,
+    bpmConfidence: 0,
     isSynced: false,
     syncMode: 'beat' as const,
     hotCues: new Array(HOT_CUE_COUNT).fill(null) as (number | null)[],
@@ -346,7 +347,7 @@ export const useMixiStore = create<MixiStore>()(
 
     // ── BPM ──────────────────────────────────────────────────
 
-    setDeckBpm: (deck, bpm, firstBeatOffset) =>
+    setDeckBpm: (deck, bpm, firstBeatOffset, bpmConfidence?) =>
       set((s) => ({
         decks: {
           ...s.decks,
@@ -355,6 +356,7 @@ export const useMixiStore = create<MixiStore>()(
             bpm,
             originalBpm: bpm,
             firstBeatOffset,
+            ...(bpmConfidence !== undefined && { bpmConfidence }),
             // #46: Loading a new track clears sync so it never
             // hijacks the other deck's tempo as an accidental master.
             isSynced: false,

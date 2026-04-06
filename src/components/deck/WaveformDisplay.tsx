@@ -64,12 +64,15 @@ interface WaveformDisplayProps {
   deckId: DeckId;
   width?: number;
   height?: number;
+  /** Shared ref for zoom level, read by WaveformOverview */
+  externalZoomRef?: React.MutableRefObject<number>;
 }
 
 export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   deckId,
   width: propWidth,
   height = 80,
+  externalZoomRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,9 +117,9 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Read theme tokens once per effect cycle
-    const COLOR_LOW = themeVar('wave-low', '#991133');
-    const COLOR_MID = themeVar('wave-mid', '#aa6611');
-    const COLOR_HIGH = themeVar('wave-high', '#2266aa');
+    const COLOR_LOW = themeVar('wave-low', '#cc2244');
+    const COLOR_MID = themeVar('wave-mid', '#dd8822');
+    const COLOR_HIGH = themeVar('wave-high', '#3388dd');
     const COLOR_BG = themeVar('wave-bg', '#0a0a0a');
     const COLOR_PLAYHEAD = PLAYHEAD_COLOR;
     const WAVE_DROP = themeVar('wave-drop', '#ff0044');
@@ -212,6 +215,19 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       ctx.fillRect(0, 0, width, height);
 
       if (!waveform || waveform.length === 0) {
+        // Placeholder: animated scanning bars while analyzing
+        const phase = (now * 0.002) % 1;
+        ctx.globalAlpha = 0.15;
+        for (let i = 0; i < totalBars; i++) {
+          const x = i * BAR_STEP;
+          const wave = Math.sin((i / totalBars + phase) * Math.PI * 4);
+          const h = ((0.3 + 0.2 * wave) * halfHeight) | 0;
+          ctx.fillStyle = '#555';
+          ctx.fillRect(x, halfHeight - h, BAR_WIDTH, h * 2);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = COLOR_PLAYHEAD;
+        ctx.fillRect(playheadX, 0, 1, height);
         rafRef.current = requestAnimationFrame(draw);
         return;
       }
@@ -467,9 +483,11 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     (e: React.WheelEvent<HTMLCanvasElement>) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.2 : 0.2;
-      zoomRef.current = Math.max(0.25, Math.min(4, zoomRef.current + delta));
+      const newZoom = Math.max(0.25, Math.min(4, zoomRef.current + delta));
+      zoomRef.current = newZoom;
+      if (externalZoomRef) externalZoomRef.current = newZoom;
     },
-    [],
+    [externalZoomRef],
   );
 
   const handleClick = useCallback(

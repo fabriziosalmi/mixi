@@ -472,7 +472,7 @@ export class MixiEngine {
 
     const store = useMixiStore.getState();
     store.setDeckWaveform(deck, analysis.waveform, buffer.duration);
-    store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset);
+    store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset, analysis.bpmConfidence);
     store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
 
     // ── Smart Auto-Cue: seek to first energetic downbeat ──

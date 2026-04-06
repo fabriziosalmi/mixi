@@ -29,16 +29,19 @@ import { CUE_COLORS, themeVar } from '../../theme';
 
 // ── Constants ────────────────────────────────────────────────
 
-const COLOR_PLAYED = 'rgba(255, 255, 255, 0.06)';
+const COLOR_PLAYED = 'rgba(0, 0, 0, 0.3)';
 
 interface WaveformOverviewProps {
   deckId: DeckId;
   height?: number;
+  /** Shared zoom ref from WaveformDisplay — used for dynamic viewport */
+  zoomRef?: React.RefObject<number>;
 }
 
 export const WaveformOverview: FC<WaveformOverviewProps> = ({
   deckId,
   height = 16,
+  zoomRef: externalZoomRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,7 +83,7 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    const ctx = canvas.getContext('2d', { alpha: false })!;
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })!;
     ctx.scale(dpr, dpr);
 
     // Read theme tokens once per effect
@@ -101,17 +104,12 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     for (let x = 0; x < width; x++) {
       const startIdx = Math.floor(x * pointsPerPixel);
       const endIdx = Math.min(Math.floor((x + 1) * pointsPerPixel), waveformData.length);
+      // Min-Max decimation: preserve peaks instead of averaging them away
       let low = 0, mid = 0, high = 0;
-      const count = endIdx - startIdx;
       for (let i = startIdx; i < endIdx; i++) {
-        low += waveformData[i].low;
-        mid += waveformData[i].mid;
-        high += waveformData[i].high;
-      }
-      if (count > 0) {
-        low /= count;
-        mid /= count;
-        high /= count;
+        if (waveformData[i].low > low) low = waveformData[i].low;
+        if (waveformData[i].mid > mid) mid = waveformData[i].mid;
+        if (waveformData[i].high > high) high = waveformData[i].high;
       }
 
       const hLow = low * halfH;
@@ -139,7 +137,7 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false })!;
+    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })!;
     const dpr = window.devicePixelRatio || 1;
     const engine = MixiEngine.getInstance();
     const COLOR_CURSOR = themeVar('wave-playhead', '#fff');
@@ -210,7 +208,9 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
 
           // ── Viewport rectangle (what's visible in main waveform)
           // Estimate ~4s visible window, playhead at 1/3
-          const viewSec = 4;
+          // viewSec scales with zoom: at zoom 1 = ~4s, zoom 0.25 = ~16s, zoom 4 = ~1s
+          const zoom = externalZoomRef?.current ?? 1;
+          const viewSec = 4 / zoom;
           const viewStartT = Math.max(0, currentTime - viewSec / 3);
           const viewEndT = Math.min(dur, currentTime + (viewSec * 2) / 3);
           const vx1 = Math.floor((viewStartT / dur) * width);

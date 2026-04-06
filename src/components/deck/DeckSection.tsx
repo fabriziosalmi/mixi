@@ -38,6 +38,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const isTrackLoaded = useMixiStore((s) => s.decks[deckId].isTrackLoaded);
   const isSynced = useMixiStore((s) => s.decks[deckId].isSynced);
   const bpm = useMixiStore((s) => s.decks[deckId].bpm);
+  const bpmConfidence = useMixiStore((s) => s.decks[deckId].bpmConfidence);
   const originalBpm = useMixiStore((s) => s.decks[deckId].originalBpm);
   const trackName = useMixiStore((s) => s.decks[deckId].trackName);
   const musicalKey = useMixiStore((s) => s.decks[deckId].musicalKey);
@@ -53,6 +54,8 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const deckMode = useMixiStore((s) => s.deckModes[deckId]);
   const [ejectPending, setEjectPending] = useState(false);
   const ejectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Shared zoom ref: WaveformDisplay writes, WaveformOverview reads */
+  const waveZoomRef = useRef(1);
 
   const togglePlay = useCallback(
     () => setPlaying(deckId, !isPlaying),
@@ -174,10 +177,22 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         })()}
         {/* BPM + Beat counter */}
         {bpm > 0 && (
-          <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-baseline shrink-0 mixi-pop">
-            <span className="text-sm font-mono font-black text-white" style={{ fontFeatureSettings: '"tnum"' }}>
+          <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-baseline gap-0.5 shrink-0 mixi-pop">
+            <span
+              className="text-sm font-mono font-black"
+              style={{
+                fontFeatureSettings: '"tnum"',
+                color: bpmConfidence < 0.3 ? '#f97316' : bpmConfidence < 0.6 ? '#eab308' : '#fff',
+              }}
+              title={`BPM confidence: ${(bpmConfidence * 100).toFixed(0)}%`}
+            >
               {bpm.toFixed(1)}
             </span>
+            {bpmConfidence > 0 && bpmConfidence < 0.5 && (
+              <span className="text-[8px] text-amber-400" title={`Low confidence: ${(bpmConfidence * 100).toFixed(0)}%`}>
+                ?
+              </span>
+            )}
             <BeatCounter deckId={deckId} color={color} />
           </div>
         )}
@@ -197,8 +212,8 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-60 blur-[2px]' : 'opacity-100 blur-0'}`}>
           {/* Waveform */}
           <div className="mixi-waveform-area shrink-0 flex flex-col gap-1.5">
-            <WaveformDisplay deckId={deckId} height={70} />
-            <WaveformOverview deckId={deckId} height={22} />
+            <WaveformDisplay deckId={deckId} height={70} externalZoomRef={waveZoomRef} />
+            <WaveformOverview deckId={deckId} height={22} zoomRef={waveZoomRef} />
           </div>
 
           {/* FX Strip + Jog wheel + Pitch strip */}
