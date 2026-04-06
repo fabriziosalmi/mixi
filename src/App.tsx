@@ -245,13 +245,14 @@ const App: FC = () => {
       <VfxCanvas active={vfxActive} />
       {/* Top bar */}
       <header
-        className="flex items-center justify-between border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-3 transition-colors duration-200"
-        style={panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : undefined}
+        className="grid items-center border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-4 transition-colors duration-200"
+        style={{
+          gridTemplateColumns: '1fr auto 1fr',
+          ...(panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : {}),
+        }}
       >
-        {/* ── Group: Telemetry + Master FX + Skin + AI + Intent ── */}
-        <div className="mixi-hud-group">
-          <SystemHud mcpConnected={mcpConnected} />
-          <div className="h-4 border-r border-zinc-700/40" />
+        {/* ── Left: Master FX + Skin + AI + Intent ── */}
+        <div className="mixi-hud-group justify-self-start">
           <MasterHud />
           <div className="h-4 border-r border-zinc-700/40" />
           <SkinSelector />
@@ -261,8 +262,8 @@ const App: FC = () => {
           <IntentDisplay engineState={aiState} />
         </div>
 
-        {/* ── Group: Quantize + Master Clock + REC ─────────── */}
-        <div className="mixi-hud-group">
+        {/* ── Center: Quantize + Master Clock + REC (aligned above mixer) ── */}
+        <div className="mixi-hud-group justify-self-center">
           <QuantizeToggle />
           <div className="h-4 border-r border-zinc-700/40" />
           <MasterClock />
@@ -270,8 +271,10 @@ const App: FC = () => {
           <RecPanel />
         </div>
 
-        {/* ── Group: VFX + MCP + Settings ──────────────────── */}
-        <div className="mixi-hud-group">
+        {/* ── Right: Telemetry + Browser + VFX + Panic + Settings ── */}
+        <div className="mixi-hud-group justify-self-end">
+          <SystemHud mcpConnected={mcpConnected} />
+          <div className="h-4 border-r border-zinc-700/40" />
           {/* Track Browser toggle */}
           <button
             type="button"
