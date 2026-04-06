@@ -127,7 +127,8 @@ export const PhaseMeter: FC = () => {
         slave.style.boxShadow = `0 0 6px rgba(34,197,94,0.3)`;
         master.style.borderColor = 'rgba(255,255,255,0.3)';
         master.style.boxShadow = 'none';
-        label.textContent = `${deltaMs > 0 ? '+' : ''}${deltaMs.toFixed(0)}ms`;
+        const ms = Math.round(deltaMs);
+        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
         label.style.color = 'rgba(34,197,94,0.8)';
         container.style.animation = '';
       } else if (absDelta < 30) {
@@ -137,7 +138,8 @@ export const PhaseMeter: FC = () => {
         slave.style.boxShadow = `0 0 6px rgba(245,158,11,0.3)`;
         master.style.borderColor = 'rgba(255,255,255,0.2)';
         master.style.boxShadow = 'none';
-        label.textContent = `${deltaMs > 0 ? '+' : ''}${deltaMs.toFixed(0)}ms`;
+        const ms = Math.round(deltaMs);
+        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
         label.style.color = 'rgba(245,158,11,0.8)';
         container.style.animation = absDelta > 15 ? 'phase-shake 0.1s ease-in-out infinite' : '';
       } else {
@@ -147,7 +149,8 @@ export const PhaseMeter: FC = () => {
         slave.style.boxShadow = `0 0 8px rgba(239,68,68,0.4)`;
         master.style.borderColor = 'rgba(255,255,255,0.15)';
         master.style.boxShadow = 'none';
-        label.textContent = `${deltaMs > 0 ? '+' : ''}${deltaMs.toFixed(0)}ms`;
+        const ms = Math.round(deltaMs);
+        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
         label.style.color = 'rgba(239,68,68,0.9)';
         container.style.animation = 'phase-shake 0.08s ease-in-out infinite';
       }

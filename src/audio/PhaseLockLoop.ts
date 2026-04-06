@@ -76,12 +76,12 @@ const CLOCK_CAL_INTERVAL = 200;
 // ── Onset correlation constants ─────────────────────────────
 
 /** Run onset correlation every N ticks (80 ticks = 4s ≈ every 4 beats at 128bpm). */
-const ONSET_CORR_INTERVAL = 80;
+const ONSET_CORR_INTERVAL = 200;  // every 10s (was 80=4s) — reduces CPU spike
 
 // ── Phase cancellation defense constants ────────────────────
 
 /** Check for cancellation every N ticks (40 ticks = 2s ≈ every 2 beats). */
-const CANCEL_CHECK_INTERVAL = 40;
+const CANCEL_CHECK_INTERVAL = 80;  // every 4s (was 40=2s) — reduces CPU spike
 
 /** Emergency nudge: 2ms (inaudible but breaks destructive interference). */
 const CANCEL_NUDGE_MS = 2;

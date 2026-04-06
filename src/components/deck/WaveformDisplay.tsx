@@ -32,6 +32,21 @@ const PHASE_OVERLAY_ALPHA_ALIGNED = 0.30; // white when kicks match
 const PHASE_OVERLAY_ALPHA_DIFF = 0.25;    // red/cyan intensity
 const PHASE_DIFF_THRESHOLD = 0.10;         // energy diff below = aligned
 
+// Pre-baked RGBA color LUT (26 steps, 0.00–0.25 alpha) — zero string allocation in draw loop
+const _OVERLAY_WHITE: string[] = [];
+const _OVERLAY_RED: string[] = [];
+const _OVERLAY_CYAN: string[] = [];
+for (let i = 0; i <= 25; i++) {
+  const a = (i / 100).toFixed(2);
+  _OVERLAY_WHITE.push(`rgba(255,255,255,${a})`);
+  _OVERLAY_RED.push(`rgba(255,60,60,${a})`);
+  _OVERLAY_CYAN.push(`rgba(0,240,255,${a})`);
+}
+function overlayColor(type: 0 | 1 | 2, alpha: number): string {
+  const idx = Math.min(25, (alpha * 100 + 0.5) | 0);
+  return type === 0 ? _OVERLAY_WHITE[idx] : type === 1 ? _OVERLAY_RED[idx] : _OVERLAY_CYAN[idx];
+}
+
 // ── Drawing constants ────────────────────────────────────────
 
 const PLAYHEAD_RATIO = 1 / 3;
@@ -169,6 +184,14 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       },
     );
 
+    // Cache settings outside rAF (avoid getState() per frame)
+    let cachedFpsLimit = useSettingsStore.getState().fpsLimit;
+    let cachedShowOverlay = useSettingsStore.getState().showPhaseOverlay;
+    const unsubSettings = useSettingsStore.subscribe((s) => {
+      cachedFpsLimit = s.fpsLimit;
+      cachedShowOverlay = s.showPhaseOverlay;
+    });
+
     // ── Render loop ────────────────────────────────────────
 
     let lastDraw = 0;
@@ -176,7 +199,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     function draw() {
       // FPS limiter: skip frame if too soon
       const now = performance.now();
-      const interval = useSettingsStore.getState().fpsLimit === 30 ? 33 : 0;
+      const interval = cachedFpsLimit === 30 ? 33 : 0;
       if (interval && now - lastDraw < interval) {
         rafRef.current = requestAnimationFrame(draw);
         return;
@@ -236,7 +259,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       // ── Differential Phase Overlay (Ghost Deck Anaglifo) ─
       // Items 19+20: Draw other deck's energy as red/cyan/white
       // differential overlay. White = kicks aligned, red/cyan = misaligned.
-      const showOverlay = useSettingsStore.getState().showPhaseOverlay;
+      const showOverlay = cachedShowOverlay;
       if (showOverlay && otherIsPlaying && otherWaveform && otherWaveform.length > 0 && otherBpm > 0) {
         const otherTime = engine.isInitialized
           ? engine.getCurrentTime(otherDeckId) : 0;
@@ -267,14 +290,11 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
           const h = (maxE * halfHeight * 0.6) | 0;
 
           if (Math.abs(diff) < PHASE_DIFF_THRESHOLD) {
-            // ALIGNED: constructive — white solid
-            ctx.fillStyle = `rgba(255, 255, 255, ${(PHASE_OVERLAY_ALPHA_ALIGNED * maxE).toFixed(2)})`;
+            ctx.fillStyle = overlayColor(0, PHASE_OVERLAY_ALPHA_ALIGNED * maxE);
           } else if (diff > 0) {
-            // Master (this deck) dominates: RED
-            ctx.fillStyle = `rgba(255, 60, 60, ${(PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff)).toFixed(2)})`;
+            ctx.fillStyle = overlayColor(1, PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff));
           } else {
-            // Slave (other deck) dominates: CYAN
-            ctx.fillStyle = `rgba(0, 240, 255, ${(PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff)).toFixed(2)})`;
+            ctx.fillStyle = overlayColor(2, PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff));
           }
 
           ctx.fillRect(x, halfHeight - h, BAR_WIDTH, h * 2);
@@ -440,7 +460,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     }
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(rafRef.current); unsub(); unsubOther(); };
+    return () => { cancelAnimationFrame(rafRef.current); unsub(); unsubOther(); unsubSettings(); };
   }, [deckId, width, height]);
 
   const handleWheel = useCallback(

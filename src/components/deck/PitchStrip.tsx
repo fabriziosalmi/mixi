@@ -18,7 +18,7 @@
 //   [▼ nudge slower]
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useRef, useState, useEffect, type FC } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect, type FC } from 'react';
 import { useDrag } from '../../hooks/useDrag';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
@@ -53,9 +53,8 @@ function softCurve(t: number): number {
  */
 function softCurveInverse(y: number): number {
   let t = y; // initial guess
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 3; i++) { // 3 iterations ≈ <0.001 error, sufficient for UI
     const err = softCurve(t) - y;
-    // Derivative: 6*(t-0.5)^2 + 0.5
     const x = t - 0.5;
     const deriv = 6 * x * x + 0.5;
     t -= err / deriv;
@@ -163,18 +162,36 @@ export const PitchStrip: FC<PitchStripProps> = ({
   const visualNorm = softCenter ? softCurveInverse(norm) : norm;
   const offset = (1 - visualNorm) * (TRACK_LEN - CAP_LEN);
 
-  // ── Tick marks (perpendicular to fader) ──
-  const ticks: number[] = [];
-  for (let i = 0; i <= TICK_COUNT; i++) {
-    const t = i / TICK_COUNT; // uniform in visual space
-    if (softCenter) {
-      // In soft mode: ticks are evenly spaced visually → shows
-      // that center region covers a SMALLER pitch range (higher resolution)
-      ticks.push(t);
-    } else {
-      ticks.push(t);
+  // ── Tick marks (perpendicular to fader, memoized to avoid DOM churn) ──
+  const ticksJsx = useMemo(() => {
+    const result: React.ReactNode[] = [];
+    for (let i = 0; i <= TICK_COUNT; i++) {
+      const t = i / TICK_COUNT;
+      const isCenter = i === Math.floor(TICK_COUNT / 2);
+      const tickY = (1 - t) * TRACK_LEN;
+      const tickW = isCenter ? 14 : (softCenter ? 6 + 4 * (1 - Math.abs(t - 0.5) * 2) : 8);
+      const alpha = isCenter
+        ? 0.15
+        : softCenter
+          ? 0.04 + 0.06 * (1 - Math.abs(t - 0.5) * 2)
+          : 0.04;
+      result.push(
+        <div
+          key={i}
+          className="absolute pointer-events-none"
+          style={{
+            width: tickW,
+            height: 1,
+            top: tickY,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: `rgba(255,255,255,${alpha})`,
+          }}
+        />,
+      );
     }
-  }
+    return result;
+  }, [softCenter]);
 
   const pitchPercent = ((clamped - 1) * 100).toFixed(1);
   const pitchLabel = `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
@@ -280,34 +297,8 @@ export const PitchStrip: FC<PitchStripProps> = ({
             <div className="absolute bg-zinc-700" style={{ width: '100%', height: 1, top: '50%' }} />
           </div>
 
-          {/* Tick marks — perpendicular to fader track */}
-          {ticks.map((t, i) => {
-            const isCenter = i === Math.floor(TICK_COUNT / 2);
-            // In soft mode, ticks are uniform in visual space but map to
-            // non-uniform pitch values → denser at center = higher resolution
-            // Visual position along the track
-            const tickY = (1 - t) * TRACK_LEN;
-            // Longer tick at center, shorter at extremes in soft mode
-            const tickW = isCenter ? 14 : (softCenter ? 6 + 4 * (1 - Math.abs(t - 0.5) * 2) : 8);
-            return (
-              <div
-                key={i}
-                className="absolute pointer-events-none"
-                style={{
-                  width: tickW,
-                  height: 1,
-                  top: tickY,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: isCenter
-                    ? 'rgba(255,255,255,0.15)'
-                    : softCenter
-                      ? `rgba(255,255,255,${0.04 + 0.06 * (1 - Math.abs(t - 0.5) * 2)})`
-                      : 'rgba(255,255,255,0.04)',
-                }}
-              />
-            );
-          })}
+          {/* Tick marks — perpendicular to fader track (memoized) */}
+          {ticksJsx}
 
           {/* Cap */}
           <div

@@ -238,21 +238,29 @@ const BeatCounter: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) =
 
   useEffect(() => {
     const engine = MixiEngine.getInstance();
+    let rafId = 0;
+    let lastBeat = -1;
 
-    const timer = setInterval(() => {
+    function tick() {
       const deck = useMixiStore.getState().decks[deckId];
       const el = spanRef.current;
       if (el && engine.isInitialized && deck.isPlaying && deck.bpm > 0) {
         const t = engine.getCurrentTime(deckId);
         const beatPeriod = 60 / deck.bpm;
-        const beat = (t - deck.firstBeatOffset) / beatPeriod;
-        el.textContent = `.${(((Math.floor(beat) % 4) + 4) % 4) + 1}`;
-      } else if (el) {
+        const beat = (((Math.floor((t - deck.firstBeatOffset) / beatPeriod) % 4) + 4) % 4) + 1;
+        if (beat !== lastBeat) {
+          lastBeat = beat;
+          el.textContent = `.${beat}`;
+        }
+      } else if (el && lastBeat !== -1) {
+        lastBeat = -1;
         el.textContent = '';
       }
-    }, 100);
+      rafId = requestAnimationFrame(tick);
+    }
 
-    return () => clearInterval(timer);
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [deckId]);
 
   return (
