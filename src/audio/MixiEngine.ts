@@ -714,7 +714,9 @@ export class MixiEngine {
     transport.playbackRate = rate;
 
     if (transport.source) {
-      smoothParam(transport.source.playbackRate, rate, this.ctx);
+      // Apply rate + any active nudge offset so nudge isn't lost on fader move
+      const effectiveRate = rate + this._nudge[deck];
+      smoothParam(transport.source.playbackRate, effectiveRate, this.ctx);
     }
 
     // When Key Lock is ON, update the pitch compensation ratio.
@@ -722,6 +724,54 @@ export class MixiEngine {
     if (shifter && useMixiStore.getState().decks[deck].keyLock) {
       shifter.port.postMessage({ type: 'setPitchRatio', value: 1 / rate });
     }
+  }
+
+  // ── Nudge (Temporary Pitch Bend) ─────────────────────────────
+
+  /** Active nudge amounts per deck (0 = no nudge). */
+  private _nudge: Record<DeckId, number> = { A: 0, B: 0 };
+
+  /** Standard nudge: ±4 %. Fine nudge (Shift): ±1 %. */
+  static readonly NUDGE_AMOUNT = 0.04;
+  static readonly FINE_NUDGE = 0.01;
+
+  /**
+   * Start nudging a deck. Direction: +1 = speed up, -1 = slow down.
+   * The nudge is purely temporary — it offsets the playbackRate on the
+   * AudioBufferSourceNode without touching the store state, so releasing
+   * the key restores the original rate.
+   */
+  nudgeStart(deck: DeckId, direction: 1 | -1, fine = false): void {
+    if (!this.initialized) return;
+    const amount = fine ? MixiEngine.FINE_NUDGE : MixiEngine.NUDGE_AMOUNT;
+    this._nudge[deck] = direction * amount;
+
+    const transport = this.transports[deck];
+    if (transport.source) {
+      const effectiveRate = transport.playbackRate + this._nudge[deck];
+      // Fast attack: 8 ms for instant feel
+      smoothParam(transport.source.playbackRate, effectiveRate, this.ctx, 0.008);
+    }
+  }
+
+  /**
+   * Stop nudging — restore the base playback rate.
+   * Slower release (40 ms) for smooth return to original pitch.
+   */
+  nudgeStop(deck: DeckId): void {
+    if (!this.initialized) return;
+    this._nudge[deck] = 0;
+
+    const transport = this.transports[deck];
+    if (transport.source) {
+      // Smooth release back to base rate
+      smoothParam(transport.source.playbackRate, transport.playbackRate, this.ctx, 0.040);
+    }
+  }
+
+  /** Returns the current nudge offset for a deck (used by phase meter). */
+  getNudge(deck: DeckId): number {
+    return this._nudge[deck];
   }
 
   // ── VU Metering ─────────────────────────────────────────────

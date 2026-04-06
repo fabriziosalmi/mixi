@@ -24,6 +24,8 @@
 //   Global:
 //   Space    = play/pause the deck that has focus (A by default)
 //   Escape   = eject focused deck
+//   ↑/↓      = nudge Deck A ±4% (hold), Ctrl: fine ±1%
+//   Shift+↑/↓= nudge Deck B ±4% (hold), Ctrl: fine ±1%
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect } from 'react';
@@ -32,6 +34,9 @@ import { MixiEngine } from '../audio/MixiEngine';
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
+    // Track active nudge keys to avoid repeat events
+    const activeNudge = new Set<string>();
+
     function handleKeyDown(e: KeyboardEvent) {
       // Ignore if typing in an input field.
       const tag = (e.target as HTMLElement).tagName;
@@ -39,6 +44,20 @@ export function useKeyboardShortcuts() {
 
       const store = useMixiStore.getState();
       const engine = MixiEngine.getInstance();
+
+      // ── Arrow Up/Down: Nudge (temporary pitch bend) ─────
+      // No shift: Deck A, Shift: Deck B
+      // Ctrl: fine nudge (±1%), otherwise ±4%
+      if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+        e.preventDefault();
+        const key = `${e.code}-${e.shiftKey ? 'B' : 'A'}`;
+        if (activeNudge.has(key)) return; // ignore key repeat
+        activeNudge.add(key);
+        const deck: 'A' | 'B' = e.shiftKey ? 'B' : 'A';
+        const dir: 1 | -1 = e.code === 'ArrowUp' ? 1 : -1;
+        engine.nudgeStart(deck, dir, e.ctrlKey || e.metaKey);
+        return;
+      }
 
       switch (e.code) {
         // ── Space: play/pause Deck A ───────────────────────
@@ -132,7 +151,28 @@ export function useKeyboardShortcuts() {
       }
     }
 
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+        // Release nudge for both possible decks (shift state may have changed)
+        const keyA = `${e.code}-A`;
+        const keyB = `${e.code}-B`;
+        const engine = MixiEngine.getInstance();
+        if (activeNudge.has(keyA)) {
+          activeNudge.delete(keyA);
+          engine.nudgeStop('A');
+        }
+        if (activeNudge.has(keyB)) {
+          activeNudge.delete(keyB);
+          engine.nudgeStop('B');
+        }
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, []);
 }

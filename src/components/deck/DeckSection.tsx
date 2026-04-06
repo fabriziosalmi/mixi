@@ -225,7 +225,7 @@ const BeatCounter: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) =
 const GATE_LABELS = ['1/32', '1/16', '1/8', '1/4', '1/2'];
 function snapGate(v: number): number { return Math.round(v); }
 
-const FX_IDS = ['dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const;
+const FX_IDS = ['dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo'] as const;
 
 const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const [fx, setFx] = useState(() => Array<number>(FX_IDS.length).fill(0));
@@ -235,7 +235,7 @@ const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const activeRef = useRef(active);
   useEffect(() => { activeRef.current = active; }, [active]);
 
-  const labels = ['DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH', 'TAP', 'NOI'];
+  const labels = ['DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH'];
 
   const toggleFx = useCallback((i: number) => {
     setActive((a) => {
