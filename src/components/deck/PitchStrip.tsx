@@ -32,6 +32,37 @@ const CAP_LEN = 28;
 const CAP_THK = 20;
 const TRACK_THK = 6;
 
+/** Number of tick marks on the fader track. */
+const TICK_COUNT = 17;
+
+/**
+ * Soft-center curve: S-curve that increases resolution near center.
+ * Input/output both in [0..1] normalized space.
+ * At center (0.5): slope is shallow → more pixels per % change.
+ * At extremes: slope is steep → fewer pixels per % change.
+ */
+function softCurve(t: number): number {
+  // Cubic S-curve centered at 0.5
+  const x = t - 0.5;
+  return 0.5 + 2 * x * x * x + 0.5 * x;
+}
+
+/**
+ * Inverse of softCurve: maps pitch value back to visual position.
+ * Uses Newton's method (3 iterations is enough for < 0.001 error).
+ */
+function softCurveInverse(y: number): number {
+  let t = y; // initial guess
+  for (let i = 0; i < 6; i++) {
+    const err = softCurve(t) - y;
+    // Derivative: 6*(t-0.5)^2 + 0.5
+    const x = t - 0.5;
+    const deriv = 6 * x * x + 0.5;
+    t -= err / deriv;
+  }
+  return Math.max(0, Math.min(1, t));
+}
+
 interface PitchStripProps {
   value: number;
   onChange: (v: number) => void;
@@ -48,6 +79,9 @@ export const PitchStrip: FC<PitchStripProps> = ({
   midiAction,
 }) => {
   const [wide, setWide] = useState(false);
+  const [softCenter, setSoftCenter] = useState(false);
+  const softRef = useRef(false);
+  useEffect(() => { softRef.current = softCenter; }, [softCenter]);
   const range = wide ? RANGE_16 : RANGE_8;
   const rangeMin = 1 - range;
   const rangeMax = 1 + range;
@@ -78,6 +112,7 @@ export const PitchStrip: FC<PitchStripProps> = ({
   useEffect(() => { maxRef.current = rangeMax; }, [rangeMax]);
 
   const valueAtDragStart = useRef(clamped);
+  const normAtDragStart = useRef(0.5);
 
   const onDrag = useCallback(
     (_dx: number, dy: number) => {
@@ -85,9 +120,20 @@ export const PitchStrip: FC<PitchStripProps> = ({
       const mx = maxRef.current;
       const rng = mx - mn;
       const travelPx = TRACK_LEN - CAP_LEN;
-      const delta = (-dy / travelPx) * rng;
-      const raw = valueAtDragStart.current + delta;
-      onChange(Math.min(mx, Math.max(mn, raw)));
+
+      if (softRef.current) {
+        // Soft center: drag in visual (curved) space, then convert back
+        const visualDelta = -dy / travelPx;
+        const newVisualNorm = Math.max(0, Math.min(1, normAtDragStart.current + visualDelta));
+        // Convert visual position → pitch value through the curve
+        const pitchNorm = softCurve(newVisualNorm);
+        onChange(Math.min(mx, Math.max(mn, mn + pitchNorm * rng)));
+      } else {
+        // Linear: direct mapping
+        const delta = (-dy / travelPx) * rng;
+        const raw = valueAtDragStart.current + delta;
+        onChange(Math.min(mx, Math.max(mn, raw)));
+      }
     },
     [onChange],
   );
@@ -103,6 +149,9 @@ export const PitchStrip: FC<PitchStripProps> = ({
         return;
       }
       valueAtDragStart.current = clamped;
+      // For soft mode: compute visual norm at drag start
+      const n = (clamped - minRef.current) / (maxRef.current - minRef.current);
+      normAtDragStart.current = softRef.current ? softCurveInverse(n) : n;
       onPointerDown(e);
     },
     [clamped, onPointerDown, midiAction],
@@ -110,7 +159,22 @@ export const PitchStrip: FC<PitchStripProps> = ({
 
   // ── Visual position ──
   const norm = (clamped - rangeMin) / (rangeMax - rangeMin);
-  const offset = (1 - norm) * (TRACK_LEN - CAP_LEN);
+  // In soft mode, cap position is in "curved" visual space
+  const visualNorm = softCenter ? softCurveInverse(norm) : norm;
+  const offset = (1 - visualNorm) * (TRACK_LEN - CAP_LEN);
+
+  // ── Tick marks (perpendicular to fader) ──
+  const ticks: number[] = [];
+  for (let i = 0; i <= TICK_COUNT; i++) {
+    const t = i / TICK_COUNT; // uniform in visual space
+    if (softCenter) {
+      // In soft mode: ticks are evenly spaced visually → shows
+      // that center region covers a SMALLER pitch range (higher resolution)
+      ticks.push(t);
+    } else {
+      ticks.push(t);
+    }
+  }
 
   const pitchPercent = ((clamped - 1) * 100).toFixed(1);
   const pitchLabel = `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
@@ -212,9 +276,38 @@ export const PitchStrip: FC<PitchStripProps> = ({
                 filter: 'blur(1.5px)',
               }}
             />
-            {/* Centre tick */}
+            {/* Centre tick (stronger) */}
             <div className="absolute bg-zinc-700" style={{ width: '100%', height: 1, top: '50%' }} />
           </div>
+
+          {/* Tick marks — perpendicular to fader track */}
+          {ticks.map((t, i) => {
+            const isCenter = i === Math.floor(TICK_COUNT / 2);
+            // In soft mode, ticks are uniform in visual space but map to
+            // non-uniform pitch values → denser at center = higher resolution
+            // Visual position along the track
+            const tickY = (1 - t) * TRACK_LEN;
+            // Longer tick at center, shorter at extremes in soft mode
+            const tickW = isCenter ? 14 : (softCenter ? 6 + 4 * (1 - Math.abs(t - 0.5) * 2) : 8);
+            return (
+              <div
+                key={i}
+                className="absolute pointer-events-none"
+                style={{
+                  width: tickW,
+                  height: 1,
+                  top: tickY,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: isCenter
+                    ? 'rgba(255,255,255,0.15)'
+                    : softCenter
+                      ? `rgba(255,255,255,${0.04 + 0.06 * (1 - Math.abs(t - 0.5) * 2)})`
+                      : 'rgba(255,255,255,0.04)',
+                }}
+              />
+            );
+          })}
 
           {/* Cap */}
           <div
@@ -250,6 +343,34 @@ export const PitchStrip: FC<PitchStripProps> = ({
       >
         {pitchLabel}
       </span>
+
+      {/* Soft-center toggle */}
+      <button
+        type="button"
+        onClick={() => setSoftCenter((p) => !p)}
+        className="mixi-btn rounded flex items-center justify-center shrink-0 transition-all duration-200 active:scale-95"
+        style={{
+          width: 34,
+          height: 18,
+          background: softCenter ? `${color}22` : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${softCenter ? `${color}66` : 'var(--brd-default)33'}`,
+        }}
+        title={`Pitch curve: ${softCenter ? 'Soft center (high-res)' : 'Linear'}`}
+      >
+        {/* S-curve icon */}
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
+          <path
+            d={softCenter
+              ? 'M1 9 C4 9, 6 1, 8 5 C10 9, 12 1, 15 1'  // S-curve
+              : 'M1 9 L15 1'                                 // straight line
+            }
+            stroke={softCenter ? color : 'var(--txt-secondary)'}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity={softCenter ? 1 : 0.6}
+          />
+        </svg>
+      </button>
 
       <NudgeBtn direction={-1} color={color} onClick={() => handleNudge(-1)} />
     </div>
