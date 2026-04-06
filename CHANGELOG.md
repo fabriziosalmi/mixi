@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.11] - 2026-04-06
+
+### Added
+- Traktor-style visual improvements and FX strip cleanup
+- Phase meter UI with tabbed HUD and unified HP/MEQ strip
+- Nudge (pitch bend) and trim FX strip (remove tape, noise)
+- Smart auto-cue (grid-snapped) and shift grid ±1 beat
+- HP/MEQ strip redesign with label bar and rectangular buttons
+- Continuous PLL phase correction with anti-windup
+- Groove offset, drift compensation, audio clock reconciliation
+- Onset correlation, phase cancellation defense, phrase lock
+- Variable beatgrid, beatgrid editing, drop align, cross-sync
+- Harmonic sync, predictive phase, differential phase overlay (Sprint 5)
+- Eject safety, deck identity, contrast fixes, pop animation (T1 UI polish)
+- MPC module cards, vinyl drop zone, paste URL, safe mode (T2 UI polish)
+- Soft-center pitch fader mode with resolution tick marks
+- Waveform viewer tier 1 — min-max decimation, willReadFrequently, colour palette, zoom sync, scanner bars, BPM confidence
+- Waveform viewer tier 2 — drag-to-scrub, overview viewport drag, BPM ×2/÷2 edit, energy shadow, centre line, grid flash, Shift+Click beatgrid edit
+
+### Fixed
+- 10 critical audit fixes: ctx.resume catch, PLL isFinite guard, exitLoop on eject, settings migration, hotCue validation, engine init try-catch, path traversal on save-as/recover, URL validation + timeout, MIDI disconnect cleanup
+- 9 pre-release hardening fixes: disk-rec:discard path traversal, UDP socket error handler, process crash guards, worklet port.onmessage leak (×2), BpmDetector div-by-zero, PLL null guard, drag listener cleanup, nudge state cleanup
+- Phase meter shake bug — animation on slave box only, CSS keyframe preserves translateY
+- Eliminate getState()-per-frame in 4 components (PremiumJogWheel, VfxCanvas, PhaseMeter, VuMeter)
+- DOM write guards in TrackInfo and MasterClock safety counter
+- 5 CPU/GPU bottleneck eliminations from recent commits
+
+### Changed
+- 70 new beatmatching tests across 6 modules (239 total)
+- Beatmatching architecture doc (BEATMATCHING.md)
+- MIXI brand removed from mixer, expanded HUD and phase meter
+
 ## [0.2.10] - 2026-04-05
 
 ### Added
