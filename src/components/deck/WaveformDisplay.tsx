@@ -26,6 +26,16 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { POINTS_PER_SECOND } from '../../audio/WaveformAnalyzer';
 import type { DeckId, WaveformPoint } from '../../types';
 import { CUE_COLORS, themeVar } from '../../theme';
+import {
+  BAR_STEP,
+  screenXToTime,
+  timeToScreenX as timeToScreenXPure,
+  snapToBeat as snapToBeatPure,
+  hitTest,
+  zoomAtPoint,
+  resizeLoop,
+  clampMenuPosition,
+} from './waveformInteractions';
 
 // ── Phase overlay constants ─────────────────────────────────
 const PHASE_OVERLAY_ALPHA_ALIGNED = 0.30; // white when kicks match
@@ -51,8 +61,6 @@ function overlayColor(type: 0 | 1 | 2, alpha: number): string {
 
 const PLAYHEAD_RATIO = 1 / 3;
 const BAR_WIDTH = 3;
-const BAR_GAP = 1;
-const BAR_STEP = BAR_WIDTH + BAR_GAP;
 
 const COLOR_DOWNBEAT = 'rgba(255, 255, 255, 0.3)';
 const COLOR_BEAT_NUM = 'rgba(255, 255, 255, 0.35)';
@@ -519,14 +527,10 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       const delta = e.deltaY > 0 ? -0.2 : 0.2;
       const newZoom = Math.max(0.25, Math.min(4, oldZoom + delta));
 
-      // Zoom centred on mouse position (VS Code style):
-      // Keep the data point under the cursor fixed on screen.
+      // Zoom centred on mouse position (VS Code style)
       const rect = e.currentTarget.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
-      const mouseBarIndex = mouseX / BAR_STEP;
-      const dataIndexUnderMouse = startIndexRef.current + mouseBarIndex * oldZoom;
-      // After zoom, adjust startIndex so the same data point stays under the mouse
-      startIndexRef.current = dataIndexUnderMouse - mouseBarIndex * newZoom;
+      startIndexRef.current = zoomAtPoint(mouseX, startIndexRef.current, oldZoom, newZoom);
 
       zoomRef.current = newZoom;
       if (externalZoomRef) externalZoomRef.current = newZoom;
@@ -536,21 +540,15 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
   /** Convert a mouse clientX to a seek time given a bounding rect. */
   const mouseXToTime = useCallback(
-    (clientX: number, rect: DOMRect): number => {
-      const clickX = clientX - rect.left;
-      const barIndex = clickX / BAR_STEP;
-      const dataIndex = startIndexRef.current + barIndex * zoomRef.current;
-      return Math.max(0, dataIndex / POINTS_PER_SECOND);
-    },
+    (clientX: number, rect: DOMRect): number =>
+      screenXToTime(clientX - rect.left, startIndexRef.current, zoomRef.current),
     [],
   );
 
   /** Convert a time (seconds) to screen X position. */
   const timeToScreenX = useCallback(
-    (time: number): number => {
-      const dataIdx = time * POINTS_PER_SECOND;
-      return ((dataIdx - startIndexRef.current) / zoomRef.current) * BAR_STEP;
-    },
+    (time: number): number =>
+      timeToScreenXPure(time, startIndexRef.current, zoomRef.current),
     [],
   );
 
@@ -558,13 +556,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   const snapToBeat = useCallback(
     (time: number, forceSnap: boolean): number => {
       const d = useMixiStore.getState().decks[deckId];
-      if (d.bpm <= 0 || (!d.quantize && !forceSnap)) return time;
-      const beatPeriod = 60 / d.bpm;
-      const beatNum = Math.round((time - d.firstBeatOffset) / beatPeriod);
-      const snapped = d.firstBeatOffset + beatNum * beatPeriod;
-      // Only snap if within half a beat
-      if (Math.abs(time - snapped) < beatPeriod * 0.4) return snapped;
-      return time;
+      return snapToBeatPure(time, d.bpm, d.firstBeatOffset, d.quantize, forceSnap);
     },
     [deckId],
   );
@@ -588,82 +580,68 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         return;
       }
 
-      const HIT_RADIUS = 8; // pixels
       const store = useMixiStore.getState();
       const d = store.decks[deckId];
 
-      // ── Hit-test hot cue markers ────────────────────────
-      for (let i = 0; i < d.hotCues.length; i++) {
-        const cueTime = d.hotCues[i];
-        if (cueTime === null) continue;
-        const cx = timeToScreenX(cueTime);
-        if (Math.abs(clickX - cx) < HIT_RADIUS) {
-          // Drag this hot cue
-          const onMouseMove = (me: MouseEvent) => {
-            // Visual feedback only — we don't move the cue until release
-            scrubTimeRef.current = mouseXToTime(me.clientX, rect);
-          };
-          const onMouseUp = (me: MouseEvent) => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            const finalTime = mouseXToTime(me.clientX, rect);
-            const snapped = snapToBeat(finalTime, false);
-            store.setHotCue(deckId, i, snapped);
-            scrubTimeRef.current = null;
-            dragCleanupRef.current = null;
-          };
-          window.addEventListener('mousemove', onMouseMove);
-          window.addEventListener('mouseup', onMouseUp);
-          dragCleanupRef.current = () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            scrubTimeRef.current = null;
-          };
-          return;
-        }
+      // ── Hit-test markers (cues + loop borders) ──────────
+      const hit = hitTest(clickX, d.hotCues, d.activeLoop, startIndexRef.current, zoomRef.current);
+
+      if (hit.type === 'cue') {
+        const cueIdx = hit.index;
+        const onMouseMove = (me: MouseEvent) => {
+          scrubTimeRef.current = mouseXToTime(me.clientX, rect);
+        };
+        const onMouseUp = (me: MouseEvent) => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          const finalTime = mouseXToTime(me.clientX, rect);
+          const snapped = snapToBeat(finalTime, false);
+          store.setHotCue(deckId, cueIdx, snapped);
+          scrubTimeRef.current = null;
+          dragCleanupRef.current = null;
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        dragCleanupRef.current = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          scrubTimeRef.current = null;
+        };
+        return;
       }
 
-      // ── Hit-test loop borders ───────────────────────────
-      const loop = d.activeLoop;
-      if (loop) {
-        const lxStart = timeToScreenX(loop.start);
-        const lxEnd = timeToScreenX(loop.end);
-        const hitStart = Math.abs(clickX - lxStart) < HIT_RADIUS;
-        const hitEnd = Math.abs(clickX - lxEnd) < HIT_RADIUS;
-        if (hitStart || hitEnd) {
-          const side = hitStart ? 'start' : 'end';
-          const onMouseMove = (me: MouseEvent) => {
-            const newTime = snapToBeat(mouseXToTime(me.clientX, rect), false);
-            const engine = MixiEngine.getInstance();
-            const st = useMixiStore.getState();
-            const curLoop = st.decks[deckId].activeLoop;
-            if (!curLoop || !engine.isInitialized) return;
-            let newStart = curLoop.start;
-            let newEnd = curLoop.end;
-            if (side === 'start' && newTime < curLoop.end - 0.05) newStart = newTime;
-            else if (side === 'end' && newTime > curLoop.start + 0.05) newEnd = newTime;
-            else return;
-            const bpm = st.decks[deckId].bpm;
-            const lengthInBeats = bpm > 0 ? (newEnd - newStart) / (60 / bpm) : curLoop.lengthInBeats;
-            const updatedLoop = { start: newStart, end: newEnd, lengthInBeats };
-            useMixiStore.setState((s) => ({
-              decks: { ...s.decks, [deckId]: { ...s.decks[deckId], activeLoop: updatedLoop } },
-            }));
-            engine.setLoop(deckId, newStart, newEnd);
-          };
-          const onMouseUp = () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            dragCleanupRef.current = null;
-          };
-          window.addEventListener('mousemove', onMouseMove);
-          window.addEventListener('mouseup', onMouseUp);
-          dragCleanupRef.current = () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-          };
-          return;
-        }
+      if (hit.type === 'loop-start' || hit.type === 'loop-end') {
+        const side = hit.type === 'loop-start' ? 'start' : 'end';
+        const onMouseMove = (me: MouseEvent) => {
+          const newTime = snapToBeat(mouseXToTime(me.clientX, rect), false);
+          const engine = MixiEngine.getInstance();
+          const st = useMixiStore.getState();
+          const curLoop = st.decks[deckId].activeLoop;
+          if (!curLoop || !engine.isInitialized) return;
+          const resized = resizeLoop(side, newTime, curLoop.start, curLoop.end);
+          if (!resized) return;
+          const bpm = st.decks[deckId].bpm;
+          const lengthInBeats = bpm > 0
+            ? (resized.end - resized.start) / (60 / bpm)
+            : curLoop.lengthInBeats;
+          const updatedLoop = { ...resized, lengthInBeats };
+          useMixiStore.setState((s) => ({
+            decks: { ...s.decks, [deckId]: { ...s.decks[deckId], activeLoop: updatedLoop } },
+          }));
+          engine.setLoop(deckId, resized.start, resized.end);
+        };
+        const onMouseUp = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          dragCleanupRef.current = null;
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        dragCleanupRef.current = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+        return;
       }
 
       // ── Default: drag-to-scrub ──────────────────────────
@@ -716,7 +694,9 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       e.preventDefault();
       const rect = e.currentTarget.getBoundingClientRect();
       const time = mouseXToTime(e.clientX, rect);
-      setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, time });
+      const raw = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const clamped = clampMenuPosition(raw.x, raw.y, 160, 140, rect.width, rect.height);
+      setCtxMenu({ x: clamped.x, y: clamped.y, time });
     },
     [mouseXToTime],
   );
