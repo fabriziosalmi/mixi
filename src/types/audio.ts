@@ -82,6 +82,8 @@ export interface DeckState {
   firstBeatOffset: number;
   /** True if this deck has been synced to the other deck's tempo. */
   isSynced: boolean;
+  /** Sync granularity: 'beat' (default), 'bar' (4-beat), 'phrase' (16-beat). */
+  syncMode: 'beat' | 'bar' | 'phrase';
   /** 8 hot cue slots — timestamp in seconds, or null if empty. */
   hotCues: (number | null)[];
   /** Currently active loop, or null if no loop. */

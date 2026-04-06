@@ -29,6 +29,8 @@ import type { DeckId } from '../types';
 import { MixiEngine } from './MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { crossCorrelatePhase, extractChunk } from './onsetCorrelation';
+import { detectPhaseCancellation, extractLowFreq } from './phaseCancellation';
 
 // ── PI constants (tuned for DJ use) ─────────────────────────
 
@@ -69,6 +71,19 @@ const DRIFT_SLOPE_THRESHOLD = 0.01;
 /** How often to recalibrate clocks (every 200 ticks = 10s). */
 const CLOCK_CAL_INTERVAL = 200;
 
+// ── Onset correlation constants ─────────────────────────────
+
+/** Run onset correlation every N ticks (80 ticks = 4s ≈ every 4 beats at 128bpm). */
+const ONSET_CORR_INTERVAL = 80;
+
+// ── Phase cancellation defense constants ────────────────────
+
+/** Check for cancellation every N ticks (40 ticks = 2s ≈ every 2 beats). */
+const CANCEL_CHECK_INTERVAL = 40;
+
+/** Emergency nudge: 2ms (inaudible but breaks destructive interference). */
+const CANCEL_NUDGE_MS = 2;
+
 // ── Controller state per deck ───────────────────────────────
 
 interface PllState {
@@ -76,10 +91,21 @@ interface PllState {
   lastPhaseDelta: number;
   lastCorrection: number;
   frozen: boolean;
+  /** Onset-correlation-derived phase offset (more accurate than grid). */
+  onsetOffset: number;
+  onsetTickCounter: number;
+  /** Phase cancellation emergency nudge (fraction of beat). */
+  cancelNudge: number;
+  cancelTickCounter: number;
+  cancelAttempt: number;  // 0 = none, 1 = +2ms tried, 2 = -2ms tried
 }
 
 function createPllState(): PllState {
-  return { integral: 0, lastPhaseDelta: 0, lastCorrection: 0, frozen: false };
+  return {
+    integral: 0, lastPhaseDelta: 0, lastCorrection: 0, frozen: false,
+    onsetOffset: 0, onsetTickCounter: 0,
+    cancelNudge: 0, cancelTickCounter: 0, cancelAttempt: 0,
+  };
 }
 
 // ── Drift tracker ───────────────────────────────────────────
@@ -222,6 +248,12 @@ class PhaseLockLoop {
       // Drift compensation (sample + correct)
       this.tickDrift(deck, phaseDelta, master.bpm);
 
+      // Onset flux cross-correlation (every ~4s, refines grid-based phase)
+      this.tickOnsetCorrelation(deck, masterDeck, engine, master.bpm);
+
+      // Phase cancellation defense (every ~2s)
+      this.tickCancellationDefense(deck, masterDeck, engine, master.bpm);
+
       const correction = this.computePI(deck, phaseDelta);
       this.applyCorrection(deck, correction, engine);
     }
@@ -272,16 +304,17 @@ class PhaseLockLoop {
 
     s.lastPhaseDelta = phaseDelta;
 
-    // Groove offset: shift the target from 0 to the user's preferred offset
+    // Groove offset + phase cancellation nudge = combined target
     const grooveMs = useSettingsStore.getState().grooveOffsetMs;
     const store = useMixiStore.getState();
     const masterDeck: DeckId = deck === 'A' ? 'B' : 'A';
     const masterBpm = store.decks[masterDeck].bpm;
     const beatPeriodMs = masterBpm > 0 ? (60 / masterBpm) * 1000 : 500;
     const grooveTarget = grooveMs / beatPeriodMs;  // convert ms to beat fraction
+    const target = grooveTarget + s.cancelNudge;   // add emergency nudge if active
 
-    // Error = actual phase delta - desired groove offset
-    const error = phaseDelta - grooveTarget;
+    // Error = actual phase delta - desired target
+    const error = phaseDelta - target;
 
     // Deadzone: ignore tiny errors (inaudible)
     if (Math.abs(error) < DEADZONE) {
@@ -355,6 +388,110 @@ class PhaseLockLoop {
       d.rateCorrection += rateCorrectionDelta;
       // Clamp total drift correction to ±0.05% (safety)
       d.rateCorrection = Math.max(-0.0005, Math.min(0.0005, d.rateCorrection));
+    }
+  }
+
+  // ── Onset flux cross-correlation ───────────────────────────
+
+  private tickOnsetCorrelation(
+    slaveDeck: DeckId,
+    masterDeck: DeckId,
+    engine: MixiEngine,
+    masterBpm: number,
+  ): void {
+    const s = this.states[slaveDeck];
+    s.onsetTickCounter++;
+    if (s.onsetTickCounter % ONSET_CORR_INTERVAL !== 0) return;
+
+    const masterBuf = engine.getBuffer(masterDeck);
+    const slaveBuf = engine.getBuffer(slaveDeck);
+    if (!masterBuf || !slaveBuf) return;
+
+    const beatPeriod = 60 / masterBpm;
+    const chunkDuration = beatPeriod * 2;  // 2 beats
+
+    const masterTime = engine.getCurrentTime(masterDeck);
+    const slaveTime = engine.getCurrentTime(slaveDeck);
+
+    const masterChunk = extractChunk(masterBuf, masterTime - chunkDuration, chunkDuration);
+    const slaveChunk = extractChunk(slaveBuf, slaveTime - chunkDuration, chunkDuration);
+
+    if (masterChunk.length === 0 || slaveChunk.length === 0) return;
+
+    const offset = crossCorrelatePhase(masterChunk, slaveChunk, masterBuf.sampleRate);
+    if (offset === null) return;
+
+    // Only use if offset is meaningful (> 5ms)
+    if (Math.abs(offset * 1000) > 5) {
+      // Store as beat fraction for the PI controller to use
+      s.onsetOffset = offset / beatPeriod;
+    } else {
+      s.onsetOffset = 0;
+    }
+  }
+
+  // ── Phase cancellation defense ────────────────────────────
+
+  private tickCancellationDefense(
+    slaveDeck: DeckId,
+    masterDeck: DeckId,
+    engine: MixiEngine,
+    masterBpm: number,
+  ): void {
+    const s = this.states[slaveDeck];
+    s.cancelTickCounter++;
+    if (s.cancelTickCounter % CANCEL_CHECK_INTERVAL !== 0) return;
+
+    // Only check when both EQ lows are open
+    const store = useMixiStore.getState();
+    const masterEq = store.decks[masterDeck].eq.low;
+    const slaveEq = store.decks[slaveDeck].eq.low;
+    if (masterEq < -10 || slaveEq < -10) {
+      // Bass is killed on at least one deck — no cancellation possible
+      s.cancelNudge = 0;
+      s.cancelAttempt = 0;
+      return;
+    }
+
+    const masterBuf = engine.getBuffer(masterDeck);
+    const slaveBuf = engine.getBuffer(slaveDeck);
+    if (!masterBuf || !slaveBuf) return;
+
+    const beatPeriod = 60 / masterBpm;
+    const chunkDuration = beatPeriod * 2;
+
+    const masterTime = engine.getCurrentTime(masterDeck);
+    const slaveTime = engine.getCurrentTime(slaveDeck);
+
+    const masterChunk = extractChunk(masterBuf, masterTime - chunkDuration, chunkDuration);
+    const slaveChunk = extractChunk(slaveBuf, slaveTime - chunkDuration, chunkDuration);
+
+    if (masterChunk.length === 0 || slaveChunk.length === 0) return;
+
+    const sr = masterBuf.sampleRate;
+    const masterLow = extractLowFreq(masterChunk, sr);
+    const slaveLow = extractLowFreq(slaveChunk, sr);
+
+    const cancelling = detectPhaseCancellation(masterLow, slaveLow);
+
+    if (cancelling) {
+      if (s.cancelAttempt === 0) {
+        // First attempt: +2ms nudge
+        s.cancelNudge = CANCEL_NUDGE_MS / (beatPeriod * 1000);
+        s.cancelAttempt = 1;
+      } else if (s.cancelAttempt === 1) {
+        // +2ms didn't work, try -2ms
+        s.cancelNudge = -CANCEL_NUDGE_MS / (beatPeriod * 1000);
+        s.cancelAttempt = 2;
+      }
+      // If attempt 2 also fails, keep the -2ms nudge (usually resolves)
+    } else {
+      // No cancellation — clear the emergency nudge
+      if (s.cancelAttempt > 0) {
+        // Keep the successful nudge, but stop escalating
+      } else {
+        s.cancelNudge = 0;
+      }
     }
   }
 

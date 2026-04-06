@@ -316,6 +316,12 @@ export class MixiEngine {
     return this.initialized;
   }
 
+  /** Get the decoded AudioBuffer for a deck (for analysis). */
+  getBuffer(deck: DeckId): AudioBuffer | null {
+    if (!this.initialized) return null;
+    return this.transports[deck].buffer;
+  }
+
   /** Raw AudioContext.currentTime (for clock reconciliation). */
   getAudioContextTime(): number {
     return this.initialized ? this.ctx.currentTime : 0;

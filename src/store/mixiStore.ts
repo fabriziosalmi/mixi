@@ -91,6 +91,8 @@ export interface MixiActions {
   beatJump: (deck: DeckId, beats: number) => void;
   // Shift Beatgrid
   shiftGrid: (deck: DeckId, beats: number) => void;
+  // Sync mode (beat / bar / phrase)
+  setSyncMode: (deck: DeckId, mode: 'beat' | 'bar' | 'phrase') => void;
   // Vinyl Brake
   vinylBrake: (deck: DeckId) => void;
   // Slip Mode
@@ -145,6 +147,7 @@ function defaultDeck() {
     originalBpm: 0,
     firstBeatOffset: 0,
     isSynced: false,
+    syncMode: 'beat' as const,
     hotCues: new Array(HOT_CUE_COUNT).fill(null) as (number | null)[],
     activeLoop: null as LoopState | null,
     quantize: true,
@@ -429,10 +432,27 @@ export const useMixiStore = create<MixiStore>()(
           if (phaseDelta < -0.5) phaseDelta += 1;
 
           // Convert to seconds and seek
-          const seekOffset = phaseDelta * thisBeatPeriod;
+          let seekOffset = phaseDelta * thisBeatPeriod;
+
+          // ── 3. Phrase / bar align (structural sync) ──────────
+          const mode = thisDeck.syncMode;
+          if (mode === 'bar' || mode === 'phrase') {
+            const groupSize = mode === 'phrase' ? 16 : 4;
+            // Compute beat-in-group for both decks
+            const masterBeat = (masterTime - other.firstBeatOffset) / masterBeatPeriod;
+            const thisBeat = (thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod;
+            const masterPos = ((masterBeat % groupSize) + groupSize) % groupSize;
+            const thisPos = ((thisBeat % groupSize) + groupSize) % groupSize;
+
+            let phraseOffset = Math.round(masterPos - thisPos);
+            if (phraseOffset > groupSize / 2) phraseOffset -= groupSize;
+            if (phraseOffset < -groupSize / 2) phraseOffset += groupSize;
+
+            seekOffset += phraseOffset * thisBeatPeriod;
+          }
+
           if (Math.abs(seekOffset) > 0.005) { // Only if > 5ms off
             const targetTime = thisTime + seekOffset;
-            // Seek immediately — Zustand set() is sync, no deferral needed
             engine.seek(deck, Math.max(0, targetTime));
           }
         }
@@ -553,6 +573,11 @@ export const useMixiStore = create<MixiStore>()(
      *
      * Calls engine.setLoop() directly for immediate engagement.
      */
+    setSyncMode: (deck, mode) =>
+      set((s) => ({
+        decks: { ...s.decks, [deck]: { ...s.decks[deck], syncMode: mode } },
+      })),
+
     beatJump: (deck, beats) => {
       const s = get();
       const d = s.decks[deck];
