@@ -17,8 +17,6 @@
 import { useEffect, useRef, useState, useCallback, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { MidiManager } from '../../midi/MidiManager';
-import { useMidiStore } from '../../store/midiStore';
-import { wasmCore, isWasmReady } from '../../wasm/wasmBridge';
 
 const HISTORY_SIZE = 8;
 const RISING_THRESHOLD = 4;
@@ -62,14 +60,6 @@ function latLogScale(ms: number): number {
 
 // ── SVG Icons (same #555 as other inactive icons) ──────────
 
-const CpuIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="4" width="16" height="16" rx="2" />
-    <rect x="9" y="9" width="6" height="6" />
-    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" />
-  </svg>
-);
-
 const LatIcon: FC<{ color: string }> = ({ color }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" />
@@ -89,17 +79,11 @@ const StatusDot: FC<{ alert: AlertLevel; pulse?: boolean }> = ({ alert, pulse })
 
 // ── Main component ─────────────────────────────────────────
 
-export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false }) => {
-  const isLearning = useMidiStore((s) => s.isLearning);
-  const setLearning = useMidiStore((s) => s.setLearning);
-  const learningAction = useMidiStore((s) => s.learningAction);
-
+export const SystemHud: FC = () => {
   const [cpuAlert, setCpuAlert] = useState<AlertLevel>('nominal');
   const [cpuPct, setCpuPct] = useState(0);
   const [latAlert, setLatAlert] = useState<AlertLevel>('nominal');
   const [midiConnected, setMidiConnected] = useState(false);
-  const [audioOut, setAudioOut] = useState<'running' | 'suspended' | 'closed'>('suspended');
-  const [wasmReady, setWasmReady] = useState(isWasmReady());
   const [booting, setBooting] = useState(true);
   const [dimmed, setDimmed] = useState(false);
 
@@ -130,11 +114,6 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
   useEffect(() => {
     const timeout = setTimeout(() => setBooting(false), BOOT_DURATION_MS);
     return () => clearTimeout(timeout);
-  }, []);
-
-  // Initialize Rust/Wasm core (lazy, non-blocking)
-  useEffect(() => {
-    wasmCore().then(() => setWasmReady(true)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -179,7 +158,6 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
       if (engine.isInitialized) {
         const latRaw = engine.latency * 1000;
         setLatAlert(getAlertLevel(latLogScale(latRaw)));
-        setAudioOut(engine.getAudioContext().state as 'running' | 'suspended' | 'closed');
       }
     }, 3000);
     return () => clearInterval(timer);
@@ -196,12 +174,6 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
     return () => { MidiManager.onStatusChange = null; };
   }, []);
 
-  const systemAlert: AlertLevel = cpuAlert === 'critical' || latAlert === 'critical'
-    ? 'critical'
-    : cpuAlert === 'warn' || latAlert === 'warn'
-      ? 'warn'
-      : 'nominal';
-
   return (
     <div
       className="flex items-center gap-2 transition-opacity duration-700"
@@ -212,107 +184,33 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
         <span className="text-[8px] font-mono text-zinc-500">...</span>
       ) : (
         <>
-          {/* CPU: icon + dot + percentage */}
-          <div className="flex items-center gap-1" title={`CPU: ${cpuPct}%`}>
-            <CpuIcon color="var(--txt-muted)" />
-            <StatusDot alert={cpuAlert} />
-            <span className="text-[8px] font-mono tabular-nums" style={{ color: DOT_COLORS[cpuAlert], minWidth: 22 }}>{cpuPct}%</span>
-          </div>
+          {/* CPU — just colored number, no dot */}
+          <span
+            className="text-[9px] font-mono font-bold tabular-nums"
+            style={{ color: DOT_COLORS[cpuAlert], minWidth: 24, textAlign: 'right' }}
+            title={`CPU: ${cpuPct}%`}
+          >
+            {cpuPct}%
+          </span>
 
-          {/* LAT: icon + dot */}
-          <div className="flex items-center gap-1" title="Latency">
-            <LatIcon color="var(--txt-muted)" />
-            <StatusDot alert={latAlert} />
-          </div>
+          {/* LAT — only visible when warn or critical */}
+          {latAlert !== 'nominal' && (
+            <div className="flex items-center gap-1" title="Latency warning">
+              <LatIcon color={DOT_COLORS[latAlert]} />
+              <StatusDot alert={latAlert} pulse />
+            </div>
+          )}
 
-          {/* OUT: audio output state */}
-          <div className="flex items-center gap-1" title={`Audio Output: ${audioOut}`}>
-            <span className="text-[7px] font-mono font-bold tracking-wider" style={{ color: audioOut === 'running' ? 'var(--status-ok)' : 'var(--status-error-dim)' }}>OUT</span>
-            <div
-              className="h-[6px] w-[6px] rounded-full shrink-0"
-              style={{
-                backgroundColor: audioOut === 'running' ? 'var(--status-ok)' : audioOut === 'suspended' ? 'var(--status-warn)' : 'var(--status-error)',
-                boxShadow: audioOut === 'running' ? '0 0 6px var(--status-ok)66' : 'none',
-              }}
-            />
-          </div>
-
-          {/* ── gap: System | Audio ── */}
-          <div style={{ width: 6 }} />
-
-          {/* Sync status: icon + dot */}
-          <div className="flex items-center gap-1" title={systemAlert === 'critical' ? 'System overload' : systemAlert === 'warn' ? 'System warning' : 'System OK'}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--txt-muted)" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 12a8 8 0 0 1 14-5.3" />
-              <path d="M20 12a8 8 0 0 1-14 5.3" />
-              <polygon points="18,3 22,7 14,7" fill="var(--txt-muted)" stroke="none" />
-              <polygon points="6,21 2,17 10,17" fill="var(--txt-muted)" stroke="none" />
-            </svg>
-            <StatusDot alert={systemAlert} pulse />
-          </div>
-
-          <div style={{ width: 6 }} />
-
-          {/* MIDI status */}
-          <div className="flex items-center gap-1" title={midiConnected ? 'MIDI: Active' : 'MIDI: Disconnected'}>
-            <button 
-              type="button"
-              className="text-[7.5px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded transition-all active:scale-95" 
-              style={{ 
-                color: isLearning ? '#000' : 'var(--txt-muted)',
-                backgroundColor: isLearning ? 'var(--status-warn)' : 'transparent',
-                border: `1px solid ${isLearning ? 'var(--status-warn)' : 'rgba(255,255,255,0.1)'}`,
-                boxShadow: isLearning ? '0 0 10px var(--status-warn)' : 'none',
-              }}
-              onClick={() => setLearning(!isLearning)}
-              title="Toggle MIDI Learn Mode"
-            >
-              {isLearning ? (learningAction ? `WAITING HW: ${learningAction.type}` : 'TEST CTL') : 'MIDI LRN'}
-            </button>
-            <div
-              className={`h-[8px] w-[8px] rounded-full shrink-0 transition-all ${midiConnected ? 'mixi-dot-pulse duration-300' : 'duration-1000'}`}
-              style={{
-                backgroundColor: midiConnected ? 'var(--status-ok)' : 'rgba(255,255,255,0.05)',
-                border: midiConnected ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                boxShadow: midiConnected ? '0 0 8px var(--status-ok)' : 'none',
-              }}
-            />
-          </div>
-
-          {/* MCP status: icon + dot */}
-
-          {/* ── gap ── */}
-          <div style={{ width: 6 }} />
-
-          {/* WASM status */}
-          <div className="flex items-center gap-1" title={wasmReady ? 'Rust/Wasm: Active' : 'Rust/Wasm: Loading...'}>
-            <span className="text-[7px] font-mono font-bold tracking-wider" style={{ color: wasmReady ? 'var(--status-ok)' : 'var(--txt-dim)' }}>WASM</span>
-            <div
-              className="h-[6px] w-[6px] rounded-full shrink-0"
-              style={{
-                backgroundColor: wasmReady ? 'var(--status-ok)' : 'var(--brd-default)',
-                boxShadow: wasmReady ? '0 0 6px var(--status-ok)66' : 'none',
-              }}
-            />
-          </div>
-
-          {/* ── gap: Audio | Effects ── */}
-          <div style={{ width: 6 }} />
-
-          <div className="flex items-center gap-1" title={mcpConnected ? 'AI Agent: Connected' : 'AI Agent: Disconnected'}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--txt-muted)" strokeWidth="2" strokeLinecap="round">
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="12" r="3" />
-              <path d="M9 12h6" />
-            </svg>
-            <div
-              className="h-[8px] w-[8px] rounded-full shrink-0"
-              style={{
-                backgroundColor: mcpConnected ? 'var(--status-ok)' : 'var(--brd-default)',
-                boxShadow: mcpConnected ? '0 0 5px var(--status-ok)66' : 'none',
-              }}
-            />
-          </div>
+          {/* MIDI — small dot only, no label */}
+          <div
+            className={`h-[7px] w-[7px] rounded-full shrink-0 transition-all ${midiConnected ? 'mixi-dot-pulse' : ''}`}
+            style={{
+              backgroundColor: midiConnected ? 'var(--status-ok)' : 'rgba(255,255,255,0.08)',
+              border: midiConnected ? 'none' : '1px solid rgba(255,255,255,0.1)',
+              boxShadow: midiConnected ? '0 0 6px var(--status-ok)' : 'none',
+            }}
+            title={midiConnected ? 'MIDI: Connected' : 'MIDI: No device'}
+          />
         </>
       )}
     </div>

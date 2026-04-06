@@ -141,7 +141,7 @@ const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
 
 const App: FC = () => {
   const { initEngine } = useMixiSync();
-  const { connected: mcpConnected } = useMixiBridge();
+  useMixiBridge();
   const { state: aiState, toggle: toggleAI } = useAIEngine();
   useKeyboardShortcuts();
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
@@ -324,7 +324,7 @@ const App: FC = () => {
 
         {/* ── Right: Telemetry + Browser + VFX + Panic + Settings ── */}
         <div className="mixi-hud-group justify-self-end">
-          <SystemHud mcpConnected={mcpConnected} />
+          <SystemHud />
           <div className="h-4 border-r border-zinc-700/40" />
           {/* Track Browser toggle */}
           <button
