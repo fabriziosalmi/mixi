@@ -90,3 +90,15 @@ export const CAMELOT_KEY_COLORS: Record<string, string> = {
   '11B': '#cccc22',  // A
   '12B': '#33ff66',  // E
 };
+
+/**
+ * Returns black or white text color for optimal contrast against a hex color.
+ * Uses W3C relative luminance formula (WCAG 2.1).
+ */
+export function getContrastText(hex: string): { text: string; luminance: number } {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return { text: luminance > 0.6 ? '#111' : hex, luminance };
+}

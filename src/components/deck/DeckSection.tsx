@@ -24,7 +24,8 @@ import { TrackInfo } from './TrackInfo';
 import { PerformancePads } from './PerformancePads';
 import { PitchStrip } from './PitchStrip';
 import type { DeckId } from '../../types';
-import { CAMELOT_KEY_COLORS } from '../../theme';
+import { CAMELOT_KEY_COLORS, getContrastText } from '../../theme';
+import { HOUSE_DECKS } from '../../decks';
 
 interface DeckSectionProps {
   deckId: DeckId;
@@ -48,6 +49,10 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const unsyncDeck = useMixiStore((s) => s.unsyncDeck);
   const ejectDeck = useMixiStore((s) => s.ejectDeck);
   const setDeckMode = useMixiStore((s) => s.setDeckMode);
+  const volume = useMixiStore((s) => s.decks[deckId].volume);
+  const deckMode = useMixiStore((s) => s.deckModes[deckId]);
+  const [ejectPending, setEjectPending] = useState(false);
+  const ejectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const togglePlay = useCallback(
     () => setPlaying(deckId, !isPlaying),
@@ -62,6 +67,28 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
     else syncDeck(deckId);
   }, [deckId, isSynced, syncDeck, unsyncDeck]);
 
+  // ── Eject safety guard (double-click when live) ────────
+  const handleEject = useCallback(() => {
+    const isLive = isPlaying && volume > 0.05;
+    if (!isLive) {
+      ejectDeck(deckId);
+      return;
+    }
+    if (ejectPending) {
+      clearTimeout(ejectTimerRef.current);
+      setEjectPending(false);
+      ejectDeck(deckId);
+    } else {
+      setEjectPending(true);
+      ejectTimerRef.current = setTimeout(() => setEjectPending(false), 2000);
+    }
+  }, [deckId, isPlaying, volume, ejectPending, ejectDeck]);
+
+  useEffect(() => () => clearTimeout(ejectTimerRef.current), []);
+
+  // ── Module-aware gradient header ────────────────────────
+  const activeModule = HOUSE_DECKS.find(d => d.mode === deckMode);
+  const moduleColor = activeModule?.accentColor;
 
   const otherDeckId: DeckId = deckId === 'A' ? 'B' : 'A';
   const otherBpm = useMixiStore((s) => s.decks[otherDeckId].bpm);
@@ -73,7 +100,13 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
       style={{ opacity: !isTrackLoaded && !isPlaying ? 0.6 : 1 }}
     >
       {/* ── Unified Header — flush with top border ────────────── */}
-      <div className="mixi-deck-header flex items-center gap-2 px-3 pt-2.5 pb-1 border-b border-zinc-800/30">
+      <div
+        className="mixi-deck-header flex items-center gap-2 px-3 pt-2.5 pb-1 border-b border-zinc-800/30"
+        style={moduleColor ? {
+          background: `linear-gradient(90deg, ${color}15, ${moduleColor}10)`,
+          borderBottom: `1px solid ${moduleColor}22`,
+        } : undefined}
+      >
         {/* Status dot */}
         <div
           className={`h-2 w-2 shrink-0 rounded-full ${isPlaying ? 'mixi-dot-pulse' : ''}`}
@@ -98,9 +131,13 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         {isTrackLoaded && (
           <button
             type="button"
-            onClick={() => ejectDeck(deckId)}
-            className="shrink-0 rounded p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors"
-            title="Eject track"
+            onClick={handleEject}
+            className={`shrink-0 rounded p-0.5 transition-colors ${
+              ejectPending
+                ? 'text-red-400 animate-pulse'
+                : 'text-zinc-600 hover:text-zinc-300'
+            }`}
+            title={ejectPending ? 'Click again to eject (live!)' : 'Eject track'}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="5,18 12,6 19,18" />
@@ -119,10 +156,17 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         {/* Key badge — Camelot-colored */}
         {musicalKey && (() => {
           const keyColor = CAMELOT_KEY_COLORS[musicalKey] || color;
+          const { text: keyText, luminance } = getContrastText(keyColor);
           return (
             <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
-              style={{ background: `${keyColor}15`, border: `1px solid ${keyColor}44`, color: keyColor, textShadow: `0 0 6px ${keyColor}44` }}
+              key={`key-${musicalKey}`}
+              className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider mixi-pop"
+              style={{
+                background: `${keyColor}22`,
+                border: `1px solid ${keyColor}44`,
+                color: keyText,
+                textShadow: luminance > 0.6 ? 'none' : `0 0 6px ${keyColor}44`,
+              }}
             >
               {musicalKey}
             </span>
@@ -130,7 +174,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         })()}
         {/* BPM + Beat counter */}
         {bpm > 0 && (
-          <div className="flex items-baseline shrink-0">
+          <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-baseline shrink-0 mixi-pop">
             <span className="text-sm font-mono font-black text-white" style={{ fontFeatureSettings: '"tnum"' }}>
               {bpm.toFixed(1)}
             </span>

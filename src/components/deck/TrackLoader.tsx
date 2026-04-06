@@ -202,6 +202,26 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
 
   return (
     <div className="flex flex-col gap-3 w-full max-w-sm px-6">
+      {/* ── Deck Identity Bar ─────────────────────────────── */}
+      <div
+        className="flex items-center gap-2 -mx-6 -mt-2 px-4 py-2 mb-1"
+        style={{
+          background: `linear-gradient(90deg, ${color}08, transparent)`,
+          borderBottom: `1px solid ${color}18`,
+          boxShadow: `0 10px 30px ${color}08`,
+        }}
+      >
+        <span
+          className="text-2xl font-black tracking-widest"
+          style={{ color, textShadow: `0 0 12px ${color}44` }}
+        >
+          {deckId}
+        </span>
+        <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-[0.2em]">
+          Load Track
+        </span>
+      </div>
+
       {/* ── Drop Zone ───────────────────────────────────────── */}
       <div
         onDragOver={onDragOver}
@@ -209,15 +229,20 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         onDrop={onDrop}
         onClick={() => !isLoading && fileInputRef.current?.click()}
         className={`
-          flex items-center justify-center rounded-lg border-2 border-dashed
-          px-4 py-14 text-center text-xs transition-all cursor-pointer
-          ${isDragOver
-            ? 'border-current bg-white/5'
-            : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600'
-          }
+          flex items-center justify-center rounded-lg border border-dashed
+          px-4 py-14 text-center text-xs cursor-pointer
+          transition-all duration-200
           ${isLoading ? 'pointer-events-none opacity-50' : ''}
         `}
-        style={{ borderColor: isDragOver ? color : undefined }}
+        style={{
+          borderColor: isDragOver ? `${color}88` : '#333',
+          background: isDragOver
+            ? `radial-gradient(ellipse at center, ${color}12 0%, transparent 70%)`
+            : '#0a0a0a',
+          boxShadow: isDragOver
+            ? `inset 0 4px 20px rgba(0,0,0,0.6), 0 0 30px ${color}15`
+            : 'inset 0 4px 15px rgba(0,0,0,0.8)',
+        }}
       >
         {isLoading ? (
           <Spinner color={color} />
