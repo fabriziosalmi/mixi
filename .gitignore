@@ -50,6 +50,7 @@ WAVEFORM_VIEWER.md
 CRITICAL_AUDIT.md
 AUTOUPDATE.md
 MOBILE.md
+DECKS_MOBILE_UI.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

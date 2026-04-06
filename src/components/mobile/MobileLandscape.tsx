@@ -29,6 +29,8 @@ import { OverlayEQ } from './overlay/OverlayEQ';
 import { OverlayPads } from './overlay/OverlayPads';
 import { MobileBrowser } from './MobileBrowser';
 import { mobilePanic } from './mobilePanic';
+import { MobileDeckSlot } from './MobileDeckSlot';
+import { MobileDeckPicker } from './MobileDeckPicker';
 import type { DeckId } from '../../types';
 
 // ── Constants ────────────────────────────────────────────────
@@ -323,6 +325,23 @@ const MobileCrossfader: FC = () => {
   );
 };
 
+// ── Deck area (routes track vs custom) ───────────────────────
+
+const LandscapeDeckArea: FC<{ deckId: DeckId }> = ({ deckId }) => {
+  const mode = useMixiStore((s) => s.deckModes[deckId]);
+  const color = COLORS[deckId];
+
+  if (mode !== 'track') {
+    return (
+      <div style={{ padding: '4px 8px', borderBottom: '1px solid #222' }}>
+        <MobileDeckSlot deckId={deckId} color={color} />
+      </div>
+    );
+  }
+
+  return <DeckRow deckId={deckId} />;
+};
+
 // ── Toolbar button ───────────────────────────────────────────
 
 const ToolBtn: FC<{ label: string; active?: boolean; color?: string; onClick: () => void }> = ({
@@ -383,11 +402,13 @@ export const MobileLandscape: FC = () => {
           height: 28,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
+          padding: '0 8px',
           borderBottom: '1px solid #222',
           flexShrink: 0,
         }}
       >
+        <MobileDeckPicker deckId="A" />
         <span
           style={{
             fontSize: 12,
@@ -399,12 +420,13 @@ export const MobileLandscape: FC = () => {
         >
           MIXI
         </span>
+        <MobileDeckPicker deckId="B" />
       </div>
 
       {/* Deck rows */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         {DECK_IDS.map((id) => (
-          <DeckRow key={id} deckId={id} />
+          <LandscapeDeckArea key={id} deckId={id} />
         ))}
       </div>
 

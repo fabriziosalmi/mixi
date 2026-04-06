@@ -33,8 +33,10 @@ export interface HouseDeckEntry {
   label: string;
   /** Accent color used in the picker chip. */
   accentColor: string;
-  /** Lazy-loaded React component. */
+  /** Lazy-loaded React component (desktop). */
   component: LazyExoticComponent<FC<HouseDeckProps>>;
+  /** Optional mobile-optimized component. If absent, mobile shows fallback. */
+  mobileComponent?: LazyExoticComponent<FC<HouseDeckProps>>;
 }
 
 /**
@@ -58,6 +60,9 @@ export const HOUSE_DECKS: HouseDeckEntry[] = [
     accentColor: '#ef4444',
     component: lazy(() =>
       import('./turbokick/TurboKickDeck').then((m) => ({ default: m.TurboKickDeck })),
+    ),
+    mobileComponent: lazy(() =>
+      import('./turbokick/TurboKickMobileDeck').then((m) => ({ default: m.TurboKickMobileDeck })),
     ),
   },
   {

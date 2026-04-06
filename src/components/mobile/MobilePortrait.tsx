@@ -40,6 +40,8 @@ import { OverlayEQ } from './overlay/OverlayEQ';
 import { OverlayPads } from './overlay/OverlayPads';
 import { MobileBrowser } from './MobileBrowser';
 import { mobilePanic } from './mobilePanic';
+import { MobileDeckSlot } from './MobileDeckSlot';
+import { MobileDeckPicker } from './MobileDeckPicker';
 import type { DeckId } from '../../types';
 
 // ── Constants ────────────────────────────────────────────────
@@ -334,6 +336,35 @@ const PortraitCrossfader: FC = () => {
   );
 };
 
+// ── Deck area (routes track vs custom) ───────────────────────
+
+const PortraitDeckArea: FC<{
+  deckId: DeckId;
+  openOverlay: (tab: OverlayTab, deck: DeckId) => void;
+}> = ({ deckId, openOverlay }) => {
+  const mode = useMixiStore((s) => s.deckModes[deckId]);
+  const color = deckId === 'A' ? COLOR_DECK_A : COLOR_DECK_B;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <MobileDeckPicker deckId={deckId} />
+        <div style={{ flex: 1 }} />
+        {mode === 'track' && (
+          <>
+            <PortraitToolBtn label="EQ" onClick={() => openOverlay('eq', deckId)} />
+            <PortraitToolBtn label="PADS" onClick={() => openOverlay('pads', deckId)} />
+          </>
+        )}
+      </div>
+      {mode === 'track'
+        ? <DeckCard deckId={deckId} />
+        : <MobileDeckSlot deckId={deckId} color={color} />
+      }
+    </div>
+  );
+};
+
 // ── MobilePortrait ───────────────────────────────────────────
 
 export const MobilePortrait: FC = () => {
@@ -416,25 +447,11 @@ export const MobilePortrait: FC = () => {
           flexShrink: 0,
         }}
       >
-        {/* Deck A with overlay buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-            <PortraitToolBtn label="EQ" onClick={() => openOverlay('eq', 'A')} />
-            <PortraitToolBtn label="PADS" onClick={() => openOverlay('pads', 'A')} />
-          </div>
-          <DeckCard deckId="A" />
-        </div>
-
+        {/* Deck A */}
+        <PortraitDeckArea deckId="A" openOverlay={openOverlay} />
         <PortraitCrossfader />
-
-        {/* Deck B with overlay buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-            <PortraitToolBtn label="EQ" onClick={() => openOverlay('eq', 'B')} />
-            <PortraitToolBtn label="PADS" onClick={() => openOverlay('pads', 'B')} />
-          </div>
-          <DeckCard deckId="B" />
-        </div>
+        {/* Deck B */}
+        <PortraitDeckArea deckId="B" openOverlay={openOverlay} />
       </div>
 
       {/* Browser (bottom half) */}
