@@ -11,6 +11,7 @@ export default defineConfig({
   },
   base: './',
   server: {
+    host: '0.0.0.0',
     port: 5173,
     // COOP/COEP — required for SharedArrayBuffer (Step 2)
     headers: {

@@ -19,17 +19,20 @@
 //   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen, session, globalShortcut, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, screen, session, globalShortcut, ipcMain, dialog, shell } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join, resolve } from 'path';
 import {
   existsSync, openSync, writeSync, closeSync, readSync,
   copyFileSync, unlinkSync, readdirSync, statSync,
+  readFileSync, writeFileSync,
 } from 'fs';
 import { tmpdir } from 'os';
 import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
 import { createSocket, Socket as DgramSocket } from 'dgram';
+import { net } from 'electron';
+import { compareSemver, parseTagVersion, shouldShowUpdate, truncateReleaseNotes } from './updateCheck';
 
 // ── Process-level crash guards ──────────────────────────────
 process.on('uncaughtException', (err) => {
@@ -305,6 +308,56 @@ function createWindow(): void {
   });
 }
 
+// ── Update check (GitHub Releases) ──────────────────────────
+
+const SKIP_VERSION_FILE = join(app.getPath('userData'), 'skip-version.txt');
+const GITHUB_RELEASES_URL = 'https://api.github.com/repos/fabriziosalmi/mixi/releases/latest';
+
+function getSkippedVersion(): string | null {
+  try {
+    return existsSync(SKIP_VERSION_FILE) ? readFileSync(SKIP_VERSION_FILE, 'utf-8').trim() : null;
+  } catch { return null; }
+}
+
+function setSkippedVersion(version: string): void {
+  try { writeFileSync(SKIP_VERSION_FILE, version, 'utf-8'); } catch { /* ignore */ }
+}
+
+async function checkForUpdates(): Promise<void> {
+  try {
+    const currentVersion = app.getVersion();
+    const response = await net.fetch(GITHUB_RELEASES_URL, {
+      headers: { 'User-Agent': `mixi/${currentVersion}` },
+    });
+    if (!response.ok) return;
+
+    const data = await response.json() as { tag_name: string; html_url: string; body?: string };
+    const latestVersion = parseTagVersion(data.tag_name);
+
+    if (!shouldShowUpdate(currentVersion, latestVersion, getSkippedVersion())) return;
+    if (!mainWindow) return;
+
+    const { response: choice } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `Mixi v${latestVersion} is available (current: v${currentVersion})`,
+      detail: truncateReleaseNotes(data.body),
+      buttons: ['Download', 'Later', 'Skip This Version'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (choice === 0) {
+      shell.openExternal(data.html_url);
+    } else if (choice === 2) {
+      setSkippedVersion(latestVersion);
+    }
+  } catch (err) {
+    // Silently fail — update check is optional
+    console.log('[mixi] Update check failed:', err);
+  }
+}
+
 // ── App lifecycle ────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -316,6 +369,7 @@ app.whenReady().then(async () => {
     setupNativeAudioIPC();
     setupDiskRecordingIPC();
     setupMixiSyncIPC();
+    ipcMain.handle('app:check-for-updates', () => checkForUpdates());
 
     // 1. Find free port
     apiPort = await findFreePort();
@@ -330,6 +384,9 @@ app.whenReady().then(async () => {
 
     // 4. Create window
     createWindow();
+
+    // 5. Check for updates (non-blocking, after window is shown)
+    checkForUpdates();
   } catch (err) {
     console.error('[mixi] Failed to start:', err);
     killEngine();

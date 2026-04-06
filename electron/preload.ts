@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('mixi', {
   apiBase: `http://127.0.0.1:${apiPort}`,
   wsBase: `ws://127.0.0.1:${apiPort}`,
 
+  /** Trigger a manual update check (shows native dialog if update available) */
+  checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),
+
   // ── Native Audio I/O (cpal) ──────────────────────────────
   nativeAudio: {
     /** Check if native audio addon is available */
