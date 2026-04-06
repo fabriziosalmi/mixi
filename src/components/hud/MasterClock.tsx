@@ -20,10 +20,27 @@
 // main thread's rAF/GC pauses don't drift the clock.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, useRef, type FC } from 'react';
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { COLOR_MASTER } from '../../theme';
+
+// ── Shared MIDI Clock active state (used by MasterClock + MidiClockToggle) ──
+
+let _midiActive = false;
+const _listeners = new Set<() => void>();
+function _notify() { _listeners.forEach((l) => l()); }
+
+export function toggleMidiClock() {
+  _midiActive = !_midiActive;
+  _notify();
+}
+export function useMidiClockActive(): boolean {
+  return useSyncExternalStore(
+    (cb) => { _listeners.add(cb); return () => _listeners.delete(cb); },
+    () => _midiActive,
+  );
+}
 
 // ── MIDI Clock constants ─────────────────────────────────────
 
@@ -63,7 +80,7 @@ export const MasterClock: FC = () => {
   const syncA = useMixiStore((s) => s.decks.A.isSynced);
   const syncB = useMixiStore((s) => s.decks.B.isSynced);
 
-  const [midiActive, setMidiActive] = useState(false);
+  const midiActive = useMidiClockActive();
   const [midiPort, setMidiPort] = useState<string>('');
   const [midiPorts, setMidiPorts] = useState<MIDIOutput[]>([]);
   const midiAccessRef = useRef<MIDIAccess | null>(null);
@@ -208,10 +225,6 @@ export const MasterClock: FC = () => {
 
   // ── Toggle MIDI ────────────────────────────────────────────
 
-  const toggleMidi = useCallback(() => {
-    setMidiActive((v) => !v);
-  }, []);
-
   // ── Render ─────────────────────────────────────────────────
 
   const hasMidi = typeof navigator !== 'undefined' && !!(navigator as any).requestMIDIAccess;
@@ -225,34 +238,11 @@ export const MasterClock: FC = () => {
           color: masterBpm > 0 ? COLOR_MASTER : 'var(--txt-dim)',
           textShadow: masterBpm > 0 ? `0 0 10px ${COLOR_MASTER}44` : 'none',
           minWidth: 52,
-          textAlign: 'right',
+          textAlign: 'center',
         }}
       >
         {masterBpm > 0 ? masterBpm.toFixed(1) : '---.-'}
       </span>
-
-      {/* ── MIDI Clock toggle (icon only) ── */}
-      {hasMidi && (
-        <button
-          type="button"
-          onClick={toggleMidi}
-          className="flex items-center justify-center rounded p-0.5 transition-all active:scale-95"
-          style={{
-            color: midiActive ? 'var(--status-ok-dim)' : 'var(--txt-muted)',
-            filter: midiActive ? 'drop-shadow(0 0 4px var(--status-ok)66)' : 'none',
-          }}
-          title={midiActive ? 'MIDI Clock active — click to stop' : 'Enable MIDI Clock output'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="8" cy="10" r="1" fill="currentColor" />
-            <circle cx="16" cy="10" r="1" fill="currentColor" />
-            <circle cx="12" cy="15" r="1" fill="currentColor" />
-            <circle cx="7" cy="14" r="1" fill="currentColor" />
-            <circle cx="17" cy="14" r="1" fill="currentColor" />
-          </svg>
-        </button>
-      )}
 
       {/* Port selector (visible when MIDI available and ports exist) */}
       {hasMidi && midiPorts.length > 1 && (
@@ -260,6 +250,7 @@ export const MasterClock: FC = () => {
           value={midiPort}
           onChange={(e) => setMidiPort(e.target.value)}
           className="bg-zinc-900/60 border border-zinc-800/50 rounded px-1 py-0.5 text-[9px] text-zinc-400 font-mono outline-none"
+          title="MIDI output port"
           style={{ maxWidth: 90 }}
         >
           {midiPorts.map((p) => (

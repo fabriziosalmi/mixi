@@ -21,7 +21,15 @@ import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { DiskRecordingBridge } from '../../audio/recording/DiskRecordingBridge';
 import { useMixiStore } from '../../store/mixiStore';
+import { useSettingsStore, type RecFormat } from '../../store/settingsStore';
 import { generateFingerprint, watermarkAudioBlob } from '../../utils/watermark';
+
+const REC_MIME: Record<RecFormat, { mime: string; ext: string; bitrate: number }> = {
+  'webm-opus': { mime: 'audio/webm;codecs=opus', ext: 'webm', bitrate: 128_000 },
+  'webm-pcm':  { mime: 'audio/webm;codecs=pcm',  ext: 'webm', bitrate: 1_411_200 },
+  'ogg-opus':  { mime: 'audio/ogg;codecs=opus',   ext: 'ogg',  bitrate: 128_000 },
+  'mp4-aac':   { mime: 'audio/mp4;codecs=aac',    ext: 'm4a',  bitrate: 256_000 },
+};
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -127,9 +135,13 @@ export const RecPanel: FC = () => {
     masterOutput.connect(dest);
     destRef.current = dest;
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm';
+    const fmt = useSettingsStore.getState().recFormat;
+    const preferred = REC_MIME[fmt];
+    const mimeType = MediaRecorder.isTypeSupported(preferred.mime)
+      ? preferred.mime
+      : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
 
     const recorder = new MediaRecorder(dest.stream, { mimeType });
     chunksRef.current = [];
@@ -152,7 +164,8 @@ export const RecPanel: FC = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `MIXI_Set_${stamp}.webm`;
+        const ext = Object.values(REC_MIME).find((r) => r.mime === mimeType)?.ext ?? 'webm';
+        a.download = `MIXI_Set_${stamp}.${ext}`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -276,8 +289,11 @@ export const RecPanel: FC = () => {
 
   // ── Estimated file size for disk recording ─────────────────
 
-  const estimatedBytes = diskModeRef.current && recording
-    ? elapsed * 44100 * 2 * 4 // stereo, 32-bit float, 44.1kHz
+  const recFormat = useSettingsStore((s) => s.recFormat);
+  const estimatedBytes = recording
+    ? diskModeRef.current
+      ? elapsed * 44100 * 2 * 4                    // WAV: stereo, 32-bit float, 44.1kHz
+      : elapsed * REC_MIME[recFormat].bitrate / 8   // estimated from format bitrate
     : 0;
 
   // ── Render ────────────────────────────────────────────────
@@ -306,34 +322,21 @@ export const RecPanel: FC = () => {
         </div>
       )}
 
-      {/* REC button */}
+      {/* REC button — square style matching Q toggle */}
       <button
         type="button"
         onClick={recording ? stopRec : startRec}
-        className="relative flex items-center gap-1.5 rounded px-1.5 py-0.5 transition-all active:scale-95"
+        className="text-[10px] font-mono font-black rounded px-1.5 py-[3px] transition-all active:scale-95"
         style={{
-          background: recording ? 'rgba(220,38,38,0.12)' : 'transparent',
-          border: recording ? '1px solid rgba(220,38,38,0.3)' : '1px solid transparent',
+          color: recording ? '#000' : 'var(--txt-muted)',
+          backgroundColor: recording ? 'var(--clr-rec)' : 'transparent',
+          border: `1px solid ${recording ? 'var(--clr-rec)' : 'rgba(255,255,255,0.1)'}`,
+          boxShadow: recording ? '0 0 8px var(--clr-rec)66' : 'none',
+          animation: recording ? 'pulse 1.5s ease-in-out infinite' : 'none',
         }}
         title={recording ? 'Stop Recording' : 'Start Recording'}
       >
-        {/* Red dot */}
-        <span
-          className="block rounded-full"
-          style={{
-            width: 8,
-            height: 8,
-            background: recording ? 'var(--clr-rec)' : 'var(--txt-muted)',
-            boxShadow: recording ? '0 0 8px var(--clr-rec)aa' : 'none',
-            animation: recording ? 'pulse 1.5s ease-in-out infinite' : 'none',
-          }}
-        />
-        {/* WAV badge when disk recording is active */}
-        {recording && diskModeRef.current && (
-          <span className="text-[8px] font-mono font-bold tracking-wider text-emerald-400/80">
-            WAV
-          </span>
-        )}
+        REC
       </button>
 
       {/* Timer + file size + mark count (visible only when recording) */}
@@ -343,8 +346,8 @@ export const RecPanel: FC = () => {
             {fmtTime(elapsed)}
           </span>
 
-          {/* File size estimate (disk recording only) */}
-          {diskModeRef.current && estimatedBytes > 0 && (
+          {/* File size estimate */}
+          {estimatedBytes > 0 && (
             <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
               {fmtSize(estimatedBytes)}
             </span>

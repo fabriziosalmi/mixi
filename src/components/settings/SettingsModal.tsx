@@ -218,11 +218,20 @@ const SessionManager: FC = () => {
 
 // ── Tab: Audio ──────────────────────────────────────────────
 
+const REC_FORMAT_LABELS: Record<import('../../store/settingsStore').RecFormat, string> = {
+  'webm-opus': 'WebM/Opus',
+  'webm-pcm':  'WebM/PCM',
+  'ogg-opus':  'OGG/Opus',
+  'mp4-aac':   'M4A/AAC',
+};
+
 const AudioTab: FC = () => {
   const bpmRange = useSettingsStore((s) => s.bpmRange);
   const setBpmRange = useSettingsStore((s) => s.setBpmRange);
   const loadDemoTrack = useSettingsStore((s) => s.loadDemoTrack);
   const setLoadDemoTrack = useSettingsStore((s) => s.setLoadDemoTrack);
+  const recFormat = useSettingsStore((s) => s.recFormat);
+  const setRecFormat = useSettingsStore((s) => s.setRecFormat);
 
   return (
     <>
@@ -234,6 +243,19 @@ const AudioTab: FC = () => {
           }))}
           value={bpmRange}
           onChange={setBpmRange}
+        />
+      </SettingRow>
+
+      <Divider />
+
+      <SettingRow label="Recording Format" description="Audio format for set recording (browser support varies)">
+        <SegmentedControl<import('../../store/settingsStore').RecFormat>
+          options={(['webm-opus', 'ogg-opus', 'mp4-aac', 'webm-pcm'] as const).map((f) => ({
+            value: f,
+            label: REC_FORMAT_LABELS[f],
+          }))}
+          value={recFormat}
+          onChange={setRecFormat}
         />
       </SettingRow>
 

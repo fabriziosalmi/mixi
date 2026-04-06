@@ -29,10 +29,10 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { useSettingsStore } from './store/settingsStore';
 import { SkinSelector } from './components/hud/SkinSelector';
 import { injectAllCustomSkins } from './utils/skinLoader';
-import { SystemHud } from './components/hud/SystemHud';
+import { CpuBadge } from './components/hud/SystemHud';
 import { MasterHud } from './components/hud/MasterHud';
 import { RecPanel } from './components/hud/RecPanel';
-import { MasterClock } from './components/hud/MasterClock';
+import { MasterClock, useMidiClockActive, toggleMidiClock } from './components/hud/MasterClock';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
 import { SplashScreen } from './components/SplashScreen';
@@ -84,6 +84,28 @@ const MiniMasterVu: FC = () => {
         <div ref={barRRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
       </div>
     </div>
+  );
+};
+
+// ── MIDI Clock toggle (right of center HUD) ─────────────────
+
+const MidiClockToggle: FC = () => {
+  const active = useMidiClockActive();
+  return (
+    <button
+      type="button"
+      onClick={toggleMidiClock}
+      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
+      style={{
+        color: active ? '#000' : 'var(--txt-muted)',
+        backgroundColor: active ? 'var(--status-ok)' : 'transparent',
+        border: `1px solid ${active ? 'var(--status-ok)' : 'rgba(255,255,255,0.1)'}`,
+        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
+      }}
+      title={active ? 'MIDI Clock active — click to stop' : 'Enable MIDI Clock output'}
+    >
+      M
+    </button>
   );
 };
 
@@ -296,11 +318,9 @@ const App: FC = () => {
           ...(panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : {}),
         }}
       >
-        {/* ── Left: Master FX + Skin + AI + Intent ── */}
+        {/* ── Left: Master FX + AI + Intent ── */}
         <div className="mixi-hud-group justify-self-start">
           <MasterHud />
-          <div className="h-4 border-r border-zinc-700/40" />
-          <SkinSelector />
           <div className="h-4 border-r border-zinc-700/40" />
           <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
           <div className="h-4 border-r border-zinc-700/40" />
@@ -318,18 +338,33 @@ const App: FC = () => {
             maxWidth: '100%',
           }}
         >
-          <div className="flex items-center justify-between w-full">
+          <div className="flex items-center justify-self-stretch gap-2">
             <QuantizeToggle />
-            <MasterClock />
-            <RecPanel />
+            <div
+              className="mixi-master-hud flex flex-col flex-1 rounded-md px-3 py-1 overflow-hidden"
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+                minWidth: 0,
+              }}
+            >
+              <div className="flex items-center justify-between w-full">
+                <MasterClock />
+                <CpuBadge />
+              </div>
+              <MiniMasterVu />
+            </div>
+            <MidiClockToggle />
           </div>
-          <MiniMasterVu />
         </div>
 
-        {/* ── Right: Telemetry + Browser + VFX + Panic + Settings ── */}
-        <div className="mixi-hud-group justify-self-end">
-          <SystemHud />
-          <div className="h-4 border-r border-zinc-700/40" />
+        {/* ── Right: REC group + action buttons ── */}
+        <div className="flex items-center gap-2 justify-self-end">
+          <div className="mixi-hud-group h-full" style={{ minWidth: 200 }}>
+            <RecPanel />
+          </div>
+          <div className="mixi-hud-group">
           {/* Track Browser toggle */}
           <button
             type="button"
@@ -350,6 +385,9 @@ const App: FC = () => {
           </button>
 
           <div className="h-4 border-r border-zinc-700/40" />
+
+          {/* Skin selector */}
+          <SkinSelector />
 
           {/* VFX toggle — Space Invader */}
           <button
@@ -412,6 +450,7 @@ const App: FC = () => {
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
+          </div>
         </div>
       </header>
 

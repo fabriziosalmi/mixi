@@ -104,13 +104,6 @@ export const SkinSelector: FC = () => {
         </svg>
       </button>
 
-      {/* Active skin dot */}
-      <div
-        className="h-[6px] w-[6px] rounded-full transition-all duration-300"
-        style={{ background: dotColor, boxShadow: `0 0 6px ${dotColor}88` }}
-        title={skinName}
-      />
-
       {/* Load custom skin from folder */}
       <button
         type="button"

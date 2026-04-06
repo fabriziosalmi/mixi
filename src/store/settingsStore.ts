@@ -88,7 +88,11 @@ export interface SettingsState {
   showPhaseOverlay: boolean;
   /** Colorblind-friendly waveform palette (blue + orange + white). */
   colorblindMode: boolean;
+  /** Recording format preference for MediaRecorder. */
+  recFormat: RecFormat;
 }
+
+export type RecFormat = 'webm-opus' | 'webm-pcm' | 'ogg-opus' | 'mp4-aac';
 
 export interface SettingsActions {
   toggleDebugPanel: () => void;
@@ -107,6 +111,7 @@ export interface SettingsActions {
   setGrooveOffset: (ms: number) => void;
   setShowPhaseOverlay: (v: boolean) => void;
   setColorblindMode: (v: boolean) => void;
+  setRecFormat: (fmt: RecFormat) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -128,6 +133,7 @@ export const useSettingsStore = create<SettingsStore>()(
       grooveOffsetMs: 0,
       showPhaseOverlay: true,
       colorblindMode: false,
+      recFormat: 'webm-opus' as RecFormat,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -153,6 +159,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setGrooveOffset: (ms) => set({ grooveOffsetMs: Math.max(-10, Math.min(10, ms)) }),
       setShowPhaseOverlay: (v) => set({ showPhaseOverlay: v }),
       setColorblindMode: (v) => set({ colorblindMode: v }),
+      setRecFormat: (fmt) => set({ recFormat: fmt }),
     }),
     {
       name: 'mixi-settings',
