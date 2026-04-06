@@ -48,6 +48,9 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
   const staticRef = useRef<ImageData | null>(null);
   const rafRef = useRef(0);
   const [width, setWidth] = useState(400);
+  /** Viewport drag state */
+  const isDraggingRef = useRef(false);
+  const dragOffsetRef = useRef(0);
 
   // ── Measure container width ────────────────────────────────
   useEffect(() => {
@@ -251,27 +254,64 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     return () => cancelAnimationFrame(rafRef.current);
   }, [deckId, width, height]);
 
-  // ── Click to seek ──────────────────────────────────────────
-  const handleClick = useCallback(
+  // ── Click to seek / viewport drag ───────────────────────────
+  const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (e.button !== 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const progress = x / rect.width;
-      const seekTime = progress * duration;
+      const clickTime = progress * duration;
 
       const engine = MixiEngine.getInstance();
-      if (engine.isInitialized) {
-        engine.seek(deckId, seekTime);
+      if (!engine.isInitialized) return;
+
+      const currentTime = engine.getCurrentTime(deckId);
+      const zoom = externalZoomRef?.current ?? 1;
+      const viewSec = 4 / zoom;
+      const viewStart = currentTime - viewSec / 3;
+      const viewEnd = currentTime + (viewSec * 2) / 3;
+      const isInsideViewport = clickTime >= viewStart && clickTime <= viewEnd;
+
+      if (!isInsideViewport) {
+        // Click outside viewport: instant seek
+        engine.seek(deckId, Math.max(0, Math.min(duration, clickTime)));
+        return;
       }
+
+      // Drag mode: remember offset from cursor to current playback time
+      isDraggingRef.current = true;
+      dragOffsetRef.current = currentTime - clickTime;
+      let lastSeek = 0;
+
+      const onMouseMove = (me: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+        const now = performance.now();
+        if (now - lastSeek < 66) return; // throttle to ~15Hz
+        lastSeek = now;
+        const mx = me.clientX - rect.left;
+        const mp = mx / rect.width;
+        const targetTime = mp * duration + dragOffsetRef.current;
+        engine.seek(deckId, Math.max(0, Math.min(duration, targetTime)));
+      };
+
+      const onMouseUp = () => {
+        isDraggingRef.current = false;
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
     },
-    [deckId, duration],
+    [deckId, duration, externalZoomRef],
   );
 
   return (
     <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         className="w-full rounded-lg cursor-crosshair shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]"
         style={{ height }}
       />

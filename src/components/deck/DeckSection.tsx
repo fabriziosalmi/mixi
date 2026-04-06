@@ -56,6 +56,10 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const ejectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** Shared zoom ref: WaveformDisplay writes, WaveformOverview reads */
   const waveZoomRef = useRef(1);
+  /** BPM inline editing state */
+  const [editingBpm, setEditingBpm] = useState(false);
+  const [bpmInput, setBpmInput] = useState('');
+  const bpmInputRef = useRef<HTMLInputElement>(null);
 
   const togglePlay = useCallback(
     () => setPlaying(deckId, !isPlaying),
@@ -88,6 +92,34 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   }, [deckId, isPlaying, volume, ejectPending, ejectDeck]);
 
   useEffect(() => () => clearTimeout(ejectTimerRef.current), []);
+
+  // ── BPM x2/÷2 + inline edit ───────────────────────────
+  const doubleBpm = useCallback(() => {
+    const store = useMixiStore.getState();
+    const d = store.decks[deckId];
+    if (d.bpm > 0 && d.bpm * 2 <= 300) store.setDeckBpm(deckId, d.bpm * 2, d.firstBeatOffset);
+  }, [deckId]);
+
+  const halveBpm = useCallback(() => {
+    const store = useMixiStore.getState();
+    const d = store.decks[deckId];
+    if (d.bpm > 0 && d.bpm / 2 >= 30) store.setDeckBpm(deckId, d.bpm / 2, d.firstBeatOffset);
+  }, [deckId]);
+
+  const startBpmEdit = useCallback(() => {
+    setEditingBpm(true);
+    setBpmInput(bpm.toFixed(1));
+    setTimeout(() => bpmInputRef.current?.select(), 0);
+  }, [bpm]);
+
+  const commitBpmEdit = useCallback(() => {
+    setEditingBpm(false);
+    const val = parseFloat(bpmInput);
+    if (!isNaN(val) && val >= 30 && val <= 300) {
+      const store = useMixiStore.getState();
+      store.setDeckBpm(deckId, val, store.decks[deckId].firstBeatOffset);
+    }
+  }, [deckId, bpmInput]);
 
   // ── Module-aware gradient header ────────────────────────
   const activeModule = HOUSE_DECKS.find(d => d.mode === deckMode);
@@ -177,22 +209,43 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         })()}
         {/* BPM + Beat counter */}
         {bpm > 0 && (
-          <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-baseline gap-0.5 shrink-0 mixi-pop">
-            <span
-              className="text-sm font-mono font-black"
-              style={{
-                fontFeatureSettings: '"tnum"',
-                color: bpmConfidence < 0.3 ? '#f97316' : bpmConfidence < 0.6 ? '#eab308' : '#fff',
-              }}
-              title={`BPM confidence: ${(bpmConfidence * 100).toFixed(0)}%`}
-            >
-              {bpm.toFixed(1)}
-            </span>
-            {bpmConfidence > 0 && bpmConfidence < 0.5 && (
-              <span className="text-[8px] text-amber-400" title={`Low confidence: ${(bpmConfidence * 100).toFixed(0)}%`}>
-                ?
+          <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-center gap-0.5 shrink-0 mixi-pop">
+            {/* /2 button */}
+            <button type="button" onClick={halveBpm} className="text-[7px] text-zinc-600 hover:text-zinc-300 font-mono transition-colors px-0.5" title="Halve BPM">/2</button>
+
+            {/* BPM value — double-click to edit */}
+            {editingBpm ? (
+              <input
+                ref={bpmInputRef}
+                value={bpmInput}
+                onChange={(e) => setBpmInput(e.target.value)}
+                onBlur={commitBpmEdit}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitBpmEdit(); if (e.key === 'Escape') setEditingBpm(false); }}
+                className="w-12 text-sm font-mono font-black text-white bg-transparent border-b border-zinc-500 outline-none text-center"
+                style={{ fontFeatureSettings: '"tnum"' }}
+              />
+            ) : (
+              <span
+                className="text-sm font-mono font-black cursor-pointer"
+                style={{
+                  fontFeatureSettings: '"tnum"',
+                  color: bpmConfidence < 0.3 ? '#f97316' : bpmConfidence < 0.6 ? '#eab308' : '#fff',
+                }}
+                title={`BPM confidence: ${(bpmConfidence * 100).toFixed(0)}% — Double-click to edit`}
+                onDoubleClick={startBpmEdit}
+              >
+                {bpm.toFixed(1)}
               </span>
             )}
+
+            {/* Confidence warning */}
+            {bpmConfidence > 0 && bpmConfidence < 0.5 && (
+              <span className="text-[8px] text-amber-400" title={`Low confidence: ${(bpmConfidence * 100).toFixed(0)}%`}>?</span>
+            )}
+
+            {/* x2 button */}
+            <button type="button" onClick={doubleBpm} className="text-[7px] text-zinc-600 hover:text-zinc-300 font-mono transition-colors px-0.5" title="Double BPM">x2</button>
+
             <BeatCounter deckId={deckId} color={color} />
           </div>
         )}
@@ -213,7 +266,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
           {/* Waveform */}
           <div className="mixi-waveform-area shrink-0 flex flex-col gap-1.5">
             <WaveformDisplay deckId={deckId} height={70} externalZoomRef={waveZoomRef} />
-            <WaveformOverview deckId={deckId} height={22} zoomRef={waveZoomRef} />
+            <WaveformOverview deckId={deckId} height={28} zoomRef={waveZoomRef} />
           </div>
 
           {/* FX Strip + Jog wheel + Pitch strip */}

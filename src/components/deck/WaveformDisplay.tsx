@@ -79,6 +79,11 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   const rafRef = useRef<number>(0);
   const startIndexRef = useRef<number>(0);
   const zoomRef = useRef<number>(1);
+  /** Drag-to-scrub state */
+  const isDraggingRef = useRef(false);
+  const scrubTimeRef = useRef<number | null>(null);
+  /** Beatgrid edit flash */
+  const gridFlashRef = useRef<{ x: number; until: number } | null>(null);
   const [measuredWidth, setMeasuredWidth] = useState(propWidth || 500);
 
   useEffect(() => {
@@ -232,14 +237,27 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         return;
       }
 
-      const currentTime = engine.isInitialized
-        ? engine.getCurrentTime(deckId) : 0;
+      const currentTime = scrubTimeRef.current !== null
+        ? scrubTimeRef.current
+        : (engine.isInitialized ? engine.getCurrentTime(deckId) : 0);
 
       const zoom = zoomRef.current;
       const currentIndex = currentTime * POINTS_PER_SECOND;
       const barsLeftOfPlayhead = (playheadX / BAR_STEP) | 0;
       const startIndex = currentIndex - barsLeftOfPlayhead * zoom;
       startIndexRef.current = startIndex;
+
+      // ── Energy shadow (total energy as grey backdrop, Rekordbox-style) ──
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      for (let i = 0; i < totalBars; i++) {
+        const dataIdx = (startIndex + i * zoom) | 0;
+        if (dataIdx < 0 || dataIdx >= waveform.length) continue;
+        const pt = waveform[dataIdx];
+        const maxE = Math.max(pt.low, pt.mid, pt.high);
+        const h = (maxE * halfHeight) | 0;
+        ctx.fillRect(i * BAR_STEP, halfHeight - h, BAR_WIDTH, h * 2);
+      }
 
       // ── Waveform bars — additive 'screen' blend ──────────
       // Replaces ctx.filter='blur()' with GPU-native compositing.
@@ -437,9 +455,9 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         }
       }
 
-      // ── Centre line (single pixel, ultra-transparent) ───
-      ctx.globalAlpha = 0.05;
-      ctx.fillStyle = COLOR_PLAYHEAD;
+      // ── Centre line (single pixel, subtle white) ─────────
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, halfHeight | 0, width, 1);
       ctx.globalAlpha = 1;
 
@@ -471,6 +489,16 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         }
       }
 
+      // ── Beatgrid edit flash (Shift+Click feedback) ──────
+      const flash = gridFlashRef.current;
+      if (flash && now < flash.until) {
+        const alpha = (flash.until - now) / 150;
+        ctx.fillStyle = `rgba(255,255,255,${(alpha * 0.8).toFixed(2)})`;
+        ctx.fillRect((flash.x | 0) - 1, 0, 3, height);
+      } else if (flash) {
+        gridFlashRef.current = null;
+      }
+
       // ── Next frame ───────────────────────────────────────
       rafRef.current = requestAnimationFrame(draw);
     }
@@ -490,13 +518,22 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     [externalZoomRef],
   );
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
+  /** Convert a mouse clientX to a seek time given a bounding rect. */
+  const mouseXToTime = useCallback(
+    (clientX: number, rect: DOMRect): number => {
+      const clickX = clientX - rect.left;
       const barIndex = clickX / BAR_STEP;
       const dataIndex = startIndexRef.current + barIndex * zoomRef.current;
-      const seekTime = dataIndex / POINTS_PER_SECOND;
+      return Math.max(0, dataIndex / POINTS_PER_SECOND);
+    },
+    [],
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (e.button !== 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const seekTime = mouseXToTime(e.clientX, rect);
 
       // Shift+Click: set first downbeat (beatgrid editing)
       if (e.shiftKey && seekTime >= 0) {
@@ -504,23 +541,48 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         const d = store.decks[deckId];
         if (d.bpm > 0) {
           store.setDeckBpm(deckId, d.bpm, seekTime);
+          // Visual flash feedback
+          const flashX = e.clientX - rect.left;
+          gridFlashRef.current = { x: flashX, until: performance.now() + 150 };
         }
         return;
       }
 
-      const engine = MixiEngine.getInstance();
-      if (engine.isInitialized && seekTime >= 0) {
-        engine.seek(deckId, seekTime);
-      }
+      // Normal click: start potential drag-to-scrub
+      isDraggingRef.current = true;
+      scrubTimeRef.current = seekTime;
+
+      const onMouseMove = (me: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+        scrubTimeRef.current = mouseXToTime(me.clientX, rect);
+      };
+
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
+
+        const finalTime = scrubTimeRef.current;
+        scrubTimeRef.current = null;
+
+        const engine = MixiEngine.getInstance();
+        if (engine.isInitialized && finalTime !== null && finalTime >= 0) {
+          engine.seek(deckId, finalTime);
+        }
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
     },
-    [deckId],
+    [deckId, mouseXToTime],
   );
 
   return (
     <div ref={containerRef} className="w-full relative">
       <canvas
         ref={canvasRef}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         onWheel={handleWheel}
         className="rounded-lg w-full cursor-crosshair shadow-[inset_0_2px_6px_rgba(0,0,0,0.6),inset_0_-1px_2px_rgba(0,0,0,0.3)]"
         style={{ height }}
