@@ -116,6 +116,12 @@ jobs:
           SKIP_WASM_BUILD: "1"
         run: ${{ matrix.dist-cmd }}
 
+      - name: Clean release artifacts
+        shell: bash
+        run: |
+          rm -f release/*.blockmap release/*.yml
+          rm -f release/Mixi.Setup.*.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.release-name }}
