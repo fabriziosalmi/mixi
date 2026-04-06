@@ -25,6 +25,7 @@
 import {
   useState,
   useCallback,
+  useEffect,
   useRef,
   type FC,
   type DragEvent,
@@ -36,6 +37,39 @@ import { HOUSE_DECKS } from '../../decks';
 import { useMixiStore } from '../../store/mixiStore';
 import { log } from '../../utils/logger';
 import type { DeckId, DeckMode } from '../../types';
+
+// ── Module card icons & descriptions ────────────────────────
+
+/** Unique wireframe SVG per module — stroke-only, technical aesthetic */
+const MODULE_ICONS: Record<string, React.ReactNode> = {
+  groovebox: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      {[0,1,2,3].flatMap(r => [0,1,2,3].map(c => (
+        <rect key={`${r}${c}`} x={2+c*5.5} y={2+r*5.5} width="4" height="4" rx="0.5"
+          opacity={[0,2,5,7,8,10,13,15].includes(r*4+c) ? 1 : 0.25} />
+      )))}
+    </svg>
+  ),
+  turbokick: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 12 L6 12 L8 3 L10 21 L12 8 L14 14 L16 11 L18 12.5 L22 12" />
+      <circle cx="12" cy="12" r="10" strokeWidth="0.5" opacity="0.2" />
+    </svg>
+  ),
+  js303: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 16 L5 6 L5 16 L8 6 L8 16 L11 6 L11 16 L14 6 L14 16 L17 6 L17 16 L20 6 L20 16 L22 16" />
+      <line x1="2" y1="16" x2="22" y2="16" strokeWidth="0.5" opacity="0.3" />
+    </svg>
+  ),
+};
+
+/** Short descriptions per module */
+const MODULE_SUBS: Record<string, string> = {
+  groovebox: 'Drum Machine',
+  turbokick: 'Kick Synth',
+  js303: 'Acid Synth',
+};
 
 // ── Config ───────────────────────────────────────────────────
 
@@ -67,11 +101,15 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
 }) => {
   const setTrackLoaded = useMixiStore((s) => s.setDeckTrackLoaded);
   const setStoreTrackName = useMixiStore((s) => s.setDeckTrackName);
+  const otherDeckId: DeckId = deckId === 'A' ? 'B' : 'A';
+  const otherDeckMode = useMixiStore((s) => s.deckModes[otherDeckId]);
   const [state, setState] = useState<LoadingState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [pasteFlash, setPasteFlash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const isLoading = state === 'loading';
 
@@ -198,6 +236,32 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
     [urlInput, loadBuffer, deckId],
   );
 
+  // ── Paste interception (CMD+V with URL auto-loads) ─────────
+
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+
+      const text = e.clipboardData?.getData('text')?.trim();
+      if (!text || !text.startsWith('http')) return;
+
+      e.preventDefault();
+      setUrlInput(text);
+      setPasteFlash(true);
+      setTimeout(() => setPasteFlash(false), 600);
+
+      // Auto-submit after state update
+      setTimeout(() => formRef.current?.requestSubmit(), 50);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
+
   // ── Render ─────────────────────────────────────────────────
 
   return (
@@ -247,9 +311,30 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         {isLoading ? (
           <Spinner color={color} />
         ) : (
-          <span className="text-zinc-500">
-            Drop audio file or <span className="underline text-zinc-400">browse</span>
-          </span>
+          <div className="flex flex-col items-center gap-3">
+            {/* Vinyl disc — breathing idle animation */}
+            <svg
+              width="48" height="48" viewBox="0 0 48 48"
+              fill="none" stroke="currentColor" strokeWidth="1"
+              className="mixi-breathe-vinyl"
+              style={{ color: `${color}66` }}
+            >
+              <circle cx="24" cy="24" r="22" />
+              <circle cx="24" cy="24" r="18" strokeWidth="0.5" opacity="0.4" />
+              <circle cx="24" cy="24" r="14" strokeWidth="0.5" opacity="0.3" />
+              <circle cx="24" cy="24" r="10" strokeWidth="0.5" opacity="0.2" />
+              <circle cx="24" cy="24" r="6" strokeWidth="1" opacity="0.6" />
+              <circle cx="24" cy="24" r="1.5" fill="currentColor" stroke="none" opacity="0.5" />
+            </svg>
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="text-zinc-500 text-xs">
+                Drop your track here or <span className="underline text-zinc-400 cursor-pointer">browse</span>
+              </span>
+              <span className="text-zinc-600 text-[9px] font-mono tracking-wider">
+                WAV · MP3 · FLAC · AIFF
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
@@ -263,19 +348,20 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
       />
 
       {/* ── URL Input ───────────────────────────────────────── */}
-      <form onSubmit={handleUrlLoad} className="flex gap-1.5">
+      <form ref={formRef} onSubmit={handleUrlLoad} className="flex gap-1.5">
         <input
           type="text"
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           disabled={isLoading}
           placeholder="SoundCloud URL…"
-          className="
+          className={`
             flex-1 rounded-md border border-zinc-700 bg-zinc-900/70 px-3 py-1.5
             text-xs text-zinc-300 placeholder:text-zinc-500
             focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500
-            disabled:opacity-40
-          "
+            disabled:opacity-40 transition-shadow duration-300
+            ${pasteFlash ? 'ring-2 ring-green-500/50' : ''}
+          `}
         />
         <button
           type="submit"
@@ -300,39 +386,77 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         <p className="text-[11px] text-red-400 leading-tight">{errorMsg}</p>
       )}
 
-      {/* ── House deck module picker ─────────────────────────── */}
+      {/* ── House deck module picker (MPC-style cards) ─────── */}
       {onSwitchModule && (
-        <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-zinc-800/30 flex-wrap">
-          <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-wider">or load module</span>
-          {HOUSE_DECKS.map((deck) => (
-            <button
-              key={deck.mode}
-              type="button"
-              onClick={() => onSwitchModule(deck.mode)}
-              className="
-                flex items-center gap-1.5 rounded-md border px-3 py-1.5
-                text-[10px] font-mono font-bold uppercase tracking-widest
-                transition-all active:scale-95 hover:brightness-125
-              "
-              style={{
-                borderColor: `${deck.accentColor}44`,
-                color: deck.accentColor,
-                background: `${deck.accentColor}0a`,
-              }}
-            >
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                <rect x="1" y="1" width="3" height="3" rx="0.5" />
-                <rect x="5" y="1" width="3" height="3" rx="0.5" />
-                <rect x="9" y="1" width="3" height="3" rx="0.5" />
-                <rect x="13" y="1" width="2" height="3" rx="0.5" />
-                <rect x="1" y="5" width="3" height="3" rx="0.5" />
-                <rect x="5" y="5" width="3" height="3" rx="0.5" />
-                <rect x="9" y="5" width="3" height="3" rx="0.5" />
-                <rect x="13" y="5" width="2" height="3" rx="0.5" />
-              </svg>
-              {deck.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-zinc-800/20">
+          <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-[0.2em]">
+            or load module
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {HOUSE_DECKS.map((deck) => {
+              const inUseOnOther = otherDeckMode === deck.mode;
+              return (
+                <button
+                  key={deck.mode}
+                  type="button"
+                  onClick={() => onSwitchModule(deck.mode)}
+                  className="
+                    group flex flex-col items-center gap-1 rounded-lg
+                    px-2 py-3 transition-all duration-150
+                    active:scale-95 cursor-pointer
+                  "
+                  style={{
+                    background: '#1a1a1a',
+                    borderTop: '1px solid #333',
+                    borderLeft: '1px solid #2a2a2a',
+                    borderRight: '1px solid #222',
+                    borderBottom: '1px solid #111',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 4px rgba(0,0,0,0.4)',
+                    opacity: inUseOnOther ? 0.6 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      `inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 8px ${deck.accentColor}20, 0 0 1px ${deck.accentColor}44`;
+                    e.currentTarget.style.borderColor = `${deck.accentColor}33`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 4px rgba(0,0,0,0.4)';
+                    e.currentTarget.style.borderColor = '';
+                    e.currentTarget.style.borderTop = '1px solid #333';
+                    e.currentTarget.style.borderLeft = '1px solid #2a2a2a';
+                    e.currentTarget.style.borderRight = '1px solid #222';
+                    e.currentTarget.style.borderBottom = '1px solid #111';
+                  }}
+                >
+                  {/* Module icon */}
+                  <div
+                    className="opacity-50 group-hover:opacity-90 transition-opacity"
+                    style={{ color: deck.accentColor }}
+                  >
+                    {MODULE_ICONS[deck.mode] ?? null}
+                  </div>
+                  {/* Label */}
+                  <span
+                    className="text-[10px] font-mono font-bold uppercase tracking-widest"
+                    style={{ color: deck.accentColor }}
+                  >
+                    {deck.label}
+                  </span>
+                  {/* Subtitle */}
+                  <span className="text-[8px] text-zinc-500 font-mono">
+                    {MODULE_SUBS[deck.mode] ?? ''}
+                  </span>
+                  {/* "In use" indicator */}
+                  {inUseOnOther && (
+                    <span className="text-[7px] text-zinc-500 font-mono mt-0.5">
+                      Active on {otherDeckId}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

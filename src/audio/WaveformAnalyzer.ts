@@ -180,6 +180,24 @@ function normalise(arr: Float32Array): number {
   return peak;
 }
 
+// ── Safe mode for long files ────────────────────────────────
+
+const SAFE_MODE_THRESHOLD = 600;          // 10 minutes
+const SAFE_MODE_ANALYSIS_SECONDS = 180;   // analyse first 3 min for BPM/key
+
+/** Slice an AudioBuffer to the first N seconds. */
+function sliceBuffer(buf: AudioBuffer, maxSeconds: number): AudioBuffer {
+  const maxSamples = Math.min(buf.length, Math.floor(maxSeconds * buf.sampleRate));
+  const OfflineCtx = globalThis.OfflineAudioContext || (globalThis as unknown as Record<string, unknown>).webkitOfflineAudioContext as typeof OfflineAudioContext;
+  const sliced = new OfflineCtx(
+    buf.numberOfChannels, maxSamples, buf.sampleRate,
+  ).createBuffer(buf.numberOfChannels, maxSamples, buf.sampleRate);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    sliced.copyToChannel(buf.getChannelData(ch).subarray(0, maxSamples), ch);
+  }
+  return sliced;
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
@@ -232,11 +250,19 @@ export async function analyzeWaveform(
   ]);
 
   // ── BPM detection (runs on the low-band buffer) ────────────
-  const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
-  const bpmResult: BpmResult = detectBpm(lowBuf, { bpmMin: bpmPreset.min, bpmMax: bpmPreset.max });
+  // Safe mode: limit BPM/key analysis to first 3 min for long files
+  const isLongFile = buffer.duration > SAFE_MODE_THRESHOLD;
+  if (isLongFile) {
+    log.warn('Analyzer', `Long file (${(buffer.duration / 60).toFixed(0)} min) — BPM/key from first ${SAFE_MODE_ANALYSIS_SECONDS}s`);
+  }
+  const bpmSource = isLongFile ? sliceBuffer(lowBuf, SAFE_MODE_ANALYSIS_SECONDS) : lowBuf;
+  const keySource = isLongFile ? sliceBuffer(buffer, SAFE_MODE_ANALYSIS_SECONDS) : buffer;
 
-  // ── Key detection (runs on the original buffer) ────────────
-  const keyResult: KeyResult = detectKey(buffer);
+  const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
+  const bpmResult: BpmResult = detectBpm(bpmSource, { bpmMin: bpmPreset.min, bpmMax: bpmPreset.max });
+
+  // ── Key detection (runs on the original or sliced buffer) ──
+  const keyResult: KeyResult = detectKey(keySource);
 
   // ── RMS waveform ───────────────────────────────────────────
   const lowRms = computeRms(lowBuf, chunkSize);

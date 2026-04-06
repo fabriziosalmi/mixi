@@ -411,6 +411,21 @@ body::after {
   animation: breathe 4s ease-in-out infinite;
 }
 
+/* ── Vinyl disc breathing (drop zone idle) ──────────────── */
+
+@keyframes breathe-vinyl {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.65; }
+}
+
+.mixi-breathe-vinyl {
+  animation: breathe-vinyl 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mixi-breathe-vinyl { animation: none; opacity: 0.5; }
+}
+
 /* ── Analysis data pop (BPM / Key appear with bounce) ────── */
 
 @keyframes mixi-pop {
