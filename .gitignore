@@ -48,6 +48,8 @@ DECKS_MARKETPLACE.md
 LOADERS.md
 WAVEFORM_VIEWER.md
 CRITICAL_AUDIT.md
+AUTOUPDATE.md
+MOBILE.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

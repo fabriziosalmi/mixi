@@ -7,21 +7,54 @@
  * For commercial licensing, contact: fabrizio.salmi@gmail.com
  */
 
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import './index.css';
-import './styles/mobile-compact.css';
+// ─────────────────────────────────────────────────────────────
+// Mixi – Entry Point with Code-Split Device Routing
+//
+// Device detection runs ONCE, synchronously, BEFORE React mount.
+// Vite produces separate chunks for desktop and mobile — the
+// unused chunk is never downloaded by the browser.
+//
+// Desktop/Tablet → DesktopRoot (App + MobileScaleWrapper)
+// Mobile phone   → MobileApp  (dedicated touch UI)
+//
+// Zero runtime overhead on desktop. Zero bytes of mobile code
+// in the desktop bundle.
+// ─────────────────────────────────────────────────────────────
 
-import { MobileScaleWrapper } from './components/mobile/MobileScaleWrapper';
+import { StrictMode, lazy, Suspense } from 'react';
+import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import './index.css';
+
+// ── Device detection: synchronous, pre-mount, one-time ──────
+// Uses the short side of the viewport (invariant to orientation)
+// combined with touch capability. A phone in landscape (852×393)
+// has minDim=393 → mobile. An iPad Mini (744×1133) has minDim=744
+// → desktop/tablet path (handled by MobileScaleWrapper scaling).
+const minDim = Math.min(window.innerWidth, window.innerHeight);
+const isMobile = minDim < 500 && navigator.maxTouchPoints > 0;
+
+// ── Code-split: separate Vite chunks ────────────────────────
+const Root = isMobile
+  ? lazy(() => import('./MobileApp'))
+  : lazy(() => import('./DesktopRoot'));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <MobileScaleWrapper>
-        <App />
-      </MobileScaleWrapper>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              width: '100vw',
+              height: '100vh',
+              background: '#000',
+            }}
+          />
+        }
+      >
+        <Root />
+      </Suspense>
     </ErrorBoundary>
   </StrictMode>,
 );
