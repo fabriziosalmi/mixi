@@ -104,6 +104,8 @@ export interface DeckState {
   dropBeats: number[];
   /** Musical key in Camelot notation (e.g. "8A", "11B"). */
   musicalKey: string;
+  /** Loading stage for UI feedback (null = not loading). */
+  loadingStage: string | null;
 }
 
 /** Master section state. */

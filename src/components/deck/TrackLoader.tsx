@@ -324,7 +324,7 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         }}
       >
         {isLoading ? (
-          <Spinner color={color} />
+          <LoadingCrumble deckId={deckId} color={color} />
         ) : (
           <div className="flex flex-col items-center gap-3">
             {/* Vinyl disc — breathing idle animation */}
@@ -481,12 +481,36 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
 // ── Tiny sub-components ──────────────────────────────────────
 
 /** CSS-only spinner. */
-const Spinner: FC<{ color: string }> = ({ color }) => (
-  <div
-    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-    style={{ color }}
-  />
-);
+// ── Crumble-text loading indicator (Claude Code style) ──────
+
+const LoadingCrumble: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
+  const stage = useMixiStore((s) => s.decks[deckId].loadingStage);
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDots((d) => (d.length >= 3 ? '' : d + '.'));
+    }, 400);
+    return () => clearInterval(timer);
+  }, []);
+
+  const text = stage || 'loading';
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div
+        className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        style={{ color }}
+      />
+      <span
+        className="text-[11px] font-mono tracking-wider"
+        style={{ color, minWidth: 140, textAlign: 'center' }}
+      >
+        {text}{dots}
+      </span>
+    </div>
+  );
+};
 
 /** Extract a readable name from a URL (last path segment). */
 function urlToName(url: string): string {

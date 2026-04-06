@@ -430,20 +430,25 @@ export class MixiEngine {
   async loadTrack(deck: DeckId, arrayBuffer: ArrayBuffer): Promise<void> {
     this.assertReady();
     this._loadInProgress[deck] = true;
+    const setStage = (stage: string | null) => useMixiStore.getState().setDeckLoadingStage(deck, stage);
 
     // BUG-21: Increment load generation so stale async loads are discarded.
     const gen = ++this._loadGen[deck];
 
     // Edge-case #17: Reject huge files before decodeAudioData OOMs the tab.
     if (arrayBuffer.byteLength > MixiEngine.MAX_FILE_SIZE) {
+      setStage(null);
       throw new Error(`File too large (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Maximum is 200MB.`);
     }
+
+    setStage('decoding audio');
 
     // Edge-case #20: Catch corrupt / undecodable files.
     let buffer: AudioBuffer;
     try {
       buffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0));
     } catch (err) {
+      setStage(null);
       const detail = err instanceof Error ? ` (${err.message})` : '';
       throw new Error(
         `File could not be decoded${detail}. ` +
@@ -453,7 +458,7 @@ export class MixiEngine {
     }
 
     // BUG-21: If another load or eject happened while we were decoding, bail.
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; return; }
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
 
     const transport = this.transports[deck];
     const wasPlaying = !!transport.source;
@@ -467,6 +472,8 @@ export class MixiEngine {
     transport.offset = 0;
     transport.startedAt = 0;
 
+    setStage('analyzing waveform');
+
     // Serialize analysis to avoid 6 concurrent OfflineAudioContext jobs
     // when two tracks load simultaneously. Each analysis uses 3 offline
     // renders, so running them in parallel saturates the CPU for 2+ seconds.
@@ -476,12 +483,16 @@ export class MixiEngine {
     }));
 
     // BUG-21: Check generation again after second await.
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; return; }
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
+
+    setStage('detecting BPM & key');
 
     const store = useMixiStore.getState();
     store.setDeckWaveform(deck, analysis.waveform, buffer.duration);
     store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset, analysis.bpmConfidence);
     store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
+
+    setStage('setting cue point');
 
     // ── Smart Auto-Cue: seek to first energetic downbeat ──
     const autoCue = findAutoCuePoint(buffer, analysis.bpm, analysis.firstBeatOffset);
@@ -494,6 +505,7 @@ export class MixiEngine {
     this.applyTrimGain(deck, useMixiStore.getState().decks[deck].gain);
 
     this._loadInProgress[deck] = false;
+    setStage(null);
 
     // BUG-09: If the deck was playing before load, restart playback.
     if (wasPlaying) {

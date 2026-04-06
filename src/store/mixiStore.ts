@@ -79,6 +79,7 @@ export interface MixiActions {
   setDeckBpm: (deck: DeckId, bpm: number, firstBeatOffset: number, bpmConfidence?: number) => void;
   setDeckAnalysis: (deck: DeckId, dropBeats: number[], musicalKey: string) => void;
   setDeckTrackName: (deck: DeckId, name: string) => void;
+  setDeckLoadingStage: (deck: DeckId, stage: string | null) => void;
   syncDeck: (deck: DeckId) => void;
   unsyncDeck: (deck: DeckId) => void;
 
@@ -161,6 +162,7 @@ function defaultDeck() {
     trackName: '',
     dropBeats: [] as number[],
     musicalKey: '',
+    loadingStage: null,
   };
 }
 
@@ -381,6 +383,14 @@ export const useMixiStore = create<MixiStore>()(
         },
       }));
     },
+
+    setDeckLoadingStage: (deck, stage) =>
+      set((s) => ({
+        decks: {
+          ...s.decks,
+          [deck]: { ...s.decks[deck], loadingStage: stage },
+        },
+      })),
 
     setDeckAnalysis: (deck, dropBeats, musicalKey) =>
       set((s) => ({

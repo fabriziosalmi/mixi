@@ -182,7 +182,7 @@ const ModeTab: FC<{
   <button
     type="button"
     onClick={onClick}
-    className="flex-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-all"
+    className="flex-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-all text-center"
     style={{
       background: 'transparent',
       border: 'none',
