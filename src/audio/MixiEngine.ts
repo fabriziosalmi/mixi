@@ -38,6 +38,7 @@ import { crossfaderGains } from './utils/mathUtils';
 import { smoothParam } from './utils/paramSmooth';
 import { analyzeWaveform } from './WaveformAnalyzer';
 import { findAutoCuePoint } from './autoCue';
+import { phaseLockLoop } from './PhaseLockLoop';
 import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
@@ -750,6 +751,8 @@ export class MixiEngine {
    */
   nudgeStart(deck: DeckId, direction: 1 | -1, fine = false): void {
     if (!this.initialized) return;
+    // Freeze PLL during manual nudge (anti-windup layer 1)
+    phaseLockLoop.freeze(deck);
     const amount = fine ? MixiEngine.FINE_NUDGE : MixiEngine.NUDGE_AMOUNT;
     this._nudge[deck] = direction * amount;
 
@@ -768,11 +771,26 @@ export class MixiEngine {
   nudgeStop(deck: DeckId): void {
     if (!this.initialized) return;
     this._nudge[deck] = 0;
+    // Unfreeze PLL after manual nudge
+    phaseLockLoop.unfreeze(deck);
 
     const transport = this.transports[deck];
     if (transport.source) {
       // Smooth release back to base rate
       smoothParam(transport.source.playbackRate, transport.playbackRate, this.ctx, 0.040);
+    }
+  }
+
+  /**
+   * Apply a PLL-corrected rate directly to the AudioNode.
+   * Does NOT touch the store — this is a micro-correction invisible to the UI.
+   */
+  applyPllRate(deck: DeckId, rate: number): void {
+    if (!this.initialized) return;
+    const transport = this.transports[deck];
+    if (transport.source) {
+      // Very gentle smoothing for PLL: 20ms time constant
+      smoothParam(transport.source.playbackRate, rate, this.ctx, 0.020);
     }
   }
 
@@ -973,6 +991,8 @@ export class MixiEngine {
     this.assertReady();
     // A2: Cancel vinyl brake if in progress (prevents delayed pause overwriting seek)
     this.cancelBrake(deck);
+    // PLL: Reset on seek (discontinuity protection layer 3)
+    phaseLockLoop.reset(deck);
     const transport = this.transports[deck];
     if (!transport.buffer) return;
 

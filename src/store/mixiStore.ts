@@ -41,6 +41,7 @@ import type {
 import { HOT_CUE_COUNT } from '../types';
 import { clamp } from '../audio/utils/mathUtils';
 import { MixiEngine } from '../audio/MixiEngine';
+import { phaseLockLoop } from '../audio/PhaseLockLoop';
 import { saveHotCues, loadHotCues } from './hotCueStorage';
 import { useSettingsStore } from './settingsStore';
 import type { QuantizeResolution } from './settingsStore';
@@ -436,6 +437,10 @@ export const useMixiStore = create<MixiStore>()(
           }
         }
 
+        // Start PLL for continuous phase correction
+        phaseLockLoop.reset(deck);
+        phaseLockLoop.start();
+
         return {
           decks: {
             ...s.decks,
@@ -454,12 +459,18 @@ export const useMixiStore = create<MixiStore>()(
         };
       }),
 
-    unsyncDeck: (deck) =>
-      set((s) => {
-        const d = s.decks[deck];
+    unsyncDeck: (deck) => {
+      phaseLockLoop.reset(deck);
+      // Stop PLL if no deck is synced
+      const s = get();
+      const otherSynced = s.decks[deck === 'A' ? 'B' : 'A'].isSynced;
+      if (!otherSynced) phaseLockLoop.stop();
+
+      set((st) => {
+        const d = st.decks[deck];
         return {
           decks: {
-            ...s.decks,
+            ...st.decks,
             [deck]: {
               ...d,
               playbackRate: 1.0,
@@ -468,7 +479,8 @@ export const useMixiStore = create<MixiStore>()(
             },
           },
         };
-      }),
+      });
+    },
 
     // ── HOT CUES ─────────────────────────────────────────────
 
