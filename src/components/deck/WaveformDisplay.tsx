@@ -29,7 +29,6 @@ import { CUE_COLORS, themeVar } from '../../theme';
 import {
   BAR_STEP,
   screenXToTime,
-  timeToScreenX as timeToScreenXPure,
   snapToBeat as snapToBeatPure,
   hitTest,
   zoomAtPoint,
@@ -545,12 +544,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     [],
   );
 
-  /** Convert a time (seconds) to screen X position. */
-  const timeToScreenX = useCallback(
-    (time: number): number =>
-      timeToScreenXPure(time, startIndexRef.current, zoomRef.current),
-    [],
-  );
+
 
   /** Snap a time to the nearest beat (if quantize enabled, unless Shift held). */
   const snapToBeat = useCallback(
@@ -678,7 +672,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         scrubTimeRef.current = null;
       };
     },
-    [deckId, mouseXToTime, timeToScreenX, snapToBeat],
+    [deckId, mouseXToTime, snapToBeat],
   );
 
   // Clean up drag listeners on unmount
@@ -706,7 +700,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     if (!ctxMenu) return;
     const close = () => setCtxMenu(null);
     window.addEventListener('mousedown', close);
-    window.addEventListener('wheel', close);
+    window.addEventListener('wheel', close, { passive: true });
     return () => {
       window.removeEventListener('mousedown', close);
       window.removeEventListener('wheel', close);

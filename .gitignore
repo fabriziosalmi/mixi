@@ -51,6 +51,8 @@ CRITICAL_AUDIT.md
 AUTOUPDATE.md
 MOBILE.md
 DECKS_MOBILE_UI.md
+TOPBAR.md
+BEATMATCHING.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/

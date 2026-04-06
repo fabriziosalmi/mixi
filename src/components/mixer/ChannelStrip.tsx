@@ -11,7 +11,7 @@
 // Mixi – Channel Strip (compact layout)
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useRef, useState, type FC } from 'react';
+import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { Knob } from '../controls/Knob';
 import { Fader } from '../controls/Fader';
@@ -43,7 +43,7 @@ export const ChannelStrip: FC<ChannelStripProps> = ({ deckId, color, vuSide = 'l
   });
   // Ref mirror avoids kills in useCallback deps → stable closures
   const killsRef = useRef(kills);
-  killsRef.current = kills;
+  useEffect(() => { killsRef.current = kills; });
 
   const onGainChange = useCallback(
     (val: number) => setGain(deckId, val),

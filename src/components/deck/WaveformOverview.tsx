@@ -252,7 +252,7 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [deckId, width, height]);
+  }, [deckId, width, height, externalZoomRef]);
 
   // ── Click to seek / viewport drag ───────────────────────────
   const handleMouseDown = useCallback(

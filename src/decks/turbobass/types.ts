@@ -63,6 +63,8 @@ export interface JS303Snapshot {
   currentPattern: number;
   crossfaderLink: boolean;
   ghostSequenceReady: boolean;
+  engineReady: boolean;
+  patternName: string;
 }
 
 // ── Defaults ────────────────────────────────────────────────

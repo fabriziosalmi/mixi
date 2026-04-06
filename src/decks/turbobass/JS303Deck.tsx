@@ -100,6 +100,7 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
     patternLength: 16, transpose: 0, acidMacro: 0,
     currentBank: 0, currentPattern: 0,
     crossfaderLink: false, ghostSequenceReady: false,
+    engineReady: false, patternName: '',
   });
 
   const engineRef = useRef<JS303Engine | null>(null);
@@ -113,9 +114,10 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
     const engine = new JS303Engine(deckId);
     engine.init();
     engineRef.current = engine;
+    setSnapshot(s => ({ ...s, engineReady: true, patternName: engine.getPatternName() }));
 
     engine.onStepChange = (step) => {
-      setSnapshot(s => ({ ...s, currentStep: step }));
+      setSnapshot(s => ({ ...s, currentStep: step, bpm: engine.bpm }));
     };
 
     engine.onGhostReady = (ready) => {
@@ -235,6 +237,7 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
       steps: engine.steps.map(st => ({ ...st })),
       currentBank: bank,
       currentPattern: pattern,
+      patternName: engine.getPatternName(),
     }));
   }, []);
 
@@ -254,10 +257,10 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
   }, []);
 
   // Now safe to early-return
-  if (!engineRef.current) return null;
+  if (!snapshot.engineReady) return null;
 
-  const bpm = snapshot.syncToMaster ? (engineRef.current?.bpm ?? snapshot.bpm) : snapshot.bpm;
-  const patternName = engineRef.current.getPatternName();
+  const bpm = snapshot.bpm;
+  const patternName = snapshot.patternName;
 
   // ── Inline Styles ─────────────────────────────────────────
 

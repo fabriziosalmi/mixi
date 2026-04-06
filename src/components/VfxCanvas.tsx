@@ -61,6 +61,19 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   const waveBufB = useRef<Uint8Array | null>(null);
   // Secret #3: Peak hold buffer (slower decay than raw FFT)
   const peakBufRef = useRef(new Float32Array(128));
+  // Pre-allocated VfxFrameParams — mutated in-place every frame (zero GC)
+  const paramsRef = useRef<VfxFrameParams>({
+    width: 0, height: 0, time: 0, beatEnergy: 0,
+    kick: 0, snare: 0, hihat: 0, hue: 0,
+    beatCount: 0, beatPhase: 0, energyDeriv: 0, totalEnergy: 0,
+    crossfader: 0.5, colorFilter: 0, ringWritePos: 0, feedbackAmount: 0.85,
+    deckAColor: [0, 0.94, 1], deckBColor: [1, 0.42, 0],
+    fftBins: new Uint8Array(128), peakBins: new Float32Array(128),
+  });
+  // Fallback fftBins — single allocation, reused when analyser returns null
+  const emptyFftRef = useRef(new Uint8Array(128));
+  // Frame timing for GPU loop frame-skip (perf: skip when ahead of budget)
+  const lastGpuFrameRef = useRef(0);
   // Secret #24: Parsed CSS deck colors
   const deckAColorRef = useRef<[number, number, number]>(hexToRgb('#00f0ff'));
   const deckBColorRef = useRef<[number, number, number]>(hexToRgb('#ff6a00'));
@@ -283,9 +296,15 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
   // ── WebGPU render loop ────────────────────────────────────
 
-  const renderGpu = useCallback(function gpuLoop() {
+  const renderGpu = useCallback(function gpuLoop(now: number) {
     const renderer = rendererRef.current;
     if (!renderer || renderer.destroyed) return;
+
+    rafRef.current = requestAnimationFrame(gpuLoop);
+
+    // Frame-skip: cap at ~60 FPS (16.6ms budget)
+    if (now - lastGpuFrameRef.current < 15) return;
+    lastGpuFrameRef.current = now;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -309,29 +328,28 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
     hueRef.current = (hueRef.current + 0.5 + audio.level * 2) % 360;
 
-    // GPU render (full-screen effects)
-    const params: VfxFrameParams = {
-      width: w,
-      height: h,
-      time: (performance.now() - startTimeRef.current) / 1000,
-      beatEnergy: beatEnergyRef.current,
-      kick: audio.kick,
-      snare: audio.snare,
-      hihat: audio.hihat,
-      hue: hueRef.current,
-      beatCount: beatCountRef.current,
-      beatPhase: audio.beatPhase,
-      energyDeriv: audio.energyDeriv,
-      totalEnergy: audio.totalEnergy,
-      crossfader: audio.crossfader,
-      colorFilter: audio.colorFilter,
-      ringWritePos: frameRef.current % 64,
-      feedbackAmount: 0.85,  // #14: aggressive feedback trails
-      deckAColor: deckAColorRef.current,
-      deckBColor: deckBColorRef.current,
-      fftBins: audio.fftBins || new Uint8Array(128),
-      peakBins: audio.peakBins,
-    };
+    // Mutate pre-allocated params in-place (zero GC pressure)
+    const params = paramsRef.current;
+    params.width = w;
+    params.height = h;
+    params.time = (now - startTimeRef.current) / 1000;
+    params.beatEnergy = beatEnergyRef.current;
+    params.kick = audio.kick;
+    params.snare = audio.snare;
+    params.hihat = audio.hihat;
+    params.hue = hueRef.current;
+    params.beatCount = beatCountRef.current;
+    params.beatPhase = audio.beatPhase;
+    params.energyDeriv = audio.energyDeriv;
+    params.totalEnergy = audio.totalEnergy;
+    params.crossfader = audio.crossfader;
+    params.colorFilter = audio.colorFilter;
+    params.ringWritePos = frameRef.current % 64;
+    params.feedbackAmount = 0.85;
+    params.deckAColor = deckAColorRef.current;
+    params.deckBColor = deckBColorRef.current;
+    params.fftBins = audio.fftBins || emptyFftRef.current;
+    params.peakBins = audio.peakBins;
     renderer.render(params);
 
     // Canvas 2D overlay: oscilloscopes only
@@ -343,12 +361,18 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     drawOscilloscopes(ctx, beatEnergyRef.current);
 
     ctx.restore();
-    rafRef.current = requestAnimationFrame(gpuLoop);
   }, [analyzeAudio, drawOscilloscopes, updateJogPositions]);
 
   // ── Canvas 2D fallback render loop ─────────────────────────
 
-  const renderCanvas2d = useCallback(function canvasLoop() {
+  const lastCanvas2dFrameRef = useRef(0);
+  const renderCanvas2d = useCallback(function canvasLoop(now: number) {
+    rafRef.current = requestAnimationFrame(canvasLoop);
+
+    // Frame-skip: cap at ~60 FPS
+    if (now - lastCanvas2dFrameRef.current < 15) return;
+    lastCanvas2dFrameRef.current = now;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -401,7 +425,6 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     }
 
     ctx.restore();
-    rafRef.current = requestAnimationFrame(canvasLoop);
   }, [analyzeAudio, drawOscilloscopes, updateJogPositions]);
 
   // ── Secret #29: Emergency Kill-Switch (ESC) ─────────────────

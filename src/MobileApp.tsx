@@ -40,10 +40,10 @@ export default function MobileApp() {
   const haptics = useHaptics();
 
   // Prevent pull-to-refresh and overscroll on mobile
-  if (typeof document !== 'undefined') {
+  useEffect(() => {
     document.body.style.overscrollBehavior = 'none';
     document.body.style.touchAction = 'manipulation';
-  }
+  }, []);
 
   // ── Shake-to-panic ──
   const shakeCountRef = useRef(0);

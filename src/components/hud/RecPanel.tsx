@@ -86,20 +86,23 @@ export const RecPanel: FC = () => {
     marksRef.current = marks;
   }, [marks]);
 
+  const [diskAvailable, setDiskAvailable] = useState(false);
+  const [diskMode, setDiskMode] = useState(false);
+
   // ── Check for disk recording availability + orphans on mount ─
 
   useEffect(() => {
     const bridge = DiskRecordingBridge.getInstance();
     diskBridgeRef.current = bridge;
 
-    if (bridge.isAvailable()) {
+    const available = bridge.isAvailable();
+    setDiskAvailable(available);
+    if (available) {
       bridge.checkOrphans().then((found) => {
         if (found.length > 0) setOrphans(found);
       });
     }
   }, []);
-
-  const diskAvailable = diskBridgeRef.current?.isAvailable() ?? false;
 
   // ── Start recording ────────────────────────────────────────
 
@@ -115,6 +118,7 @@ export const RecPanel: FC = () => {
       const ok = await diskBridgeRef.current.start(actx, masterOutput);
       if (ok) {
         diskModeRef.current = true;
+        setDiskMode(true);
         startTimeRef.current = performance.now();
         setRecording(true);
         setElapsed(0);
@@ -130,6 +134,7 @@ export const RecPanel: FC = () => {
 
     // Fallback: MediaRecorder (web + Electron without addon)
     diskModeRef.current = false;
+    setDiskMode(false);
 
     const dest = actx.createMediaStreamDestination();
     masterOutput.connect(dest);
@@ -291,7 +296,7 @@ export const RecPanel: FC = () => {
 
   const recFormat = useSettingsStore((s) => s.recFormat);
   const estimatedBytes = recording
-    ? diskModeRef.current
+    ? diskMode
       ? elapsed * 44100 * 2 * 4                    // WAV: stereo, 32-bit float, 44.1kHz
       : elapsed * REC_MIME[recFormat].bitrate / 8   // estimated from format bitrate
     : 0;

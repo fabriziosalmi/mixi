@@ -15,7 +15,7 @@
 // to the desktop mixer — zero duplicated logic.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useRef, type FC } from 'react';
+import { useCallback, useState, type FC } from 'react';
 import { useMixiStore } from '../../../store/mixiStore';
 import { Knob } from '../../controls/Knob';
 import { COLOR_DECK_A, COLOR_DECK_B } from '../../../theme';
@@ -49,22 +49,22 @@ export const OverlayEQ: FC<OverlayEQProps> = ({ deckId }) => {
   const setDeckColorFx = useMixiStore((s) => s.setDeckColorFx);
 
   // Kill state (saved values per band)
-  const killedRef = useRef<Record<EqBand, number | null>>({ high: null, mid: null, low: null });
+  const [killed, setKilled] = useState<Record<EqBand, number | null>>({ high: null, mid: null, low: null });
 
   const toggleKill = useCallback(
     (band: EqBand) => {
-      const saved = killedRef.current[band];
+      const saved = killed[band];
       if (saved !== null) {
         // Un-kill: restore saved value
         setDeckEq(deckId, band, saved);
-        killedRef.current[band] = null;
+        setKilled(k => ({ ...k, [band]: null }));
       } else {
         // Kill: save current, cut to min
-        killedRef.current[band] = eq[band];
+        setKilled(k => ({ ...k, [band]: eq[band] }));
         setDeckEq(deckId, band, EQ_MIN);
       }
     },
-    [deckId, eq, setDeckEq],
+    [deckId, eq, setDeckEq, killed],
   );
 
   return (
@@ -87,7 +87,7 @@ export const OverlayEQ: FC<OverlayEQProps> = ({ deckId }) => {
             onChange={(v) => {
               setDeckEq(deckId, band, v);
               // Un-kill if user moves knob while killed
-              if (killedRef.current[band] !== null) killedRef.current[band] = null;
+              if (killed[band] !== null) killed[band] = null;
             }}
             label={label}
             bipolar
@@ -100,10 +100,10 @@ export const OverlayEQ: FC<OverlayEQProps> = ({ deckId }) => {
             style={{
               width: 40,
               height: 24,
-              border: `1px solid ${killedRef.current[band] !== null ? '#ef4444' : '#444'}`,
+              border: `1px solid ${killed[band] !== null ? '#ef4444' : '#444'}`,
               borderRadius: 3,
-              background: killedRef.current[band] !== null ? '#ef444433' : 'transparent',
-              color: killedRef.current[band] !== null ? '#ef4444' : '#666',
+              background: killed[band] !== null ? '#ef444433' : 'transparent',
+              color: killed[band] !== null ? '#ef4444' : '#666',
               fontSize: 9,
               fontWeight: 700,
               fontFamily: 'var(--font-mono)',
