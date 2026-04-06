@@ -517,38 +517,54 @@ const HpMasterStrip: FC = () => {
       />
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center px-1 py-1.5 gap-0">
-        {page === 'hp' ? (
-          <>
-            <div className="flex-1 flex justify-center">
-              <CueBtn active={cueA} color={CYAN} onClick={() => toggleCue('A')} title="CUE A" />
-            </div>
-            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-              <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.5} label="MIX" />
-            </div>
-            <div className="flex-1 flex justify-center">
-              <SplitBtn active={splitMode} onClick={toggleSplit} />
-            </div>
-            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-              <Knob value={hpLevel} min={0} max={1} onChange={setHpLevel} color={COLOR_HP} scale={0.5} label="VOL" />
-            </div>
-            <div className="flex-1 flex justify-center">
-              <CueBtn active={cueB} color={ORANGE} onClick={() => toggleCue('B')} title="CUE B" />
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-              <Knob value={eqHigh} min={-12} max={12} center={0} onChange={(v) => setMasterEq('high', v)} bipolar color={COLOR_MST} scale={0.5} label="HI" />
-            </div>
-            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-              <Knob value={eqMid} min={-12} max={12} center={0} onChange={(v) => setMasterEq('mid', v)} bipolar color={COLOR_MST} scale={0.5} label="MID" />
-            </div>
-            <div className="flex-1 flex justify-center [&_span]:!text-[7px]">
-              <Knob value={eqLow} min={-12} max={12} center={0} onChange={(v) => setMasterEq('low', v)} bipolar color={COLOR_MST} scale={0.5} label="LO" />
-            </div>
-          </>
-        )}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Label bar — pinned to top */}
+        <div className="flex items-center justify-around shrink-0" style={{ height: 12, background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          {page === 'hp' ? (
+            <>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${CYAN}99` }}>CUE A</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>MIX</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>SPLIT</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>VOL</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${ORANGE}99` }}>CUE B</span>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>HI</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>MID</span>
+              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>LO</span>
+            </>
+          )}
+        </div>
+
+        {/* Controls row */}
+        <div className="flex-1 flex items-center justify-around px-2 py-1.5 gap-1.5">
+          {page === 'hp' ? (
+            <>
+              <StripBtn active={cueA} color={CYAN} onClick={() => toggleCue('A')} icon="cue" />
+              <div className="flex-1 flex justify-center [&_span]:!hidden">
+                <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.5} />
+              </div>
+              <StripBtn active={splitMode} color={COLOR_HP} onClick={toggleSplit} icon="split" />
+              <div className="flex-1 flex justify-center [&_span]:!hidden">
+                <Knob value={hpLevel} min={0} max={1} onChange={setHpLevel} color={COLOR_HP} scale={0.5} />
+              </div>
+              <StripBtn active={cueB} color={ORANGE} onClick={() => toggleCue('B')} icon="cue" />
+            </>
+          ) : (
+            <>
+              <div className="flex-1 flex justify-center [&_span]:!hidden">
+                <Knob value={eqHigh} min={-12} max={12} center={0} onChange={(v) => setMasterEq('high', v)} bipolar color={COLOR_MST} scale={0.5} />
+              </div>
+              <div className="flex-1 flex justify-center [&_span]:!hidden">
+                <Knob value={eqMid} min={-12} max={12} center={0} onChange={(v) => setMasterEq('mid', v)} bipolar color={COLOR_MST} scale={0.5} />
+              </div>
+              <div className="flex-1 flex justify-center [&_span]:!hidden">
+                <Knob value={eqLow} min={-12} max={12} center={0} onChange={(v) => setMasterEq('low', v)} bipolar color={COLOR_MST} scale={0.5} />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Right rail toggle */}
@@ -569,55 +585,42 @@ const HpMasterStrip: FC = () => {
   );
 };
 
-const CueBtn: FC<{ active: boolean; color: string; onClick: () => void; title: string }> = ({ active, color, onClick, title }) => (
+/** Rectangular button with rounded corners for the HP/MEQ strip. */
+const StripBtn: FC<{ active: boolean; color: string; onClick: () => void; icon: 'cue' | 'split' }> = ({ active, color, onClick, icon }) => (
   <button
     type="button"
     onClick={onClick}
-    title={title}
-    className="mixi-btn rounded-full flex items-center justify-center transition-all duration-150 shrink-0"
+    className="mixi-btn flex items-center justify-center transition-all duration-150 shrink-0 active:scale-95"
     style={{
-      width: 26,
-      height: 26,
-      background: active ? 'var(--srf-mid)' : 'var(--srf-raised)',
+      width: 30,
+      height: 22,
+      borderRadius: 5,
+      background: active ? `${color}18` : 'var(--srf-raised)',
       border: `1.5px solid ${active ? `${color}88` : 'var(--srf-light)'}`,
       boxShadow: active
         ? `inset 0 0 6px ${color}22, 0 0 4px ${color}33`
         : 'none',
     }}
   >
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      style={active ? { filter: `drop-shadow(0 0 3px ${color}88)` } : undefined}
-    >
-      <path d="M3 18v-6a9 9 0 0 1 18 0v6"
-        stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2.5 : 1.5} strokeLinecap="round" fill="none" />
-      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v5z"
-        stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} fill={active ? color : 'none'} />
-      <path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v5z"
-        stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} fill={active ? color : 'none'} />
-    </svg>
-  </button>
-);
-
-const SplitBtn: FC<{ active: boolean; onClick: () => void }> = ({ active, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title="Split mode (L=CUE, R=Master)"
-    className="mixi-btn rounded-full flex items-center justify-center transition-all duration-150 shrink-0"
-    style={{
-      width: 26,
-      height: 26,
-      background: active ? 'var(--srf-mid)' : 'var(--srf-raised)',
-      border: `1.5px solid ${active ? `${COLOR_HP}66` : 'var(--srf-light)'}`,
-      boxShadow: active ? `inset 0 0 6px ${COLOR_HP}22, 0 0 4px ${COLOR_HP}22` : 'none',
-    }}
-  >
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      style={active ? { filter: `drop-shadow(0 0 3px ${COLOR_HP}88)` } : undefined}
-    >
-      <line x1="12" y1="4" x2="12" y2="20" stroke={active ? COLOR_HP : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" />
-      <path d="M8 9L5 12L8 15" fill="none" stroke={active ? COLOR_HP : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16 9L19 12L16 15" fill="none" stroke={active ? COLOR_HP : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    {icon === 'cue' ? (
+      <svg width="14" height="12" viewBox="0 0 24 24" fill="none"
+        style={active ? { filter: `drop-shadow(0 0 3px ${color}88)` } : undefined}
+      >
+        <path d="M3 18v-6a9 9 0 0 1 18 0v6"
+          stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2.5 : 1.5} strokeLinecap="round" fill="none" />
+        <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v5z"
+          stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} fill={active ? color : 'none'} />
+        <path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v5z"
+          stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} fill={active ? color : 'none'} />
+      </svg>
+    ) : (
+      <svg width="14" height="12" viewBox="0 0 24 24" fill="none"
+        style={active ? { filter: `drop-shadow(0 0 3px ${color}88)` } : undefined}
+      >
+        <line x1="12" y1="4" x2="12" y2="20" stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" />
+        <path d="M8 9L5 12L8 15" fill="none" stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16 9L19 12L16 15" fill="none" stroke={active ? color : 'var(--txt-secondary)'} strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )}
   </button>
 );
