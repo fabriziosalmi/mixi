@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, type FC } from 'react';
-import { MixiEngine } from '../../audio/MixiEngine';
+import { MeterService } from '../../audio/MeterService';
 import { themeVar } from '../../theme';
 
 const SEGMENT_COUNT = 12;
@@ -43,7 +43,6 @@ function applyLevel(
 export const MasterVuMeter: FC = () => {
   const colLRef = useRef<HTMLDivElement>(null);
   const colRRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef(0);
 
   useEffect(() => {
     // Grab segment children once.
@@ -64,24 +63,11 @@ export const MasterVuMeter: FC = () => {
     );
     const segGlows = segColors.map((c) => `0 0 4px ${c}44`);
 
-    let lastUpdate = 0;
-
-    function tick() {
-      const now = performance.now();
-      if (now - lastUpdate > 33) {
-        lastUpdate = now;
-        const engine = MixiEngine.getInstance();
-        if (engine.isInitialized) {
-          const masterLevel = engine.getMasterLevel();
-          applyLevel(segsL, masterLevel, segColors, segGlows, ledOff);
-          applyLevel(segsR, masterLevel, segColors, segGlows, ledOff);
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    }
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    // Subscribe to shared MeterService (single RAF loop for all meters)
+    return MeterService.subscribe((levels) => {
+      applyLevel(segsL, levels.master, segColors, segGlows, ledOff);
+      applyLevel(segsR, levels.master, segColors, segGlows, ledOff);
+    });
   }, []);
 
   return (

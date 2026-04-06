@@ -332,7 +332,13 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     const params = paramsRef.current;
     params.width = w;
     params.height = h;
-    params.time = (now - startTimeRef.current) / 1000;
+    // Use AudioContext.currentTime as visual clock source — stays in
+    // sync with audio during GC pauses (performance.now() would drift).
+    const engine = MixiEngine.getInstance();
+    const audioTime = engine.isInitialized
+      ? engine.getAudioContext().currentTime
+      : (now - startTimeRef.current) / 1000;
+    params.time = audioTime;
     params.beatEnergy = beatEnergyRef.current;
     params.kick = audio.kick;
     params.snare = audio.snare;

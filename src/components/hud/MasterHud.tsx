@@ -17,6 +17,7 @@
 import { useCallback, useState, useEffect, useRef, useMemo, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
+import { MeterService } from '../../audio/MeterService';
 import { Knob } from '../controls/Knob';
 import { COLOR_MASTER } from '../../theme';
 import { isGhost } from '../../ai/ghostFields';
@@ -194,26 +195,16 @@ const MiniVu: FC = () => {
   const barRRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let raf = 0;
-    let skip = false;
-    function tick() {
-      skip = !skip;
-      if (!skip) {
-        const engine = MixiEngine.getInstance();
-        if (engine.isInitialized && barLRef.current && barRRef.current) {
-          const level = engine.getMasterLevel();
-          const pct = Math.min(100, Math.max(0, level * 100));
-          const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
-          barLRef.current.style.width = `${pct}%`;
-          barLRef.current.style.backgroundColor = color;
-          barRRef.current.style.width = `${pct}%`;
-          barRRef.current.style.backgroundColor = color;
-        }
+    return MeterService.subscribe((levels) => {
+      if (barLRef.current && barRRef.current) {
+        const pct = Math.min(100, Math.max(0, levels.master * 100));
+        const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
+        barLRef.current.style.width = `${pct}%`;
+        barLRef.current.style.backgroundColor = color;
+        barRRef.current.style.width = `${pct}%`;
+        barRRef.current.style.backgroundColor = color;
       }
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    });
   }, []);
 
   const barStyle = useMemo(() => ({

@@ -47,8 +47,12 @@ export class MidiManager {
   // Sends 24 ppqn clock ticks synced to the active deck's BPM.
   // 0xFA = Start, 0xFC = Stop, 0xF8 = Clock tick (24 per beat).
   private _clockEnabled = false;
-  private _clockTimer: ReturnType<typeof setInterval> | null = null;
+  private _clockSchedulerTimer: ReturnType<typeof setTimeout> | null = null;
+  private _clockNextTickTime = 0;
   private _clockOutputs: MIDIOutput[] = [];
+  // Look-ahead scheduler constants (ms)
+  private static readonly CLOCK_LOOK_AHEAD = 25;   // schedule 25ms into the future
+  private static readonly CLOCK_SCHEDULER_MS = 10;  // check every 10ms
 
   private constructor() {
     this.init();
@@ -259,9 +263,9 @@ export class MidiManager {
     if (!this._clockEnabled) return;
     this._clockEnabled = false;
 
-    if (this._clockTimer) {
-      clearInterval(this._clockTimer);
-      this._clockTimer = null;
+    if (this._clockSchedulerTimer) {
+      clearTimeout(this._clockSchedulerTimer);
+      this._clockSchedulerTimer = null;
     }
 
     // Send MIDI Stop (0xFC)
@@ -270,24 +274,37 @@ export class MidiManager {
     log.info('MIDI', 'Clock stopped');
   }
 
+  /**
+   * Look-ahead scheduler: schedules MIDI clock ticks into the future
+   * using hardware timestamps (MIDIOutput.send(data, timestamp)).
+   * The OS MIDI driver delivers messages at the exact timestamp,
+   * independent of JS main-thread scheduling jitter.
+   *
+   * Recalculates tick interval each iteration to follow live BPM changes.
+   */
   private scheduleClockTicks(): void {
-    if (this._clockTimer) clearInterval(this._clockTimer);
+    this._clockNextTickTime = performance.now();
+    this.clockSchedulerLoop();
+  }
 
-    // Tick at 24 ppqn — recalculate interval each tick for live BPM changes
-    this._clockTimer = setInterval(() => {
-      if (!this._clockEnabled) return;
-      this.sendToAllOutputs([0xF8]);
-    }, this.getTickIntervalMs());
+  private clockSchedulerLoop(): void {
+    if (!this._clockEnabled) return;
 
-    // Re-schedule periodically to follow BPM changes
-    const bpmWatcher = setInterval(() => {
-      if (!this._clockEnabled) { clearInterval(bpmWatcher); return; }
-      if (this._clockTimer) clearInterval(this._clockTimer);
-      this._clockTimer = setInterval(() => {
-        if (!this._clockEnabled) return;
-        this.sendToAllOutputs([0xF8]);
-      }, this.getTickIntervalMs());
-    }, 500); // Re-sync interval every 500ms
+    const now = performance.now();
+    const tickInterval = this.getTickIntervalMs();
+    const deadline = now + MidiManager.CLOCK_LOOK_AHEAD;
+
+    // Schedule all ticks that fall within the look-ahead window
+    while (this._clockNextTickTime < deadline) {
+      const timestamp = Math.max(this._clockNextTickTime, now);
+      this.sendToAllOutputsAt([0xF8], timestamp);
+      this._clockNextTickTime += tickInterval;
+    }
+
+    this._clockSchedulerTimer = setTimeout(
+      () => this.clockSchedulerLoop(),
+      MidiManager.CLOCK_SCHEDULER_MS,
+    );
   }
 
   private getTickIntervalMs(): number {
@@ -304,6 +321,14 @@ export class MidiManager {
     const msg = new Uint8Array(data);
     for (const output of this._clockOutputs) {
       try { output.send(msg); } catch { /* output may have disconnected */ }
+    }
+  }
+
+  /** Send with hardware timestamp — OS MIDI driver delivers at exact time. */
+  private sendToAllOutputsAt(data: number[], timestamp: number): void {
+    const msg = new Uint8Array(data);
+    for (const output of this._clockOutputs) {
+      try { output.send(msg, timestamp); } catch { /* output may have disconnected */ }
     }
   }
 

@@ -21,7 +21,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, type FC } from 'react';
-import { MixiEngine } from '../../audio/MixiEngine';
+import { MeterService } from '../../audio/MeterService';
 import type { DeckId } from '../../types';
 import { themeVar } from '../../theme';
 
@@ -39,7 +39,6 @@ interface VuMeterProps {
 
 export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef(0);
   const displayLevel = useRef(0);
   const peakLevel = useRef(0);
   const peakTime = useRef(0);
@@ -73,75 +72,63 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
       segments.unshift(seg); // segments[0] = bottom, segments[11] = top
     }
 
-    let lastUpdate = 0;
     let prevLitCount = -1;
     let prevPeakSeg = -1;
 
-    function tick() {
+    // Subscribe to shared MeterService (single RAF loop for all meters)
+    const unsub = MeterService.subscribe((levels) => {
       const now = performance.now();
-      if (now - lastUpdate > 33) { // ~30 FPS
-        lastUpdate = now;
+      const rawLevel = levels[deckId];
 
-        const engine = MixiEngine.getInstance();
-        const rawLevel = engine.isInitialized ? engine.getLevel(deckId) : 0;
-
-        // ── Attack: instant rise ─────────────────────────────
-        if (rawLevel > displayLevel.current) {
-          displayLevel.current = rawLevel;
-        } else {
-          // ── Release: logarithmic decay ─────────────────────
-          displayLevel.current *= RELEASE_DECAY;
-          if (displayLevel.current < 0.01) displayLevel.current = 0;
-        }
-
-        // ── Peak hold ────────────────────────────────────────
-        if (rawLevel > peakLevel.current) {
-          peakLevel.current = rawLevel;
-          peakTime.current = now;
-        } else if (now - peakTime.current > PEAK_HOLD_MS) {
-          // Peak expired — let it fall.
-          peakLevel.current *= RELEASE_DECAY;
-          if (peakLevel.current < 0.01) peakLevel.current = 0;
-        }
-
-        const litCount = Math.round(displayLevel.current * SEGMENT_COUNT);
-        const peakSeg = Math.min(SEGMENT_COUNT - 1, Math.round(peakLevel.current * SEGMENT_COUNT) - 1);
-
-        // ── Skip DOM writes if nothing changed ───────────────
-        if (litCount === prevLitCount && peakSeg === prevPeakSeg) {
-          rafRef.current = requestAnimationFrame(tick);
-          return;
-        }
-        prevLitCount = litCount;
-        prevPeakSeg = peakSeg;
-
-        // ── Update only changed segments (no setState) ────────
-        for (let i = 0; i < SEGMENT_COUNT; i++) {
-          const wasLit = i < prevLitCount || i === prevPeakSeg;
-          const isLit = i < litCount;
-          const isPeak = i === peakSeg && peakSeg >= 0;
-          const nowLit = isLit || isPeak;
-          if (wasLit === nowLit) continue;  // skip unchanged segments
-
-          const seg = segments[i];
-          if (nowLit) {
-            const c = segColors[i];
-            seg.style.backgroundColor = c;
-            seg.style.opacity = '1';
-            seg.style.boxShadow = `0 0 4px ${c}44`;
-          } else {
-            seg.style.backgroundColor = ledOff;
-            seg.style.opacity = '0.5';
-            seg.style.boxShadow = 'none';
-          }
-        }
+      // ── Attack: instant rise ─────────────────────────────
+      if (rawLevel > displayLevel.current) {
+        displayLevel.current = rawLevel;
+      } else {
+        // ── Release: logarithmic decay ─────────────────────
+        displayLevel.current *= RELEASE_DECAY;
+        if (displayLevel.current < 0.01) displayLevel.current = 0;
       }
 
-      rafRef.current = requestAnimationFrame(tick);
-    }
+      // ── Peak hold ────────────────────────────────────────
+      if (rawLevel > peakLevel.current) {
+        peakLevel.current = rawLevel;
+        peakTime.current = now;
+      } else if (now - peakTime.current > PEAK_HOLD_MS) {
+        peakLevel.current *= RELEASE_DECAY;
+        if (peakLevel.current < 0.01) peakLevel.current = 0;
+      }
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+      const litCount = Math.round(displayLevel.current * SEGMENT_COUNT);
+      const peakSeg = Math.min(SEGMENT_COUNT - 1, Math.round(peakLevel.current * SEGMENT_COUNT) - 1);
+
+      // ── Skip DOM writes if nothing changed ───────────────
+      if (litCount === prevLitCount && peakSeg === prevPeakSeg) return;
+      prevLitCount = litCount;
+      prevPeakSeg = peakSeg;
+
+      // ── Update only changed segments (no setState) ────────
+      for (let i = 0; i < SEGMENT_COUNT; i++) {
+        const wasLit = i < prevLitCount || i === prevPeakSeg;
+        const isLit = i < litCount;
+        const isPeak = i === peakSeg && peakSeg >= 0;
+        const nowLit = isLit || isPeak;
+        if (wasLit === nowLit) continue;
+
+        const seg = segments[i];
+        if (nowLit) {
+          const c = segColors[i];
+          seg.style.backgroundColor = c;
+          seg.style.opacity = '1';
+          seg.style.boxShadow = `0 0 4px ${c}44`;
+        } else {
+          seg.style.backgroundColor = ledOff;
+          seg.style.opacity = '0.5';
+          seg.style.boxShadow = 'none';
+        }
+      }
+    });
+
+    return unsub;
   }, [deckId]);
 
   return (

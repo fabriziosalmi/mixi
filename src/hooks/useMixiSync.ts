@@ -66,205 +66,69 @@ export function useMixiSync() {
   }, [engine]);
 
   // ── Subscriptions ──────────────────────────────────────────
+  // Consolidated: master + crossfader + headphones in a single
+  // subscription with snapshot comparison. Reduces 10 useEffects
+  // → 1, cutting listener overhead from ~10 callbacks to 1.
 
-  // Master volume
   useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.master.volume,
-      (volume) => {
-        if (!engine.isInitialized) return;
-        engine.setMasterVolume(volume);
-      },
-    );
+    let prev = useMixiStore.getState();
+    return useMixiStore.subscribe((s) => {
+      if (!engine.isInitialized) { prev = s; return; }
+
+      // Master bus
+      if (s.master.volume !== prev.master.volume) engine.setMasterVolume(s.master.volume);
+      if (s.master.filter !== prev.master.filter) engine.setMasterFilter(s.master.filter);
+      if (s.master.distortion !== prev.master.distortion) engine.setDistortion(s.master.distortion);
+      if (s.master.punch !== prev.master.punch) engine.setPunch(s.master.punch);
+
+      // Crossfader (also re-apply when curve changes)
+      if (s.crossfader !== prev.crossfader || s.crossfaderCurve !== prev.crossfaderCurve) {
+        engine.setCrossfader(s.crossfader);
+      }
+
+      // Headphones
+      if (s.headphones.level !== prev.headphones.level) engine.setHeadphoneLevel(s.headphones.level);
+      if (s.headphones.mix !== prev.headphones.mix) engine.setHeadphoneMix(s.headphones.mix);
+      if (s.headphones.splitMode !== prev.headphones.splitMode) engine.setSplitMode(s.headphones.splitMode);
+
+      prev = s;
+    });
   }, [engine]);
 
-  // Master filter
+  // Per-deck + master EQ: single subscription with snapshot diff.
+  // Replaces 16 per-deck + 3 master EQ subscriptions → 1 listener.
   useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.master.filter,
-      (filter) => {
-        if (!engine.isInitialized) return;
-        engine.setMasterFilter(filter);
-      },
-    );
-  }, [engine]);
+    let prev = useMixiStore.getState();
+    const unsub = useMixiStore.subscribe((s) => {
+      if (!engine.isInitialized) { prev = s; return; }
 
-  // Master distortion
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.master.distortion,
-      (dist) => {
-        if (!engine.isInitialized) return;
-        engine.setDistortion(dist);
-      },
-    );
-  }, [engine]);
+      for (const deck of DECK_IDS) {
+        const d = s.decks[deck];
+        const p = prev.decks[deck];
+        if (d.isPlaying !== p.isPlaying) {
+          if (d.isPlaying) engine.play(deck); else engine.pause(deck);
+        }
+        if (d.gain !== p.gain) engine.setDeckGain(deck, d.gain);
+        if (d.volume !== p.volume) engine.setDeckVolume(deck, d.volume);
+        if (d.eq !== p.eq) {
+          for (const band of EQ_BANDS) {
+            if (d.eq[band] !== p.eq[band]) engine.setEq(deck, band, d.eq[band]);
+          }
+        }
+        if (d.colorFx !== p.colorFx) engine.setColorFx(deck, d.colorFx);
+        if (d.playbackRate !== p.playbackRate) engine.setPlaybackRate(deck, d.playbackRate);
+        if (d.cueActive !== p.cueActive) engine.setCueActive(deck, d.cueActive);
+        if (d.keyLock !== p.keyLock) engine.setKeyLock(deck, d.keyLock);
+      }
 
-  // Master punch
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.master.punch,
-      (punch) => {
-        if (!engine.isInitialized) return;
-        engine.setPunch(punch);
-      },
-    );
-  }, [engine]);
+      // Master EQ
+      for (const band of EQ_BANDS) {
+        if (s.master.eq[band] !== prev.master.eq[band]) engine.setMasterEq(band, s.master.eq[band]);
+      }
 
-  // Crossfader
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.crossfader,
-      (value) => {
-        if (!engine.isInitialized) return;
-        engine.setCrossfader(value);
-      },
-    );
-  }, [engine]);
-
-  // Crossfader curve — re-apply crossfader when curve changes
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.crossfaderCurve,
-      () => {
-        if (!engine.isInitialized) return;
-        engine.setCrossfader(useMixiStore.getState().crossfader);
-      },
-    );
-  }, [engine]);
-
-  // Headphone level
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.headphones.level,
-      (level) => {
-        if (!engine.isInitialized) return;
-        engine.setHeadphoneLevel(level);
-      },
-    );
-  }, [engine]);
-
-  // Headphone mix
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.headphones.mix,
-      (mix) => {
-        if (!engine.isInitialized) return;
-        engine.setHeadphoneMix(mix);
-      },
-    );
-  }, [engine]);
-
-  // Split mode
-  useEffect(() => {
-    return useMixiStore.subscribe(
-      (s) => s.headphones.splitMode,
-      (splitMode) => {
-        if (!engine.isInitialized) return;
-        engine.setSplitMode(splitMode);
-      },
-    );
-  }, [engine]);
-
-  // Per-deck subscriptions
-  useEffect(() => {
-    const unsubs: (() => void)[] = [];
-
-    for (const deck of DECK_IDS) {
-      // Play / Pause
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].isPlaying,
-          (playing) => {
-            if (!engine.isInitialized) return;
-            if (playing) {
-              engine.play(deck);
-            } else {
-              engine.pause(deck);
-            }
-          },
-        ),
-      );
-
-      // Channel gain/trim
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].gain,
-          (db) => {
-            if (!engine.isInitialized) return;
-            engine.setDeckGain(deck, db);
-          },
-        ),
-      );
-
-      // Channel fader
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].volume,
-          (volume) => {
-            if (!engine.isInitialized) return;
-            engine.setDeckVolume(deck, volume);
-          },
-        ),
-      );
-
-      // EQ bands (single subscription per deck → 3 band updates)
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].eq,
-          (eq) => {
-            if (!engine.isInitialized) return;
-            for (const band of EQ_BANDS) engine.setEq(deck, band, eq[band]);
-          },
-        ),
-      );
-
-      // Color FX
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].colorFx,
-          (value) => {
-            if (!engine.isInitialized) return;
-            engine.setColorFx(deck, value);
-          },
-        ),
-      );
-
-      // Playback rate
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].playbackRate,
-          (rate) => {
-            if (!engine.isInitialized) return;
-            engine.setPlaybackRate(deck, rate);
-          },
-        ),
-      );
-
-      // CUE (PFL)
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].cueActive,
-          (active) => {
-            if (!engine.isInitialized) return;
-            engine.setCueActive(deck, active);
-          },
-        ),
-      );
-
-      // Key Lock
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.decks[deck].keyLock,
-          (enabled) => {
-            if (!engine.isInitialized) return;
-            engine.setKeyLock(deck, enabled);
-          },
-        ),
-      );
-    }
-
-    return () => unsubs.forEach((unsub) => unsub());
+      prev = s;
+    });
+    return unsub;
   }, [engine]);
 
   // ── Cleanup on unmount ─────────────────────────────────────
@@ -275,23 +139,6 @@ export function useMixiSync() {
       engine.destroy();
       isReady.current = false;
     };
-  }, [engine]);
-
-  // ── Master EQ ──────────────────────────────────────────────
-  useEffect(() => {
-    const unsubs: (() => void)[] = [];
-    for (const band of EQ_BANDS) {
-      unsubs.push(
-        useMixiStore.subscribe(
-          (s) => s.master.eq[band],
-          (db) => {
-            if (!engine.isInitialized) return;
-            engine.setMasterEq(band, db);
-          },
-        ),
-      );
-    }
-    return () => unsubs.forEach((u) => u());
   }, [engine]);
 
   // ── EQ Model (from settings store) ──────────────────────────

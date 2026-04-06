@@ -843,41 +843,61 @@ export class MixiEngine {
 
   /** Shared buffer — reused to avoid GC. */
   private _vuBuf: Float32Array<ArrayBuffer> | null = null;
+  /** Per-deck level cache: avoid duplicate getFloatTimeDomainData per frame. */
+  private _levelCache = { A: 0, B: 0, frameA: -1, frameB: -1 };
 
   /**
    * Read the current RMS level (0–1) from the post-fader
-   * AnalyserNode for a deck.  Called by VuMeter at ~30 FPS.
+   * AnalyserNode for a deck.  Multiple callers per frame get the
+   * cached value — only one getFloatTimeDomainData copy per frame.
    */
   getLevel(deck: DeckId): number {
     if (!this.initialized) return 0;
+
+    // Frame-stamp cache: avoid redundant analyser reads within the same RAF frame
+    const frameNow = (performance.now() | 0);  // ~1ms granularity is enough
+    const cacheKey = deck === 'A' ? 'frameA' : 'frameB';
+    if (Math.abs(frameNow - this._levelCache[cacheKey]) < 8) {
+      return this._levelCache[deck];
+    }
+
     const analyser = this.channels[deck].analyser;
     if (!this._vuBuf || this._vuBuf.length !== analyser.fftSize) {
       this._vuBuf = new Float32Array(analyser.fftSize);
     }
     analyser.getFloatTimeDomainData(this._vuBuf);
 
-    // Compute RMS.
     let sum = 0;
     for (let i = 0; i < this._vuBuf.length; i++) {
       const s = this._vuBuf[i];
       sum += s * s;
     }
     const rms = Math.sqrt(sum / this._vuBuf.length);
+    const level = Math.min(1, rms * 1.414);
 
-    // Scale: RMS of a full-scale sine is ~0.707.
-    // Map 0–0.707 to 0–1 for display.
-    return Math.min(1, rms * 1.414);
+    this._levelCache[deck] = level;
+    this._levelCache[cacheKey] = frameNow;
+    return level;
   }
 
   /** Shared buffer for master analyser — reused to avoid GC. */
   private _masterBuf: Float32Array<ArrayBuffer> | null = null;
+  /** Master level cache: avoid duplicate getFloatTimeDomainData per frame. */
+  private _masterLevelCache = { value: 0, frame: -1 };
 
   /**
    * Read the current RMS level (0–1) from the post-limiter
-   * master AnalyserNode. Called by MasterLedScreen at ~30 FPS.
+   * master AnalyserNode. Multiple callers per frame (MiniVu,
+   * MasterVuMeter, MasterLedScreen) get the cached value.
    */
   getMasterLevel(): number {
     if (!this.initialized) return 0;
+
+    const frameNow = (performance.now() | 0);
+    if (Math.abs(frameNow - this._masterLevelCache.frame) < 8) {
+      return this._masterLevelCache.value;
+    }
+
     const analyser = this.master.analyser;
     if (!this._masterBuf || this._masterBuf.length !== analyser.fftSize) {
       this._masterBuf = new Float32Array(analyser.fftSize);
@@ -890,7 +910,11 @@ export class MixiEngine {
       sum += s * s;
     }
     const rms = Math.sqrt(sum / this._masterBuf.length);
-    return Math.min(1, rms * 1.414);
+    const level = Math.min(1, rms * 1.414);
+
+    this._masterLevelCache.value = level;
+    this._masterLevelCache.frame = frameNow;
+    return level;
   }
 
   /**

@@ -50,9 +50,10 @@ export class MixiSyncBridge {
   private _active = false;
   private _isMaster = false;
   private lastMasterYieldTime = 0; // #5 cooldown timestamp
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private announceTimer: ReturnType<typeof setInterval> | null = null;
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private _schedulerTimer: ReturnType<typeof setTimeout> | null = null;
+  private _nextHeartbeatTime = 0;
+  private _nextAnnounceTime = 0;
+  private _nextTickTime = 0;
 
   // BroadcastChannel fallback (browser-only)
   private broadcastChannel: BroadcastChannel | null = null;
@@ -139,27 +140,54 @@ export class MixiSyncBridge {
     log.info('Sync', 'Stopped');
   }
 
-  // ── Timers ────────────────────────────────────────────────
+  // ── Unified Scheduler ─────────────────────────────────────
+  // Single setTimeout loop replaces 3 independent setInterval timers.
+  // Uses drift-compensated absolute timestamps — no cumulative drift.
 
   private startTimers(): void {
-    // Heartbeat at 50 Hz (master only sends; subscriber only ticks)
-    if (this._isMaster) {
-      this.heartbeatTimer = setInterval(() => this.publishHeartbeat(), 20);
-    }
-
-    // Announce at 1 Hz (both master and subscriber)
-    this.announceTimer = setInterval(() => this.sendPacket(PacketType.ANNOUNCE, true), 1000);
-
-    // PID tick at 50 Hz (subscriber only)
-    if (!this._isMaster) {
-      this.tickTimer = setInterval(() => this.subscriberTick(), 20);
-    }
+    const now = performance.now();
+    this._nextHeartbeatTime = now;
+    this._nextTickTime = now;
+    this._nextAnnounceTime = now + 1000;
+    this.schedulerLoop();
   }
 
   private stopTimers(): void {
-    if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
-    if (this.announceTimer) { clearInterval(this.announceTimer); this.announceTimer = null; }
-    if (this.tickTimer) { clearInterval(this.tickTimer); this.tickTimer = null; }
+    if (this._schedulerTimer) { clearTimeout(this._schedulerTimer); this._schedulerTimer = null; }
+  }
+
+  private schedulerLoop(): void {
+    if (!this._active) return;
+    const now = performance.now();
+
+    // Master: publish heartbeats at 50 Hz
+    if (this._isMaster && now >= this._nextHeartbeatTime) {
+      this.publishHeartbeat();
+      this._nextHeartbeatTime += 20;
+      // Catch up if we fell behind (GC pause, tab throttle)
+      if (this._nextHeartbeatTime < now - 40) this._nextHeartbeatTime = now + 20;
+    }
+
+    // Subscriber: PID tick at 50 Hz
+    if (!this._isMaster && now >= this._nextTickTime) {
+      this.subscriberTick();
+      this._nextTickTime += 20;
+      if (this._nextTickTime < now - 40) this._nextTickTime = now + 20;
+    }
+
+    // Announce at 1 Hz (both)
+    if (now >= this._nextAnnounceTime) {
+      this.sendPacket(PacketType.ANNOUNCE, true);
+      this._nextAnnounceTime += 1000;
+    }
+
+    // Sleep until the earliest next event
+    const nextEvent = Math.min(
+      this._isMaster ? this._nextHeartbeatTime : this._nextTickTime,
+      this._nextAnnounceTime,
+    );
+    const sleepMs = Math.max(1, Math.min(20, nextEvent - performance.now()));
+    this._schedulerTimer = setTimeout(() => this.schedulerLoop(), sleepMs);
   }
 
   // ── Publishing (Master) ───────────────────────────────────
