@@ -337,7 +337,7 @@ export const TrackBrowser: FC = () => {
           <input
             ref={urlRef}
             type="text"
-            placeholder="Paste SoundCloud / YouTube URL…"
+            placeholder="Paste URL…"
             className="w-64 bg-zinc-900/60 border border-zinc-800/50 rounded px-2 py-0.5 text-[11px] text-zinc-300 font-mono placeholder:text-zinc-600 outline-none focus:border-zinc-600/60"
           />
           <button
@@ -600,7 +600,7 @@ export const TrackBrowser: FC = () => {
                         Drag Audio Files Here
                       </div>
                       <div className="text-zinc-600 font-mono text-[10px]">
-                        or paste a SoundCloud / YouTube URL above
+                        or paste a URL above
                       </div>
                     </div>
                   ) : (
