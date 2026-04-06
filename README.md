@@ -6,7 +6,7 @@
 
 <p align="center">
   Deterministic audio workstation. Browser-native. Zero install.<br>
-  Dual decks, Rust/Wasm DSP, WebGPU visuals, groovebox, automixer, 17 skins, MIDI, headphone cue.
+  Dual decks, Rust/Wasm DSP, WebGPU visuals, groovebox, automixer, beatmatching, 17 skins, MIDI, headphone cue.
 </p>
 
 <p align="center">
@@ -138,7 +138,8 @@ python main.py --port 7779
 | **BPM/Key Detection** | Multi-band onset detection (low/mid/high), comb filter resonator bank + IOI histogram fusion, PLL grid offset, genre-aware octave resolution. Two-speed API (fast <50ms + full). Goertzel chromagram for key (Camelot). Rust/Wasm. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter. MIDI Clock Out/In (24 ppqn) for external gear sync. |
 | **MIXI Sync** | Binary sync protocol (64-byte UDP packets, port 4303). PID phase lock, auto-discovery, master election, predictive VJ triggers. BroadcastChannel fallback for browser. |
-| **Waveform** | Canvas-rendered waveform with zoom, scroll, and hot cue overlays. Direct DOM writes, no React reconciliation. |
+| **Beatmatching** | Aerospace-grade PLL phase correction, harmonic sync, predictive phase, differential phase overlay, variable beatgrid, onset correlation, groove offset, drift compensation, audio clock reconciliation. |
+| **Waveform** | Min-max decimation, drag-to-scrub, beatgrid editing (Shift+Click), BPM confidence display, overview viewport drag, energy shadow, zoom sync. Direct DOM writes, no React reconciliation. |
 | **Headphone Cue** | Split-stereo or dual-output routing. Mix knob blends cue and master. |
 | **Recording** | Crash-proof WAV recording (SPSC ring buffer → disk, 1MB fixed RAM). WebM fallback in browser. Orphan recovery on crash. |
 | **WebGPU VFX** | 14-effect GPU shader: spectrum border, beat shockwave, particles, plasma, CRT, Tron floor, feedback loops. Canvas 2D fallback. ESC kill-switch. |
@@ -171,7 +172,7 @@ src/
   midi/           WebMIDI manager, controller mapping
   components/     React UI — decks, mixer, browser, HUD, settings
   store/          Zustand stores — mixer state, settings, MIDI, samples
-  hooks/          React hooks — sync bridge, keyboard shortcuts, drag
+  hooks/          React hooks — sync bridge, keyboard shortcuts, drag, beatmatching
   bridge/         MCP bridge for external agents
   utils/          Logger, skin loader, watermark
   types/          Shared TypeScript interfaces
@@ -202,7 +203,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (169), Playwright (7 E2E), cargo test (203 Rust) — 379 total |
+| Tests | Vitest (239), Playwright (7 E2E), cargo test (203 Rust) — 449 total |
 | Docs | VitePress, 24 languages |
 
 ---
@@ -221,11 +222,11 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
-| `npm test` | Run unit tests (Vitest, 169 tests) |
+| `npm test` | Run unit tests (Vitest, 239 tests) |
 | `npm run test:watch` | Watch mode for tests |
 | `npm run test:coverage` | Test coverage report |
 | `npm run test:e2e` | Playwright E2E tests (7 tests: smoke + sync) |
-| `cd mixi-core && cargo test` | Rust DSP tests (152 tests) |
+| `cd mixi-core && cargo test` | Rust DSP tests (203 tests) |
 
 ---
 
