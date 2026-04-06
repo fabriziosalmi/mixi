@@ -430,6 +430,8 @@ const PerfTab: FC = () => {
   const setFpsLimit = useSettingsStore((s) => s.setFpsLimit);
   const debugPanel = useSettingsStore((s) => s.showDebugPanel);
   const toggleDebug = useSettingsStore((s) => s.toggleDebugPanel);
+  const colorblindMode = useSettingsStore((s) => s.colorblindMode);
+  const setColorblindMode = useSettingsStore((s) => s.setColorblindMode);
 
   return (
     <>
@@ -442,6 +444,12 @@ const PerfTab: FC = () => {
           value={fpsLimit}
           onChange={setFpsLimit}
         />
+      </SettingRow>
+
+      <Divider />
+
+      <SettingRow label="Colorblind Mode" description="Blue + orange + white waveform palette (deuteranopia-safe)">
+        <ToggleSwitch checked={colorblindMode} onChange={() => setColorblindMode(!colorblindMode)} />
       </SettingRow>
 
       <Divider />

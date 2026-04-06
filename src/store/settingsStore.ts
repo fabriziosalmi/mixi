@@ -85,6 +85,8 @@ export interface SettingsState {
   grooveOffsetMs: number;
   /** Show phase overlay (ghost deck) on waveforms. */
   showPhaseOverlay: boolean;
+  /** Colorblind-friendly waveform palette (blue + orange + white). */
+  colorblindMode: boolean;
 }
 
 export interface SettingsActions {
@@ -103,6 +105,7 @@ export interface SettingsActions {
   setUseWasmDsp: (v: boolean) => void;
   setGrooveOffset: (ms: number) => void;
   setShowPhaseOverlay: (v: boolean) => void;
+  setColorblindMode: (v: boolean) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -123,6 +126,7 @@ export const useSettingsStore = create<SettingsStore>()(
       useWasmDsp: false,
       grooveOffsetMs: 0,
       showPhaseOverlay: true,
+      colorblindMode: false,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -147,6 +151,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setUseWasmDsp: (v) => set({ useWasmDsp: v }),
       setGrooveOffset: (ms) => set({ grooveOffsetMs: Math.max(-10, Math.min(10, ms)) }),
       setShowPhaseOverlay: (v) => set({ showPhaseOverlay: v }),
+      setColorblindMode: (v) => set({ colorblindMode: v }),
     }),
     {
       name: 'mixi-settings',

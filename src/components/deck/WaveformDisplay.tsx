@@ -87,6 +87,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   /** Beatgrid edit flash */
   const gridFlashRef = useRef<{ x: number; until: number } | null>(null);
   const [measuredWidth, setMeasuredWidth] = useState(propWidth || 500);
+  const colorblindMode = useSettingsStore((s) => s.colorblindMode);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -124,9 +125,11 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Read theme tokens once per effect cycle
-    const COLOR_LOW = themeVar('wave-low', '#cc2244');
-    const COLOR_MID = themeVar('wave-mid', '#dd8822');
-    const COLOR_HIGH = themeVar('wave-high', '#3388dd');
+    // Colorblind palette: blue + orange + white (distinguishable in all types of color blindness)
+    const cbMode = useSettingsStore.getState().colorblindMode;
+    const COLOR_LOW = cbMode ? '#ee8833' : themeVar('wave-low', '#cc2244');
+    const COLOR_MID = cbMode ? '#ffffff' : themeVar('wave-mid', '#dd8822');
+    const COLOR_HIGH = cbMode ? '#3399ee' : themeVar('wave-high', '#3388dd');
     const COLOR_BG = themeVar('wave-bg', '#0a0a0a');
     const COLOR_PLAYHEAD = PLAYHEAD_COLOR;
     const WAVE_DROP = themeVar('wave-drop', '#ff0044');
@@ -507,13 +510,24 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
     rafRef.current = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(rafRef.current); unsub(); unsubOther(); unsubSettings(); };
-  }, [deckId, width, height]);
+  }, [deckId, width, height, colorblindMode]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLCanvasElement>) => {
       e.preventDefault();
+      const oldZoom = zoomRef.current;
       const delta = e.deltaY > 0 ? -0.2 : 0.2;
-      const newZoom = Math.max(0.25, Math.min(4, zoomRef.current + delta));
+      const newZoom = Math.max(0.25, Math.min(4, oldZoom + delta));
+
+      // Zoom centred on mouse position (VS Code style):
+      // Keep the data point under the cursor fixed on screen.
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseBarIndex = mouseX / BAR_STEP;
+      const dataIndexUnderMouse = startIndexRef.current + mouseBarIndex * oldZoom;
+      // After zoom, adjust startIndex so the same data point stays under the mouse
+      startIndexRef.current = dataIndexUnderMouse - mouseBarIndex * newZoom;
+
       zoomRef.current = newZoom;
       if (externalZoomRef) externalZoomRef.current = newZoom;
     },
@@ -531,10 +545,35 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     [],
   );
 
+  /** Convert a time (seconds) to screen X position. */
+  const timeToScreenX = useCallback(
+    (time: number): number => {
+      const dataIdx = time * POINTS_PER_SECOND;
+      return ((dataIdx - startIndexRef.current) / zoomRef.current) * BAR_STEP;
+    },
+    [],
+  );
+
+  /** Snap a time to the nearest beat (if quantize enabled, unless Shift held). */
+  const snapToBeat = useCallback(
+    (time: number, forceSnap: boolean): number => {
+      const d = useMixiStore.getState().decks[deckId];
+      if (d.bpm <= 0 || (!d.quantize && !forceSnap)) return time;
+      const beatPeriod = 60 / d.bpm;
+      const beatNum = Math.round((time - d.firstBeatOffset) / beatPeriod);
+      const snapped = d.firstBeatOffset + beatNum * beatPeriod;
+      // Only snap if within half a beat
+      if (Math.abs(time - snapped) < beatPeriod * 0.4) return snapped;
+      return time;
+    },
+    [deckId],
+  );
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button !== 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
       const seekTime = mouseXToTime(e.clientX, rect);
 
       // Shift+Click: set first downbeat (beatgrid editing)
@@ -543,14 +582,91 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         const d = store.decks[deckId];
         if (d.bpm > 0) {
           store.setDeckBpm(deckId, d.bpm, seekTime);
-          // Visual flash feedback
           const flashX = e.clientX - rect.left;
           gridFlashRef.current = { x: flashX, until: performance.now() + 150 };
         }
         return;
       }
 
-      // Normal click: start potential drag-to-scrub
+      const HIT_RADIUS = 8; // pixels
+      const store = useMixiStore.getState();
+      const d = store.decks[deckId];
+
+      // ── Hit-test hot cue markers ────────────────────────
+      for (let i = 0; i < d.hotCues.length; i++) {
+        const cueTime = d.hotCues[i];
+        if (cueTime === null) continue;
+        const cx = timeToScreenX(cueTime);
+        if (Math.abs(clickX - cx) < HIT_RADIUS) {
+          // Drag this hot cue
+          const onMouseMove = (me: MouseEvent) => {
+            // Visual feedback only — we don't move the cue until release
+            scrubTimeRef.current = mouseXToTime(me.clientX, rect);
+          };
+          const onMouseUp = (me: MouseEvent) => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            const finalTime = mouseXToTime(me.clientX, rect);
+            const snapped = snapToBeat(finalTime, false);
+            store.setHotCue(deckId, i, snapped);
+            scrubTimeRef.current = null;
+            dragCleanupRef.current = null;
+          };
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+          dragCleanupRef.current = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            scrubTimeRef.current = null;
+          };
+          return;
+        }
+      }
+
+      // ── Hit-test loop borders ───────────────────────────
+      const loop = d.activeLoop;
+      if (loop) {
+        const lxStart = timeToScreenX(loop.start);
+        const lxEnd = timeToScreenX(loop.end);
+        const hitStart = Math.abs(clickX - lxStart) < HIT_RADIUS;
+        const hitEnd = Math.abs(clickX - lxEnd) < HIT_RADIUS;
+        if (hitStart || hitEnd) {
+          const side = hitStart ? 'start' : 'end';
+          const onMouseMove = (me: MouseEvent) => {
+            const newTime = snapToBeat(mouseXToTime(me.clientX, rect), false);
+            const engine = MixiEngine.getInstance();
+            const st = useMixiStore.getState();
+            const curLoop = st.decks[deckId].activeLoop;
+            if (!curLoop || !engine.isInitialized) return;
+            let newStart = curLoop.start;
+            let newEnd = curLoop.end;
+            if (side === 'start' && newTime < curLoop.end - 0.05) newStart = newTime;
+            else if (side === 'end' && newTime > curLoop.start + 0.05) newEnd = newTime;
+            else return;
+            const bpm = st.decks[deckId].bpm;
+            const lengthInBeats = bpm > 0 ? (newEnd - newStart) / (60 / bpm) : curLoop.lengthInBeats;
+            const updatedLoop = { start: newStart, end: newEnd, lengthInBeats };
+            useMixiStore.setState((s) => ({
+              decks: { ...s.decks, [deckId]: { ...s.decks[deckId], activeLoop: updatedLoop } },
+            }));
+            engine.setLoop(deckId, newStart, newEnd);
+          };
+          const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            dragCleanupRef.current = null;
+          };
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+          dragCleanupRef.current = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+          };
+          return;
+        }
+      }
+
+      // ── Default: drag-to-scrub ──────────────────────────
       isDraggingRef.current = true;
       scrubTimeRef.current = seekTime;
 
@@ -577,7 +693,6 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
 
-      // Store cleanup so unmount can remove listeners
       dragCleanupRef.current = () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
@@ -585,7 +700,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         scrubTimeRef.current = null;
       };
     },
-    [deckId, mouseXToTime],
+    [deckId, mouseXToTime, timeToScreenX, snapToBeat],
   );
 
   // Clean up drag listeners on unmount
@@ -593,12 +708,81 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     return () => { dragCleanupRef.current?.(); };
   }, []);
 
+  // ── Context menu ────────────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; time: number } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const time = mouseXToTime(e.clientX, rect);
+      setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, time });
+    },
+    [mouseXToTime],
+  );
+
+  // Close context menu on any click or scroll
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('wheel', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('wheel', close);
+    };
+  }, [ctxMenu]);
+
+  const ctxMenuActions = useCallback(
+    (action: string) => {
+      if (!ctxMenu) return;
+      const store = useMixiStore.getState();
+      const d = store.decks[deckId];
+      const time = ctxMenu.time;
+      const engine = MixiEngine.getInstance();
+      switch (action) {
+        case 'set-cue': {
+          const emptyIdx = d.hotCues.indexOf(null);
+          if (emptyIdx >= 0) store.setHotCue(deckId, emptyIdx, time);
+          break;
+        }
+        case 'loop-in':
+          if (d.bpm > 0) {
+            const beatPeriod = 60 / d.bpm;
+            const loop = { start: time, end: time + beatPeriod * 4, lengthInBeats: 4 };
+            useMixiStore.setState((s) => ({
+              decks: { ...s.decks, [deckId]: { ...s.decks[deckId], activeLoop: loop } },
+            }));
+            if (engine.isInitialized) engine.setLoop(deckId, loop.start, loop.end);
+          }
+          break;
+        case 'exit-loop':
+          store.exitLoop(deckId);
+          break;
+        case 'seek-drop': {
+          if (d.dropBeats.length > 0 && d.bpm > 0) {
+            const beatPeriod = 60 / d.bpm;
+            const dropTime = d.firstBeatOffset + d.dropBeats[0] * beatPeriod;
+            if (engine.isInitialized) engine.seek(deckId, dropTime);
+          }
+          break;
+        }
+        case 'reset-grid':
+          if (d.bpm > 0) store.setDeckBpm(deckId, d.bpm, time);
+          break;
+      }
+      setCtxMenu(null);
+    },
+    [ctxMenu, deckId],
+  );
+
   return (
     <div ref={containerRef} className="w-full relative">
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
         onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
         className="rounded-lg w-full cursor-crosshair shadow-[inset_0_2px_6px_rgba(0,0,0,0.6),inset_0_-1px_2px_rgba(0,0,0,0.3)]"
         style={{ height }}
       />
@@ -607,6 +791,35 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         className="absolute inset-0 rounded-lg pointer-events-none"
         style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 30%)' }}
       />
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          className="absolute z-50 bg-zinc-900 border border-zinc-700 rounded-md shadow-xl py-1 text-xs text-zinc-200 min-w-[140px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 transition-colors" onClick={() => ctxMenuActions('set-cue')}>
+            Set Cue Here
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 transition-colors" onClick={() => ctxMenuActions('loop-in')}>
+            Set 4-Beat Loop
+          </button>
+          {useMixiStore.getState().decks[deckId].activeLoop && (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 transition-colors" onClick={() => ctxMenuActions('exit-loop')}>
+              Exit Loop
+            </button>
+          )}
+          {useMixiStore.getState().decks[deckId].dropBeats.length > 0 && (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 transition-colors" onClick={() => ctxMenuActions('seek-drop')}>
+              Jump to Drop
+            </button>
+          )}
+          <div className="border-t border-zinc-700 my-1" />
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-zinc-700 transition-colors" onClick={() => ctxMenuActions('reset-grid')}>
+            Set Downbeat Here
+          </button>
+        </div>
+      )}
     </div>
   );
 };
