@@ -11,7 +11,7 @@
 // Mixi – Main Application Shell
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, type FC } from 'react';
+import { useState, useCallback, useEffect, useRef, type FC } from 'react';
 import { useMixiSync } from './hooks/useMixiSync';
 import { useMixiBridge } from './hooks/useMixiBridge';
 import { useMixiStore } from './store/mixiStore';
@@ -45,6 +45,43 @@ import type { DeckId } from './types';
 import { COLOR_DECK_A, COLOR_DECK_B } from './theme';
 const CYAN = COLOR_DECK_A;
 const ORANGE = COLOR_DECK_B;
+
+// ── Mini Master VU for center HUD (thin horizontal bars) ────
+
+const MiniMasterVu: FC = () => {
+  const barLRef = useRef<HTMLDivElement>(null);
+  const barRRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let raf = 0;
+    function tick() {
+      const engine = MixiEngine.getInstance();
+      if (engine.isInitialized && barLRef.current && barRRef.current) {
+        const level = engine.getMasterLevel();
+        const pct = Math.min(100, Math.max(0, level * 100));
+        const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
+        barLRef.current.style.width = `${pct}%`;
+        barLRef.current.style.backgroundColor = color;
+        barRRef.current.style.width = `${pct}%`;
+        barRRef.current.style.backgroundColor = color;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-[1px] w-full pt-1" title="Master Level">
+      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+        <div ref={barLRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
+      </div>
+      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+        <div ref={barRRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
+      </div>
+    </div>
+  );
+};
 
 // ── Global Quantize toggle (topbar center group) ────────────
 
@@ -240,14 +277,18 @@ const App: FC = () => {
   }
 
   return (
-    <div className={`flex h-screen w-screen flex-col text-white overflow-hidden mixi-chassis mixi-skin-${skin} ${vfxActive ? 'mixi-vfx' : ''}`}>
+    <div
+      className={`h-screen w-screen text-white overflow-hidden mixi-chassis mixi-skin-${skin} ${vfxActive ? 'mixi-vfx' : ''}`}
+      style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gridTemplateRows: 'auto 1fr' }}
+    >
       {/* VFX visual overlay — audio-reactive canvas */}
       <VfxCanvas active={vfxActive} />
-      {/* Top bar */}
+      {/* Top bar — subgrid shares column tracks with main */}
       <header
         className="grid items-center border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-4 transition-colors duration-200"
         style={{
-          gridTemplateColumns: '1fr auto 1fr',
+          gridColumn: '1 / -1',
+          gridTemplateColumns: 'subgrid',
           ...(panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : {}),
         }}
       >
@@ -262,13 +303,23 @@ const App: FC = () => {
           <IntentDisplay engineState={aiState} />
         </div>
 
-        {/* ── Center: Quantize + Master Clock + REC (aligned above mixer) ── */}
-        <div className="mixi-hud-group justify-self-center">
-          <QuantizeToggle />
-          <div className="h-4 border-r border-zinc-700/40" />
-          <MasterClock />
-          <div className="h-4 border-r border-zinc-700/40" />
-          <RecPanel />
+        {/* ── Center: Master HUD screen (sized by mixer column via subgrid) ── */}
+        <div
+          className="mixi-master-hud flex flex-col justify-self-stretch rounded-md px-3 py-1 overflow-hidden"
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+            minWidth: 0,
+            maxWidth: '100%',
+          }}
+        >
+          <div className="flex items-center justify-between w-full">
+            <QuantizeToggle />
+            <MasterClock />
+            <RecPanel />
+          </div>
+          <MiniMasterVu />
         </div>
 
         {/* ── Right: Telemetry + Browser + VFX + Panic + Settings ── */}
@@ -360,7 +411,10 @@ const App: FC = () => {
         </div>
       </header>
 
-      <main className="grid flex-1 grid-cols-[1fr_auto_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative">
+      <main
+        className="grid grid-rows-[1fr] gap-4 p-4 overflow-hidden relative"
+        style={{ gridColumn: '1 / -1', gridTemplateColumns: 'subgrid' }}
+      >
         <DeckSlot deckId="A" color={CYAN} />
         <MixerSection />
         <DeckSlot deckId="B" color={ORANGE} />

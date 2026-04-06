@@ -328,12 +328,6 @@ export const RecPanel: FC = () => {
             animation: recording ? 'pulse 1.5s ease-in-out infinite' : 'none',
           }}
         />
-        <span
-          className="text-[9px] font-mono font-bold tracking-wider"
-          style={{ color: recording ? 'var(--clr-rec)' : 'var(--txt-muted)' }}
-        >
-          REC
-        </span>
         {/* WAV badge when disk recording is active */}
         {recording && diskModeRef.current && (
           <span className="text-[8px] font-mono font-bold tracking-wider text-emerald-400/80">

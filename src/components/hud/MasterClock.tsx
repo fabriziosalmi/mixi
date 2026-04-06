@@ -66,19 +66,13 @@ export const MasterClock: FC = () => {
   const [midiActive, setMidiActive] = useState(false);
   const [midiPort, setMidiPort] = useState<string>('');
   const [midiPorts, setMidiPorts] = useState<MIDIOutput[]>([]);
-  /** Visual beat pulse — true for ~80 ms on every quarter beat. */
-  const [beatFlash, setBeatFlash] = useState(false);
-
   const midiAccessRef = useRef<MIDIAccess | null>(null);
   const selectedPortRef = useRef<MIDIOutput | null>(null);
   const schedulerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Next scheduled MIDI tick time in AudioContext seconds. */
   const nextTickTimeRef = useRef(0);
-  /** Pulse count within a quarter (0–23). Used for beat flash. */
+  /** Pulse count within a quarter (0–23). */
   const pulseCountRef = useRef(0);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Beat flash driven from scheduler — avoids setTimeout flood. */
-  const beatFlashRef = useRef(false);
 
   // ── Derive master BPM ──────────────────────────────────────
   // When both decks play: the sync *leader* (non-synced deck) owns the BPM.
@@ -189,21 +183,6 @@ export const MasterClock: FC = () => {
         const sendAt = performance.now() + delayMs;
 
         port.send([MIDI_CLOCK], sendAt);
-
-        // Beat flash on every quarter note (every PPQN ticks)
-        if (pulseCountRef.current % PPQN === 0) {
-          // Set ref + state once; auto-clear via single timer
-          if (!beatFlashRef.current) {
-            beatFlashRef.current = true;
-            setBeatFlash(true);
-            if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-            flashTimerRef.current = setTimeout(() => {
-              beatFlashRef.current = false;
-              setBeatFlash(false);
-            }, 80);
-          }
-        }
-
         pulseCountRef.current++;
         nextTickTimeRef.current += tickInterval;
       }
@@ -224,7 +203,6 @@ export const MasterClock: FC = () => {
   useEffect(() => {
     return () => {
       if (schedulerRef.current) clearInterval(schedulerRef.current);
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     };
   }, []);
 
@@ -239,49 +217,33 @@ export const MasterClock: FC = () => {
   const hasMidi = typeof navigator !== 'undefined' && !!(navigator as any).requestMIDIAccess;
 
   return (
-    <div className="flex items-center gap-1.5">
-      {/* Master BPM display */}
-      <div
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-all duration-75"
+    <div className="flex items-center gap-2">
+      {/* ── BPM display — large, dominant ── */}
+      <span
+        className="text-[16px] font-mono font-black tabular-nums leading-none"
         style={{
-          background: beatFlash && midiActive
-            ? 'rgba(168,85,247,0.14)'
-            : 'rgba(168,85,247,0.06)',
-          border: '1px solid rgba(168,85,247,0.12)',
+          color: masterBpm > 0 ? COLOR_MASTER : 'var(--txt-dim)',
+          textShadow: masterBpm > 0 ? `0 0 10px ${COLOR_MASTER}44` : 'none',
+          minWidth: 52,
+          textAlign: 'right',
         }}
       >
-        {/* Metronome / clock icon */}
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={COLOR_MASTER} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-        </svg>
-        <span
-          className="text-[11px] font-mono font-black tabular-nums"
-          style={{
-            color: masterBpm > 0 ? COLOR_MASTER : 'var(--txt-dim)',
-            minWidth: 38,
-            textAlign: 'right',
-          }}
-        >
-          {masterBpm > 0 ? masterBpm.toFixed(1) : '---.-'}
-        </span>
-        <span className="text-[7px] font-mono font-bold text-zinc-600 uppercase">BPM</span>
-      </div>
+        {masterBpm > 0 ? masterBpm.toFixed(1) : '---.-'}
+      </span>
 
-      {/* MIDI LINK button */}
+      {/* ── MIDI Clock toggle (icon only) ── */}
       {hasMidi && (
         <button
           type="button"
           onClick={toggleMidi}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-all active:scale-95"
+          className="flex items-center justify-center rounded p-0.5 transition-all active:scale-95"
           style={{
-            background: midiActive ? 'rgba(34,197,94,0.1)' : 'transparent',
-            border: midiActive ? '1px solid rgba(34,197,94,0.25)' : '1px solid transparent',
             color: midiActive ? 'var(--status-ok-dim)' : 'var(--txt-muted)',
+            filter: midiActive ? 'drop-shadow(0 0 4px var(--status-ok)66)' : 'none',
           }}
           title={midiActive ? 'MIDI Clock active — click to stop' : 'Enable MIDI Clock output'}
         >
-          {/* MIDI DIN 5-pin icon */}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <circle cx="8" cy="10" r="1" fill="currentColor" />
             <circle cx="16" cy="10" r="1" fill="currentColor" />
@@ -289,23 +251,6 @@ export const MasterClock: FC = () => {
             <circle cx="7" cy="14" r="1" fill="currentColor" />
             <circle cx="17" cy="14" r="1" fill="currentColor" />
           </svg>
-          <span className="text-[9px] font-mono font-bold tracking-wider">
-            {midiActive ? 'LINK' : 'MIDI'}
-          </span>
-          {midiActive && (
-            <span
-              className="block rounded-full"
-              style={{
-                width: 5,
-                height: 5,
-                background: beatFlash ? 'var(--status-ok)' : 'var(--status-ok-dim)',
-                boxShadow: beatFlash
-                  ? '0 0 10px var(--status-ok-dim)'
-                  : '0 0 6px var(--status-ok-dim)aa',
-                transition: 'all 0.05s',
-              }}
-            />
-          )}
         </button>
       )}
 

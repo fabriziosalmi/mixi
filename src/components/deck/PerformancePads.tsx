@@ -30,11 +30,21 @@
 //   Hardware-inspired beveled look with Tailwind shadows.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, type FC, type MouseEvent } from 'react';
+import { useState, useCallback, useMemo, type FC, type MouseEvent } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import type { DeckId } from '../../types';
 import { CUE_COLORS } from '../../theme';
+
+const QUANTIZE_VALUES = [
+  { beats: 4,     label: '4' },
+  { beats: 2,     label: '2' },
+  { beats: 1,     label: '1' },
+  { beats: 0.5,   label: '1/2' },
+  { beats: 0.25,  label: '1/4' },
+  { beats: 0.125, label: '1/8' },
+  { beats: 0.0625, label: '1/16' },
+] as const;
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -61,15 +71,22 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
   const [mode, setMode] = useState<PadMode>('hotcue');
   const quantize = useMixiStore((s) => s.decks[deckId].quantize);
   const setQuantize = useMixiStore((s) => s.setQuantize);
+  const [qValueIdx, setQValueIdx] = useState(2);
 
   const toggleQuantize = useCallback(
     () => setQuantize(deckId, !quantize),
     [deckId, quantize, setQuantize],
   );
 
+  const cycleQValue = useCallback(() => {
+    setQValueIdx((prev) => (prev + 1) % QUANTIZE_VALUES.length);
+  }, []);
+
+  const qVal = useMemo(() => QUANTIZE_VALUES[qValueIdx], [qValueIdx]);
+
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      {/* ── Mode selector + Quantize ────────────────────────── */}
+      {/* ── Mode selector ───────────────────────────────────── */}
       <div className="flex gap-1 items-center">
         <ModeTab
           label="HOT CUE"
@@ -95,39 +112,60 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
           onClick={() => setMode('looproll')}
           color="#22d3ee"
         />
-        <button
-          type="button"
-          onClick={toggleQuantize}
-          className="shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider transition-all active:scale-95"
-          style={{
-            background: quantize ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.03)',
-            border: `1px solid ${quantize ? 'var(--clr-master)' : 'var(--brd-default)'}`,
-            color: quantize ? 'var(--clr-master)' : 'var(--txt-muted)',
-          }}
-          title="Quantize: snap cues & loops to the beat grid"
-        >
-          Q
-        </button>
       </div>
 
-      {/* ── Pad grid ────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2">
-        {mode === 'hotcue'
-          ? Array.from({ length: 8 }, (_, i) => (
-              <HotCuePad key={i} deckId={deckId} index={i} />
-            ))
-          : mode === 'loop'
+      {/* ── Pads + Quantize strip ───────────────────────────── */}
+      <div className="flex gap-2 w-full">
+        {/* Pad grid */}
+        <div className="grid grid-cols-4 gap-2 flex-1 min-w-0">
+          {mode === 'hotcue'
             ? Array.from({ length: 8 }, (_, i) => (
-                <LoopPad key={i} deckId={deckId} index={i} />
+                <HotCuePad key={i} deckId={deckId} index={i} />
               ))
-            : mode === 'beatjump'
+            : mode === 'loop'
               ? Array.from({ length: 8 }, (_, i) => (
-                  <BeatJumpPad key={i} deckId={deckId} index={i} />
+                  <LoopPad key={i} deckId={deckId} index={i} />
                 ))
-              : Array.from({ length: 8 }, (_, i) => (
-                  <LoopRollPad key={i} deckId={deckId} index={i} />
-                ))
-        }
+              : mode === 'beatjump'
+                ? Array.from({ length: 8 }, (_, i) => (
+                    <BeatJumpPad key={i} deckId={deckId} index={i} />
+                  ))
+                : Array.from({ length: 8 }, (_, i) => (
+                    <LoopRollPad key={i} deckId={deckId} index={i} />
+                  ))
+          }
+        </div>
+
+        {/* Quantize strip — 2 buttons stacked, same width as pitch fader */}
+        <div className="flex flex-col gap-2 shrink-0" style={{ width: 48 }}>
+          <button
+            type="button"
+            onClick={toggleQuantize}
+            className="flex-1 rounded-md text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+            style={{
+              background: quantize ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${quantize ? 'var(--clr-master)' : 'var(--brd-default)'}`,
+              color: quantize ? 'var(--clr-master)' : 'var(--txt-muted)',
+              boxShadow: quantize ? '0 0 8px rgba(168,85,247,0.2)' : 'none',
+            }}
+            title="Quantize: snap cues & loops to the beat grid"
+          >
+            Q
+          </button>
+          <button
+            type="button"
+            onClick={cycleQValue}
+            className="flex-1 rounded-md text-[10px] font-bold font-mono tabular-nums transition-all active:scale-95"
+            style={{
+              background: quantize ? 'rgba(168, 85, 247, 0.08)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${quantize ? 'rgba(168,85,247,0.2)' : 'var(--brd-default)'}`,
+              color: quantize ? 'var(--clr-master)' : 'var(--txt-muted)',
+            }}
+            title={`Quantize resolution: ${qVal.label} beat`}
+          >
+            {qVal.label}
+          </button>
+        </div>
       </div>
     </div>
   );

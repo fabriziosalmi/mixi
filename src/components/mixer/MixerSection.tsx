@@ -320,8 +320,8 @@ const MixerHud: FC = () => {
             style={{
               background: 'transparent',
               border: 'none',
-              borderBottom: page === tab.id ? '1px solid var(--clr-master)' : '1px solid transparent',
-              color: page === tab.id ? 'var(--clr-master)' : 'var(--txt-dim)',
+              borderBottom: page === tab.id ? '1px solid rgba(255,255,255,0.3)' : '1px solid transparent',
+              color: page === tab.id ? 'var(--txt-secondary)' : 'var(--txt-dim)',
               padding: '2px 4px',
               cursor: 'pointer',
             }}
