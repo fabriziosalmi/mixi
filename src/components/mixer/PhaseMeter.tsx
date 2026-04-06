@@ -25,9 +25,9 @@ import { COLOR_DECK_A, COLOR_DECK_B } from '../../theme';
 
 // ── Constants ────────────────────────────────────────────────
 
-const METER_W = 160;  // total meter width in px
-const BOX_W = 24;     // width of each phase box
-const BOX_H = 10;     // height of each phase box
+const METER_W = 200;  // total meter width in px
+const BOX_W = 28;     // width of each phase box
+const BOX_H = 14;     // height of each phase box
 const CENTER = (METER_W - BOX_W) / 2;
 
 /** Max displayable delta in ms — beyond this, box is at edge. */

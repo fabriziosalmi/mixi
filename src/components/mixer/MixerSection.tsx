@@ -332,7 +332,7 @@ const MixerHud: FC = () => {
       </div>
 
       {/* Page content */}
-      <div className="flex items-center justify-center" style={{ height: 48 }}>
+      <div className="flex items-center justify-center" style={{ height: 64 }}>
         {page === 'phase' ? <PhaseMeter /> : <MasterLedScreen />}
       </div>
     </div>
@@ -368,93 +368,84 @@ export const MixerSection: FC = () => {
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr auto 1fr',
-            gridTemplateRows: 'auto auto auto 12px auto 12px auto 12px auto 12px auto 20px auto auto',
+            gridTemplateRows: 'auto auto 12px auto 12px auto 12px auto 12px auto 20px auto auto',
             justifyItems: 'center',
             alignItems: 'center',
             padding: '4px 12px 6px',
             gap: '0px',
           }}
         >
-          {/* ── Row 1: MIXI brand (col 1–3) ───────────────────── */}
-          <div style={{ gridColumn: '1 / -1', gridRow: 1, paddingBottom: 2 }}>
-            <span className="mixi-brand-shimmer text-[8px] font-black tracking-[0.3em]">
-              MIXI
-            </span>
-          </div>
-
-          {/* ── Row 2: Deck labels ────────────────────────────── */}
-          <span style={{ gridColumn: 1, gridRow: 2 }} className="text-[10px] font-bold tracking-widest" css-color={CYAN}>
+          {/* ── Row 1: Deck labels ────────────────────────────── */}
+          <span style={{ gridColumn: 1, gridRow: 1 }} className="text-[10px] font-bold tracking-widest">
             <span style={{ color: CYAN }}>A</span>
           </span>
-          <div style={{ gridColumn: 2, gridRow: 2 }} />
-          <span style={{ gridColumn: 3, gridRow: 2 }} className="text-[10px] font-bold tracking-widest">
+          <div style={{ gridColumn: 2, gridRow: 1 }} />
+          <span style={{ gridColumn: 3, gridRow: 1 }} className="text-[10px] font-bold tracking-widest">
             <span style={{ color: ORANGE }}>B</span>
           </span>
 
-          {/* ── Row 3: GAIN (with band background) ───────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 3 }} />
-          <div style={{ gridColumn: 1, gridRow: 3, zIndex: 1 }}>
+          {/* ── Row 2: GAIN (with band background) ───────────── */}
+          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 2 }} />
+          <div style={{ gridColumn: 1, gridRow: 2, zIndex: 1 }}>
             <GainCellA value={a.gain} onChange={a.onGainChange} color={CYAN} ghost={isGhost('A.gain')} midiAction={{ type: 'DECK_GAIN', deck: 'A' }} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: 3, zIndex: 1 }}><IcGain /></div>
-          <div style={{ gridColumn: 3, gridRow: 3, zIndex: 1 }}>
+          <div style={{ gridColumn: 2, gridRow: 2, zIndex: 1 }}><IcGain /></div>
+          <div style={{ gridColumn: 3, gridRow: 2, zIndex: 1 }}>
             <GainCellB value={b.gain} onChange={b.onGainChange} color={ORANGE} ghost={isGhost('B.gain')} midiAction={{ type: 'DECK_GAIN', deck: 'B' }} />
           </div>
 
-          {/* ── Row 5: HI (with EQ band background) ──────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 5 }} />
-          <div style={{ gridColumn: 1, gridRow: 5, zIndex: 1 }}>
+          {/* ── Row 4: HI (with EQ band background) ──────────── */}
+          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 4 }} />
+          <div style={{ gridColumn: 1, gridRow: 4, zIndex: 1 }}>
             <EqCellA value={a.eq.high} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('high')} color={CYAN} ghost={isGhost('A.eq.high')} killed={a.kills.high !== null} onKill={a.onKill('high')} midiAction={{ type: 'DECK_EQ_HIGH', deck: 'A' }} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: 5, zIndex: 1 }}><IcHi /></div>
-          <div style={{ gridColumn: 3, gridRow: 5, zIndex: 1 }}>
+          <div style={{ gridColumn: 2, gridRow: 4, zIndex: 1 }}><IcHi /></div>
+          <div style={{ gridColumn: 3, gridRow: 4, zIndex: 1 }}>
             <EqCellB value={b.eq.high} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('high')} color={ORANGE} ghost={isGhost('B.eq.high')} killed={b.kills.high !== null} onKill={b.onKill('high')} midiAction={{ type: 'DECK_EQ_HIGH', deck: 'B' }} />
           </div>
 
-          {/* ── Row 7: MID (with EQ band background) ─────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 7 }} />
-          <div style={{ gridColumn: 1, gridRow: 7, zIndex: 1 }}>
+          {/* ── Row 6: MID (with EQ band background) ─────────── */}
+          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 6 }} />
+          <div style={{ gridColumn: 1, gridRow: 6, zIndex: 1 }}>
             <EqCellA value={a.eq.mid} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('mid')} color={CYAN} ghost={isGhost('A.eq.mid')} killed={a.kills.mid !== null} onKill={a.onKill('mid')} midiAction={{ type: 'DECK_EQ_MID', deck: 'A' }} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: 7, zIndex: 1 }}><IcMid /></div>
-          <div style={{ gridColumn: 3, gridRow: 7, zIndex: 1 }}>
+          <div style={{ gridColumn: 2, gridRow: 6, zIndex: 1 }}><IcMid /></div>
+          <div style={{ gridColumn: 3, gridRow: 6, zIndex: 1 }}>
             <EqCellB value={b.eq.mid} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('mid')} color={ORANGE} ghost={isGhost('B.eq.mid')} killed={b.kills.mid !== null} onKill={b.onKill('mid')} midiAction={{ type: 'DECK_EQ_MID', deck: 'B' }} />
           </div>
 
-          {/* ── Row 9: LOW (with EQ band background) ─────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 9 }} />
-          <div style={{ gridColumn: 1, gridRow: 9, zIndex: 1 }}>
+          {/* ── Row 8: LOW (with EQ band background) ─────────── */}
+          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 8 }} />
+          <div style={{ gridColumn: 1, gridRow: 8, zIndex: 1 }}>
             <EqCellA value={a.eq.low} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('low')} color={CYAN} ghost={isGhost('A.eq.low')} killed={a.kills.low !== null} onKill={a.onKill('low')} midiAction={{ type: 'DECK_EQ_LOW', deck: 'A' }} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: 9, zIndex: 1 }}><IcLow /></div>
-          <div style={{ gridColumn: 3, gridRow: 9, zIndex: 1 }}>
+          <div style={{ gridColumn: 2, gridRow: 8, zIndex: 1 }}><IcLow /></div>
+          <div style={{ gridColumn: 3, gridRow: 8, zIndex: 1 }}>
             <EqCellB value={b.eq.low} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('low')} color={ORANGE} ghost={isGhost('B.eq.low')} killed={b.kills.low !== null} onKill={b.onKill('low')} midiAction={{ type: 'DECK_EQ_LOW', deck: 'B' }} />
           </div>
 
-          {/* ── Row 11: COLOR (with EQ band background) ──────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 11 }} />
-          <div style={{ gridColumn: 1, gridRow: 11, zIndex: 1 }}>
+          {/* ── Row 10: COLOR (with EQ band background) ──────────── */}
+          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 10 }} />
+          <div style={{ gridColumn: 1, gridRow: 10, zIndex: 1 }}>
             <Knob value={a.colorFx} min={-1} max={1} center={0} onChange={a.onColorFxChange} bipolar color={CYAN} scale={0.8} ghost={isGhost('A.colorFx')} midiAction={{ type: 'DECK_FILTER', deck: 'A' }} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: 11, zIndex: 1 }}><IcColor /></div>
-          <div style={{ gridColumn: 3, gridRow: 11, zIndex: 1 }}>
+          <div style={{ gridColumn: 2, gridRow: 10, zIndex: 1 }}><IcColor /></div>
+          <div style={{ gridColumn: 3, gridRow: 10, zIndex: 1 }}>
             <Knob value={b.colorFx} min={-1} max={1} center={0} onChange={b.onColorFxChange} bipolar color={ORANGE} scale={0.8} ghost={isGhost('B.colorFx')} midiAction={{ type: 'DECK_FILTER', deck: 'B' }} />
           </div>
 
-          {/* ── Row 10: spacer (1fr absorbs remaining space) ── */}
-
-          {/* ── Row 11: Faders + VU Meters ────────────────────── */}
-          <div style={{ gridColumn: 1, gridRow: 13 }} className="flex flex-col items-center gap-1">
+          {/* ── Row 12: Faders + VU Meters ────────────────────── */}
+          <div style={{ gridColumn: 1, gridRow: 12 }} className="flex flex-col items-center gap-1">
             <div className="flex items-end gap-1">
               <VuMeter deckId="A" />
               <Fader value={a.volume} min={0} max={1} onChange={a.onVolumeChange} orientation="vertical" length={140} color={CYAN} ghost={isGhost('A.volume')} midiAction={{ type: 'DECK_VOL', deck: 'A' }} />
             </div>
             <VolumeLcd value={a.volume} color={CYAN} />
           </div>
-          <div style={{ gridColumn: 2, gridRow: '13 / 15' }} className="flex items-end">
+          <div style={{ gridColumn: 2, gridRow: '12 / 14' }} className="flex items-end">
             <MasterVuMeter />
           </div>
-          <div style={{ gridColumn: 3, gridRow: 13 }} className="flex flex-col items-center gap-1">
+          <div style={{ gridColumn: 3, gridRow: 12 }} className="flex flex-col items-center gap-1">
             <div className="flex items-end gap-1">
               <Fader value={b.volume} min={0} max={1} onChange={b.onVolumeChange} orientation="vertical" length={140} color={ORANGE} ghost={isGhost('B.volume')} midiAction={{ type: 'DECK_VOL', deck: 'B' }} />
               <VuMeter deckId="B" />
