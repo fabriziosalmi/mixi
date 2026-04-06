@@ -70,6 +70,26 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
   // Cached vignette gradient — rebuilt on resize only (Canvas 2D fallback)
   const vignetteRef = useRef<CanvasGradient | null>(null);
 
+  // ── Cached store fields via subscription (avoid getState per frame) ──
+  const cachedStore = useRef({
+    crossfader: 0.5, playingA: false, playingB: false,
+    bpmA: 0, bpmB: 0, offsetA: 0, offsetB: 0, colorFxA: 0, colorFxB: 0,
+  });
+  useEffect(() => {
+    const sync = () => {
+      const s = useMixiStore.getState();
+      cachedStore.current = {
+        crossfader: s.crossfader,
+        playingA: s.decks.A.isPlaying, playingB: s.decks.B.isPlaying,
+        bpmA: s.decks.A.bpm, bpmB: s.decks.B.bpm,
+        offsetA: s.decks.A.firstBeatOffset, offsetB: s.decks.B.firstBeatOffset,
+        colorFxA: s.decks.A.colorFx ?? 0, colorFxB: s.decks.B.colorFx ?? 0,
+      };
+    };
+    sync();
+    return useMixiStore.subscribe(sync);
+  }, []);
+
   const updateJogPositions = useCallback(() => {
     const positions: JogPos[] = [];
     const wheels = document.querySelectorAll('.mixi-chassis svg[viewBox]');
@@ -124,12 +144,12 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return result;
 
-    const state = useMixiStore.getState();
-    result.crossfader = state.crossfader;
+    const cs = cachedStore.current;
+    result.crossfader = cs.crossfader;
 
     let analyser: AnalyserNode | null = null;
-    if (state.decks.A.isPlaying) analyser = engine.channels.A.analyser;
-    else if (state.decks.B.isPlaying) analyser = engine.channels.B.analyser;
+    if (cs.playingA) analyser = engine.channels.A.analyser;
+    else if (cs.playingB) analyser = engine.channels.B.analyser;
 
     if (!analyser) return result;
 
@@ -170,17 +190,17 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
     prevLevelRef.current = result.kick;
 
     // Secret #5: BPM phase sync (0→1 sawtooth)
-    const activeDeckId = state.decks.A.isPlaying ? 'A' : 'B';
-    const activeDeck = state.decks[activeDeckId as 'A' | 'B'];
-    if (activeDeck.bpm > 0) {
-      const beatPeriod = 60 / activeDeck.bpm;
+    const activeBpm = cs.playingA ? cs.bpmA : cs.bpmB;
+    const activeOffset = cs.playingA ? cs.offsetA : cs.offsetB;
+    if (activeBpm > 0) {
+      const beatPeriod = 60 / activeBpm;
       const ctx = engine.getAudioContext();
       const currentTime = ctx.currentTime;
-      result.beatPhase = (((currentTime - activeDeck.firstBeatOffset) / beatPeriod) % 1 + 1) % 1;
+      result.beatPhase = (((currentTime - activeOffset) / beatPeriod) % 1 + 1) % 1;
     }
 
     // Secret #25: Color filter state from active deck
-    result.colorFilter = activeDeck.colorFx ?? 0;
+    result.colorFilter = cs.playingA ? cs.colorFxA : cs.colorFxB;
 
     // Secret #3: Peak hold buffer (slower decay for ring texture)
     const peakBuf = peakBufRef.current;
@@ -203,8 +223,8 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
 
     jogPositions.forEach((jog, idx) => {
       const deckId = deckIds[idx] || 'A';
-      const state = useMixiStore.getState();
-      if (!state.decks[deckId].isPlaying) return;
+      const cs = cachedStore.current;
+      if (!(deckId === 'A' ? cs.playingA : cs.playingB)) return;
 
       const analyser = engine.channels[deckId].analyser;
       const bufRef = idx === 0 ? waveBufA : waveBufB;

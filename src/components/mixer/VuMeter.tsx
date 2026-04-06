@@ -115,17 +115,20 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
         prevLitCount = litCount;
         prevPeakSeg = peakSeg;
 
-        // ── Update DOM directly (no setState) ────────────────
+        // ── Update only changed segments (no setState) ────────
         for (let i = 0; i < SEGMENT_COUNT; i++) {
-          const seg = segments[i];
+          const wasLit = i < prevLitCount || i === prevPeakSeg;
           const isLit = i < litCount;
           const isPeak = i === peakSeg && peakSeg >= 0;
-          const color = segColors[i];
+          const nowLit = isLit || isPeak;
+          if (wasLit === nowLit) continue;  // skip unchanged segments
 
-          if (isLit || isPeak) {
-            seg.style.backgroundColor = color;
+          const seg = segments[i];
+          if (nowLit) {
+            const c = segColors[i];
+            seg.style.backgroundColor = c;
             seg.style.opacity = '1';
-            seg.style.boxShadow = `0 0 4px ${color}44`;
+            seg.style.boxShadow = `0 0 4px ${c}44`;
           } else {
             seg.style.backgroundColor = ledOff;
             seg.style.opacity = '0.5';

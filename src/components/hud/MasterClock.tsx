@@ -174,7 +174,8 @@ export const MasterClock: FC = () => {
       const tickInterval = 60 / (bpm * PPQN); // seconds per MIDI tick
       const deadline = actx.currentTime + LOOK_AHEAD_S;
 
-      while (nextTickTimeRef.current < deadline) {
+      let safety = 0;
+      while (nextTickTimeRef.current < deadline && ++safety < 100) {
         // Convert AudioContext time → performance.now()-style timestamp
         // MIDIOutput.send timestamp is in DOMHighResTimeStamp (ms)
         const delayMs = Math.max(0, (nextTickTimeRef.current - actx.currentTime) * 1000);

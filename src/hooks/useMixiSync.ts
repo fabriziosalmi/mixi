@@ -208,18 +208,16 @@ export function useMixiSync() {
         ),
       );
 
-      // EQ bands
-      for (const band of EQ_BANDS) {
-        unsubs.push(
-          useMixiStore.subscribe(
-            (s) => s.decks[deck].eq[band],
-            (db) => {
-              if (!engine.isInitialized) return;
-              engine.setEq(deck, band, db);
-            },
-          ),
-        );
-      }
+      // EQ bands (single subscription per deck → 3 band updates)
+      unsubs.push(
+        useMixiStore.subscribe(
+          (s) => s.decks[deck].eq,
+          (eq) => {
+            if (!engine.isInitialized) return;
+            for (const band of EQ_BANDS) engine.setEq(deck, band, eq[band]);
+          },
+        ),
+      );
 
       // Color FX
       unsubs.push(

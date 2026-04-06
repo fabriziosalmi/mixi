@@ -11,7 +11,7 @@
 // Mixi – Channel Strip (compact layout)
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useState, type FC } from 'react';
+import { useCallback, useRef, useState, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { Knob } from '../controls/Knob';
 import { Fader } from '../controls/Fader';
@@ -41,6 +41,9 @@ export const ChannelStrip: FC<ChannelStripProps> = ({ deckId, color, vuSide = 'l
   const [kills, setKills] = useState<Record<EqBand, number | null>>({
     high: null, mid: null, low: null,
   });
+  // Ref mirror avoids kills in useCallback deps → stable closures
+  const killsRef = useRef(kills);
+  killsRef.current = kills;
 
   const onGainChange = useCallback(
     (val: number) => setGain(deckId, val),
@@ -49,27 +52,29 @@ export const ChannelStrip: FC<ChannelStripProps> = ({ deckId, color, vuSide = 'l
   const onEqChange = useCallback(
     (band: EqBand) => (val: number) => {
       // If user moves knob while killed, un-kill it
-      if (kills[band] !== null) {
+      if (killsRef.current[band] !== null) {
         setKills((k) => ({ ...k, [band]: null }));
       }
       setEq(deckId, band, val);
     },
-    [deckId, setEq, kills],
+    [deckId, setEq],
   );
   const onKill = useCallback(
     (band: EqBand) => () => {
-      const isKilled = kills[band] !== null;
+      const k = killsRef.current;
+      const isKilled = k[band] !== null;
       if (isKilled) {
         // Restore previous value
-        setEq(deckId, band, kills[band]!);
-        setKills((k) => ({ ...k, [band]: null }));
+        setEq(deckId, band, k[band]!);
+        setKills((prev) => ({ ...prev, [band]: null }));
       } else {
         // Save current value and kill (set to min)
-        setKills((k) => ({ ...k, [band]: deck.eq[band] }));
+        const eq = useMixiStore.getState().decks[deckId].eq;
+        setKills((prev) => ({ ...prev, [band]: eq[band] }));
         setEq(deckId, band, eqRange.min);
       }
     },
-    [deckId, deck.eq, eqRange.min, kills, setEq],
+    [deckId, eqRange.min, setEq],
   );
   const onColorFxChange = useCallback(
     (val: number) => setColorFx(deckId, val),

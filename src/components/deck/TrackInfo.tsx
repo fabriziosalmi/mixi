@@ -44,6 +44,7 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
 
   useEffect(() => {
     let lastUpdate = 0;
+    let prevElapsed = '', prevRemain = '', prevEnding = false;
     function tick() {
       const now = performance.now();
       if (now - lastUpdate > 100) {
@@ -51,12 +52,19 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
         if (engine.isInitialized) {
           const t = engine.getCurrentTime(deckId);
           const rem = duration - t;
-          if (elapsedRef.current) elapsedRef.current.textContent = formatTime(t);
+          const elStr = formatTime(t);
+          if (elStr !== prevElapsed && elapsedRef.current) {
+            elapsedRef.current.textContent = elStr; prevElapsed = elStr;
+          }
+          const remStr = `-${formatTime(rem)}`;
           if (remainRef.current) {
-            remainRef.current.textContent = `-${formatTime(rem)}`;
+            if (remStr !== prevRemain) { remainRef.current.textContent = remStr; prevRemain = remStr; }
             const ending = rem > 0 && rem < 30;
-            remainRef.current.style.color = ending ? 'var(--status-error)' : '';
-            remainRef.current.style.animation = ending ? 'pulse 1s ease-in-out infinite' : '';
+            if (ending !== prevEnding) {
+              prevEnding = ending;
+              remainRef.current.style.color = ending ? 'var(--status-error)' : '';
+              remainRef.current.style.animation = ending ? 'pulse 1s ease-in-out infinite' : '';
+            }
           }
         }
         lastUpdate = now;

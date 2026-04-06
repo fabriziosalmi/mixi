@@ -121,8 +121,18 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
     let freqBuf: Uint8Array<ArrayBuffer> | null = null;
     let frameSkip = 0;
 
+    // ── Cached store fields via subscription (avoid getState per frame) ──
+    let cachedIsPlaying = false, cachedPlaybackRate = 1, cachedBpm = 0, cachedFirstBeatOffset = 0;
+    const syncCache = () => {
+      const d = useMixiStore.getState().decks[deckId];
+      cachedIsPlaying = d.isPlaying; cachedPlaybackRate = d.playbackRate;
+      cachedBpm = d.bpm; cachedFirstBeatOffset = d.firstBeatOffset;
+    };
+    syncCache();
+    const unsub = useMixiStore.subscribe(syncCache);
+
     function tick() {
-      const deck = useMixiStore.getState().decks[deckId];
+      const deck = { isPlaying: cachedIsPlaying, playbackRate: cachedPlaybackRate, bpm: cachedBpm, firstBeatOffset: cachedFirstBeatOffset };
       const g = wheelRef.current;
       const beatEl = beatRef.current;
 
@@ -213,7 +223,7 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
     }
 
     rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => { cancelAnimationFrame(rafRef.current); unsub(); };
   }, [deckId]);
 
   // SVG IDs

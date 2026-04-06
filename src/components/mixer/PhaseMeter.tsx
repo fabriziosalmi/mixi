@@ -33,38 +33,6 @@ const CENTER = (METER_W - BOX_W) / 2;
 /** Max displayable delta in ms — beyond this, box is at edge. */
 const MAX_DELTA_MS = 50;
 
-// ── Phase computation ────────────────────────────────────────
-
-function computePhaseDelta(): { deltaMs: number; bothPlaying: boolean } {
-  const state = useMixiStore.getState();
-  const deckA = state.decks.A;
-  const deckB = state.decks.B;
-
-  if (!deckA.isPlaying || !deckB.isPlaying || deckA.bpm <= 0 || deckB.bpm <= 0) {
-    return { deltaMs: 0, bothPlaying: false };
-  }
-
-  const engine = MixiEngine.getInstance();
-  if (!engine.isInitialized) return { deltaMs: 0, bothPlaying: false };
-
-  const timeA = engine.getCurrentTime('A');
-  const timeB = engine.getCurrentTime('B');
-
-  const periodA = 60 / deckA.bpm;
-  const beatA = (timeA - deckA.firstBeatOffset) / periodA;
-  const beatB = (timeB - deckB.firstBeatOffset) / (60 / deckB.bpm);
-
-  const fracA = ((beatA % 1) + 1) % 1;
-  const fracB = ((beatB % 1) + 1) % 1;
-
-  let delta = fracA - fracB;
-  if (delta > 0.5) delta -= 1;
-  if (delta < -0.5) delta += 1;
-
-  const deltaMs = delta * periodA * 1000;
-  return { deltaMs, bothPlaying: true };
-}
-
 // ── Component ────────────────────────────────────────────────
 
 export const PhaseMeter: FC = () => {
@@ -75,6 +43,25 @@ export const PhaseMeter: FC = () => {
   const rafRef = useRef(0);
 
   useEffect(() => {
+    // ── Cached store fields via subscription (avoid getState per frame) ──
+    let cachedPlayingA = false, cachedPlayingB = false;
+    let cachedBpmA = 0, cachedBpmB = 0;
+    let cachedOffsetA = 0, cachedOffsetB = 0;
+    const syncCache = () => {
+      const s = useMixiStore.getState();
+      cachedPlayingA = s.decks.A.isPlaying; cachedPlayingB = s.decks.B.isPlaying;
+      cachedBpmA = s.decks.A.bpm; cachedBpmB = s.decks.B.bpm;
+      cachedOffsetA = s.decks.A.firstBeatOffset; cachedOffsetB = s.decks.B.firstBeatOffset;
+    };
+    syncCache();
+    const unsub = useMixiStore.subscribe(syncCache);
+
+    // ── Change guard: track previous DOM values to skip redundant writes ──
+    let prevZone = -1;     // 0=idle, 1=locked, 2=near, 3=warn, 4=crit
+    let prevSlaveLeft = '';
+    let prevLabelText = '';
+    let prevSlaveAnim = '';
+
     function tick() {
       const slave = slaveBoxRef.current;
       const master = masterBoxRef.current;
@@ -85,81 +72,111 @@ export const PhaseMeter: FC = () => {
         return;
       }
 
-      const { deltaMs, bothPlaying } = computePhaseDelta();
+      const bothPlaying = cachedPlayingA && cachedPlayingB && cachedBpmA > 0 && cachedBpmB > 0;
 
       if (!bothPlaying) {
-        container.style.opacity = '0.3';
-        slave.style.left = `${CENTER}px`;
-        slave.style.background = 'rgba(255,255,255,0.05)';
-        slave.style.borderColor = 'rgba(255,255,255,0.1)';
-        slave.style.boxShadow = 'none';
-        master.style.borderColor = 'rgba(255,255,255,0.1)';
-        master.style.boxShadow = 'none';
-        label.textContent = '';
-        container.style.animation = '';
+        if (prevZone !== 0) {
+          prevZone = 0;
+          container.style.opacity = '0.3';
+          slave.style.left = `${CENTER}px`;
+          slave.style.background = 'rgba(255,255,255,0.05)';
+          slave.style.borderColor = 'rgba(255,255,255,0.1)';
+          slave.style.boxShadow = 'none';
+          slave.style.animation = '';
+          master.style.borderColor = 'rgba(255,255,255,0.1)';
+          master.style.boxShadow = 'none';
+          label.textContent = '';
+          prevSlaveLeft = ''; prevLabelText = ''; prevSlaveAnim = '';
+        }
         rafRef.current = requestAnimationFrame(tick);
         return;
       }
+
+      // ── Compute phase delta using cached values ──
+      const engine = MixiEngine.getInstance();
+      if (!engine.isInitialized) { rafRef.current = requestAnimationFrame(tick); return; }
+
+      const timeA = engine.getCurrentTime('A');
+      const timeB = engine.getCurrentTime('B');
+      const periodA = 60 / cachedBpmA;
+      const beatA = (timeA - cachedOffsetA) / periodA;
+      const beatB = (timeB - cachedOffsetB) / (60 / cachedBpmB);
+      const fracA = ((beatA % 1) + 1) % 1;
+      const fracB = ((beatB % 1) + 1) % 1;
+      let delta = fracA - fracB;
+      if (delta > 0.5) delta -= 1;
+      if (delta < -0.5) delta += 1;
+      const deltaMs = delta * periodA * 1000;
 
       container.style.opacity = '1';
 
       // Map deltaMs to pixel offset
       const clampedDelta = Math.max(-MAX_DELTA_MS, Math.min(MAX_DELTA_MS, deltaMs));
       const pxOffset = (clampedDelta / MAX_DELTA_MS) * (METER_W / 2 - BOX_W / 2);
-      const slaveLeft = CENTER + pxOffset;
-      slave.style.left = `${slaveLeft}px`;
+      const newLeft = `${(CENTER + pxOffset) | 0}px`;
+      if (newLeft !== prevSlaveLeft) { slave.style.left = newLeft; prevSlaveLeft = newLeft; }
 
       const absDelta = Math.abs(deltaMs);
+      const zone = absDelta < 2 ? 1 : absDelta < 10 ? 2 : absDelta < 30 ? 3 : 4;
 
-      if (absDelta < 2) {
-        // LOCKED — fuse into white block
-        slave.style.background = 'rgba(255,255,255,0.35)';
-        slave.style.borderColor = 'rgba(255,255,255,0.9)';
-        slave.style.boxShadow = '0 0 12px rgba(255,255,255,0.5), inset 0 0 4px rgba(255,255,255,0.3)';
-        master.style.borderColor = 'rgba(255,255,255,0.9)';
-        master.style.boxShadow = '0 0 12px rgba(255,255,255,0.5)';
-        label.textContent = '';
-        container.style.animation = '';
-      } else if (absDelta < 10) {
-        // Near-lock — green
-        slave.style.background = 'rgba(34,197,94,0.2)';
-        slave.style.borderColor = 'rgba(34,197,94,0.7)';
-        slave.style.boxShadow = `0 0 6px rgba(34,197,94,0.3)`;
-        master.style.borderColor = 'rgba(255,255,255,0.3)';
-        master.style.boxShadow = 'none';
-        const ms = Math.round(deltaMs);
-        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
-        label.style.color = 'rgba(34,197,94,0.8)';
-        container.style.animation = '';
-      } else if (absDelta < 30) {
-        // Warning — orange + vibrate
-        slave.style.background = 'rgba(245,158,11,0.2)';
-        slave.style.borderColor = 'rgba(245,158,11,0.7)';
-        slave.style.boxShadow = `0 0 6px rgba(245,158,11,0.3)`;
-        master.style.borderColor = 'rgba(255,255,255,0.2)';
-        master.style.boxShadow = 'none';
-        const ms = Math.round(deltaMs);
-        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
-        label.style.color = 'rgba(245,158,11,0.8)';
-        container.style.animation = absDelta > 15 ? 'phase-shake 0.1s ease-in-out infinite' : '';
+      // ── Color/style changes on zone transition only ──
+      if (zone !== prevZone) {
+        prevZone = zone;
+        if (zone === 1) {
+          slave.style.background = 'rgba(255,255,255,0.35)';
+          slave.style.borderColor = 'rgba(255,255,255,0.9)';
+          slave.style.boxShadow = '0 0 12px rgba(255,255,255,0.5), inset 0 0 4px rgba(255,255,255,0.3)';
+          master.style.borderColor = 'rgba(255,255,255,0.9)';
+          master.style.boxShadow = '0 0 12px rgba(255,255,255,0.5)';
+        } else if (zone === 2) {
+          slave.style.background = 'rgba(34,197,94,0.2)';
+          slave.style.borderColor = 'rgba(34,197,94,0.7)';
+          slave.style.boxShadow = '0 0 6px rgba(34,197,94,0.3)';
+          master.style.borderColor = 'rgba(255,255,255,0.3)';
+          master.style.boxShadow = 'none';
+          label.style.color = 'rgba(34,197,94,0.8)';
+        } else if (zone === 3) {
+          slave.style.background = 'rgba(245,158,11,0.2)';
+          slave.style.borderColor = 'rgba(245,158,11,0.7)';
+          slave.style.boxShadow = '0 0 6px rgba(245,158,11,0.3)';
+          master.style.borderColor = 'rgba(255,255,255,0.2)';
+          master.style.boxShadow = 'none';
+          label.style.color = 'rgba(245,158,11,0.8)';
+        } else {
+          slave.style.background = 'rgba(239,68,68,0.25)';
+          slave.style.borderColor = 'rgba(239,68,68,0.8)';
+          slave.style.boxShadow = '0 0 8px rgba(239,68,68,0.4)';
+          master.style.borderColor = 'rgba(255,255,255,0.15)';
+          master.style.boxShadow = 'none';
+          label.style.color = 'rgba(239,68,68,0.9)';
+        }
+      }
+
+      // ── Shake on SLAVE BOX only (evaluated every frame, not just on zone change) ──
+      const newAnim = zone === 4
+        ? 'phase-shake 0.08s ease-in-out infinite'
+        : zone === 3 && absDelta > 15
+          ? 'phase-shake 0.1s ease-in-out infinite'
+          : '';
+      if (newAnim !== prevSlaveAnim) {
+        slave.style.animation = newAnim;
+        prevSlaveAnim = newAnim;
+      }
+
+      // Label text — only write when changed
+      if (zone === 1) {
+        if (prevLabelText !== '') { label.textContent = ''; prevLabelText = ''; }
       } else {
-        // Critical — red + strong vibrate
-        slave.style.background = 'rgba(239,68,68,0.25)';
-        slave.style.borderColor = 'rgba(239,68,68,0.8)';
-        slave.style.boxShadow = `0 0 8px rgba(239,68,68,0.4)`;
-        master.style.borderColor = 'rgba(255,255,255,0.15)';
-        master.style.boxShadow = 'none';
         const ms = Math.round(deltaMs);
-        label.textContent = `${ms > 0 ? '+' : ''}${ms}ms`;
-        label.style.color = 'rgba(239,68,68,0.9)';
-        container.style.animation = 'phase-shake 0.08s ease-in-out infinite';
+        const txt = `${ms > 0 ? '+' : ''}${ms}ms`;
+        if (txt !== prevLabelText) { label.textContent = txt; prevLabelText = txt; }
       }
 
       rafRef.current = requestAnimationFrame(tick);
     }
 
     rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => { cancelAnimationFrame(rafRef.current); unsub(); };
   }, []);
 
   return (
