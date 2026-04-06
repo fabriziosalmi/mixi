@@ -282,7 +282,7 @@ class PhaseLockLoop {
     const slavePeriod = ratio !== 1
       ? virtualBeatPeriod(slave.bpm, ratio)
       : 60 / slave.bpm;
-    if (slavePeriod <= 0) return null;
+    if (slavePeriod <= 0 || !isFinite(slavePeriod)) return null;
 
     const masterFrac = (((masterTime - master.firstBeatOffset) / masterPeriod) % 1 + 1) % 1;
     const slaveFrac = (((slaveTime - slave.firstBeatOffset) / slavePeriod) % 1 + 1) % 1;

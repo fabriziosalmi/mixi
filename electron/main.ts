@@ -22,7 +22,7 @@
 import { app, BrowserWindow, screen, session, globalShortcut, ipcMain, dialog } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import {
   existsSync, openSync, writeSync, closeSync, readSync,
   copyFileSync, unlinkSync, readdirSync, statSync,
@@ -496,8 +496,13 @@ function setupDiskRecordingIPC(): void {
 
   // Copy temp file to user-chosen destination
   ipcMain.handle('disk-rec:save-as', (_event, args: { src: string; dest: string }) => {
-    copyFileSync(args.src, args.dest);
-    try { unlinkSync(args.src); } catch { /* temp may already be gone */ }
+    // SEC-1: Validate source path is inside temp directory (prevent path traversal)
+    const resolvedSrc = resolve(args.src);
+    if (!resolvedSrc.startsWith(tmpdir())) {
+      throw new Error('Source path outside temp directory');
+    }
+    copyFileSync(resolvedSrc, args.dest);
+    try { unlinkSync(resolvedSrc); } catch { /* temp may already be gone */ }
     console.log(`[mixi-rec] Saved: ${args.dest}`);
     return { dest: args.dest };
   });
@@ -545,13 +550,17 @@ function setupDiskRecordingIPC(): void {
 
   // Recover an orphan recording: patch header and save
   ipcMain.handle('disk-rec:recover', (_event, args: { src: string; dest: string }) => {
-    const stat = statSync(args.src);
-    const fd = openSync(args.src, 'r+');
+    const resolvedSrc = resolve(args.src);
+    if (!resolvedSrc.startsWith(tmpdir())) {
+      throw new Error('Source path outside temp directory');
+    }
+    const stat = statSync(resolvedSrc);
+    const fd = openSync(resolvedSrc, 'r+');
     patchWavHeaderSize(fd, stat.size, { writeSync });
     closeSync(fd);
 
-    copyFileSync(args.src, args.dest);
-    try { unlinkSync(args.src); } catch { /* temp cleanup */ }
+    copyFileSync(resolvedSrc, args.dest);
+    try { unlinkSync(resolvedSrc); } catch { /* temp cleanup */ }
 
     console.log(`[mixi-rec] Recovered: ${args.dest} (${(stat.size / 1048576).toFixed(1)} MB)`);
     return { dest: args.dest, sizeBytes: stat.size };

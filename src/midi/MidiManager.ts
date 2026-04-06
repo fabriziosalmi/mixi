@@ -96,8 +96,12 @@ export class MidiManager {
           const port = e?.port;
           if (!port) return;
           log.debug('MIDI', `State change: ${port.name} → ${port.state}`);
-          if (port.type === 'input' && port.state === 'connected') {
-            this.attachListener(port as MIDIInput);
+          if (port.type === 'input') {
+            if (port.state === 'connected') {
+              this.attachListener(port as MIDIInput);
+            } else if (port.state === 'disconnected') {
+              (port as MIDIInput).onmidimessage = null;
+            }
           }
           this.notifyStatus();
         };

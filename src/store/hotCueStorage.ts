@@ -60,9 +60,11 @@ export function saveHotCues(trackName: string, cues: (number | null)[]): void {
   writeAll(store);
 }
 
-/** Load hot cues for a track. Returns null if not found. */
+/** Load hot cues for a track. Returns null if not found or invalid. */
 export function loadHotCues(trackName: string): (number | null)[] | null {
   if (!trackName) return null;
   const store = readAll();
-  return store[trackName] || null;
+  const raw = store[trackName];
+  if (!Array.isArray(raw) || raw.length !== 8) return null;
+  return raw.map(v => (typeof v === 'number' && isFinite(v)) ? v : null);
 }

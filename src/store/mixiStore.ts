@@ -232,6 +232,8 @@ export const useMixiStore = create<MixiStore>()(
       if (engine.isInitialized) {
         const s = get();
         if (s.decks[deck].isPlaying) engine.pause(deck);
+        // Exit any active loop before eject (prevents ghost looping on source node)
+        if (s.decks[deck].activeLoop) engine.exitLoop(deck);
         // BUG-13/20/19: Reset all FX to prevent ghost tails & stuck gate.
         engine.resetDeckFx(deck);
       }

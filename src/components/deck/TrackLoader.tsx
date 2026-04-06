@@ -200,10 +200,25 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
       setErrorMsg('');
 
       try {
+        // SEC-2: Validate URL protocol
+        try {
+          const parsed = new URL(url);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new Error('Only http/https URLs are supported');
+          }
+        } catch (urlErr) {
+          if (urlErr instanceof Error && urlErr.message.includes('Only http')) throw urlErr;
+          throw new Error('Invalid URL format');
+        }
+
         log.info('Loader', `Deck ${deckId} – fetching stream from proxy: ${url}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60_000);
         const res = await fetch(
           `${API_BASE}/api/stream?url=${encodeURIComponent(url)}`,
+          { signal: controller.signal },
         );
+        clearTimeout(timeout);
 
         if (!res.ok) {
           // Try to extract a detail message from the JSON error body.

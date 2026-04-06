@@ -269,7 +269,7 @@ export class MixiEngine {
     // Edge-case #21: Resume AudioContext when tab regains focus.
     this._visHandler = () => {
       if (!document.hidden && this.ctx.state === 'suspended') {
-        this.ctx.resume();
+        this.ctx.resume().catch(() => {/* autoplay policy */});
       }
     };
     document.addEventListener('visibilitychange', this._visHandler);

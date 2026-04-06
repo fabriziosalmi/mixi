@@ -150,6 +150,7 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'mixi-settings',
+      version: 2,
       storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({
         eqModel: s.eqModel,
@@ -162,10 +163,17 @@ export const useSettingsStore = create<SettingsStore>()(
         quantizeResolution: s.quantizeResolution,
         useWasmDsp: s.useWasmDsp,
       }),
+      migrate: (persisted, version) => {
+        // v1→v2: strip stale fields, ensure new defaults apply via merge
+        if (version < 2) {
+          const p = persisted as Record<string, unknown>;
+          delete p.loadDemoTrack;
+        }
+        return persisted;
+      },
       merge: (persisted, current) => {
         const p = persisted as Record<string, unknown> | undefined;
         if (!p) return current;
-        // Strip stale loadDemoTrack — it should always default to true
         const { loadDemoTrack: _, ...clean } = p;
         return { ...current, ...clean };
       },

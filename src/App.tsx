@@ -83,11 +83,16 @@ const App: FC = () => {
   const [vfxActive, setVfxActive] = useState(false);
 
   const handleStart = useCallback(async () => {
-    await initEngine();
+    try {
+      await initEngine();
+    } catch (err) {
+      console.error('[mixi] Audio init failed:', err);
+      // Still proceed — some features may work without audio
+    }
     setAudioStarted(true);
 
     // Init Web MIDI
-    MidiManager.getInstance();
+    try { MidiManager.getInstance(); } catch { /* MIDI optional */ }
 
     const settings = useSettingsStore.getState();
     const engine = MixiEngine.getInstance();

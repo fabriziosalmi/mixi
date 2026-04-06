@@ -46,6 +46,8 @@ docs/FX_REFACTORING_PLAN.md
 ROAD_TO_TRAKTOR.md
 DECKS_MARKETPLACE.md
 LOADERS.md
+WAVEFORM_VIEWER.md
+CRITICAL_AUDIT.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/
