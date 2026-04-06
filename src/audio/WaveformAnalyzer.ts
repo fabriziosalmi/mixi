@@ -261,8 +261,14 @@ export async function analyzeWaveform(
   const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
   const bpmResult: BpmResult = detectBpm(bpmSource, { bpmMin: bpmPreset.min, bpmMax: bpmPreset.max });
 
+  // Yield to main thread between heavy sync operations to avoid
+  // 500ms+ continuous main-thread block (detectBpm + detectKey + 3x computeRms).
+  await new Promise<void>((r) => setTimeout(r, 0));
+
   // ── Key detection (runs on the original or sliced buffer) ──
   const keyResult: KeyResult = detectKey(keySource);
+
+  await new Promise<void>((r) => setTimeout(r, 0));
 
   // ── RMS waveform ───────────────────────────────────────────
   const lowRms = computeRms(lowBuf, chunkSize);

@@ -103,6 +103,8 @@ export class MixiEngine {
   private _visHandler: (() => void) | null = null;
   /** Generation counter per deck — stale async loads are discarded. */
   private _loadGen: Record<DeckId, number> = { A: 0, B: 0 };
+  /** Analysis queue — serialize waveform analysis to avoid 6 concurrent OfflineAudioContext jobs. */
+  private _analysisQueue: Promise<void> = Promise.resolve();
 
   /** DSP Parameter Writer — populates the shared param bus for Wasm DSP. */
   private _paramWriter: DspParamWriter | null = null;
@@ -465,7 +467,13 @@ export class MixiEngine {
     transport.offset = 0;
     transport.startedAt = 0;
 
-    const analysis = await analyzeWaveform(buffer);
+    // Serialize analysis to avoid 6 concurrent OfflineAudioContext jobs
+    // when two tracks load simultaneously. Each analysis uses 3 offline
+    // renders, so running them in parallel saturates the CPU for 2+ seconds.
+    let analysis!: Awaited<ReturnType<typeof analyzeWaveform>>;
+    await (this._analysisQueue = this._analysisQueue.then(async () => {
+      analysis = await analyzeWaveform(buffer);
+    }));
 
     // BUG-21: Check generation again after second await.
     if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; return; }

@@ -411,7 +411,12 @@ export const useMixiStore = create<MixiStore>()(
         const thisDeck = s.decks[deck];
         const otherDeckId = otherDeck(deck);
         const other = s.decks[otherDeckId];
-        if (thisDeck.originalBpm <= 0 || other.bpm <= 0) return s;
+        if (thisDeck.originalBpm <= 0 || other.bpm <= 0) {
+          console.warn(`[mixi-sync] Cannot sync deck ${deck}: ` +
+            `thisBpm=${thisDeck.originalBpm.toFixed(1)}, otherBpm=${other.bpm.toFixed(1)}` +
+            (thisDeck.originalBpm <= 0 ? ' — BPM detection may have failed (try a different BPM range preset)' : ''));
+          return s;
+        }
 
         // ── 1. Tempo match ───────────────────────────────────
         const newRate = other.bpm / thisDeck.originalBpm;

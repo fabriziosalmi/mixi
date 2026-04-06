@@ -65,12 +65,12 @@ const THRESHOLD_ALPHA = 1.3;
 /** Half-width of the sliding average window (in energy frames). */
 const AVG_HALF_WINDOW = 10;
 
-/** Minimum inter-onset interval in seconds. */
-const MIN_IOI = 0.12;
+/** Minimum inter-onset interval in seconds (aligned with Rust mixi-core). */
+const MIN_IOI = 0.06;
 
 /** BPM search range (wide — octave resolution narrows later). */
 const DEFAULT_BPM_MIN = 65;
-const DEFAULT_BPM_MAX = 200;
+const DEFAULT_BPM_MAX = 250;
 
 /** Histogram bin resolution (BPM per bin). */
 const BIN_RESOLUTION = 0.25;

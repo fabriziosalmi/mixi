@@ -228,7 +228,7 @@ const AudioTab: FC = () => {
     <>
       <SettingRow label="BPM Detection Range" description="Hint for BPM analysis on track load">
         <SegmentedControl<BpmRangePreset>
-          options={(['wide', 'downtempo', 'house', 'dnb'] as const).map((p) => ({
+          options={(['wide', 'downtempo', 'house', 'dnb', 'hardcore'] as const).map((p) => ({
             value: p,
             label: BPM_RANGE_PRESETS[p].label,
           }))}

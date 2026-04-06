@@ -48,12 +48,13 @@ export const EQ_RANGE_PRESETS: Record<EqRangePreset, { min: number; max: number;
 export type FpsLimit = 60 | 30;
 
 /** BPM detection range presets. */
-export type BpmRangePreset = 'wide' | 'downtempo' | 'house' | 'dnb';
+export type BpmRangePreset = 'wide' | 'downtempo' | 'house' | 'dnb' | 'hardcore';
 
 export const BPM_RANGE_PRESETS: Record<BpmRangePreset, { min: number; max: number; label: string }> = {
   downtempo: { min: 70,  max: 120, label: '70–120' },
   house:     { min: 115, max: 150, label: '115–150' },
   dnb:       { min: 140, max: 190, label: '140–190' },
+  hardcore:  { min: 150, max: 250, label: '150–250' },
   wide:      { min: 65,  max: 200, label: '65–200' },
 };
 
