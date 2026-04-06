@@ -81,6 +81,8 @@ export interface SettingsState {
   quantizeResolution: QuantizeResolution;
   /** When true, use Rust/Wasm DSP in AudioWorklet instead of native WebAudio nodes. */
   useWasmDsp: boolean;
+  /** Groove offset in ms (-10 to +10). Positive = push (urgency), negative = lay back. */
+  grooveOffsetMs: number;
 }
 
 export interface SettingsActions {
@@ -97,6 +99,7 @@ export interface SettingsActions {
   setBpmRange: (preset: BpmRangePreset) => void;
   setQuantizeResolution: (res: QuantizeResolution) => void;
   setUseWasmDsp: (v: boolean) => void;
+  setGrooveOffset: (ms: number) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -115,6 +118,7 @@ export const useSettingsStore = create<SettingsStore>()(
       bpmRange: 'wide' as BpmRangePreset,
       quantizeResolution: 1 as QuantizeResolution,
       useWasmDsp: false,
+      grooveOffsetMs: 0,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -137,6 +141,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setBpmRange: (preset) => set({ bpmRange: preset }),
       setQuantizeResolution: (res) => set({ quantizeResolution: res }),
       setUseWasmDsp: (v) => set({ useWasmDsp: v }),
+      setGrooveOffset: (ms) => set({ grooveOffsetMs: Math.max(-10, Math.min(10, ms)) }),
     }),
     {
       name: 'mixi-settings',

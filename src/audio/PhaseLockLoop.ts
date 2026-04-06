@@ -10,29 +10,25 @@
 // ─────────────────────────────────────────────────────────────
 // Mixi – Continuous Phase-Lock Loop (PI Controller)
 //
-// Runs at ~20 Hz (via rAF) on the synced deck.  Replaces the
-// one-shot sync + blunt PhaseDriftCorrectionIntent with a
-// smooth, inaudible, continuous phase correction.
+// Runs at ~20 Hz on the synced deck.  Features:
+//
+//   1. PI phase correction with 3-layer anti-windup
+//   2. Groove Offset — intentional phase target (±10ms)
+//   3. Drift Compensation — linear regression detects and
+//      corrects systematic clock drift over long sets
+//   4. Audio Clock Reconciliation — detects divergence
+//      between AudioContext.currentTime and performance.now()
 //
 // Why this beats everyone:
 //   - Traktor:    discrete nudges → audible "wobble"
 //   - Rekordbox:  periodic re-sync → audible jump
 //   - Mixi PLL:   continuous PI → zero artefacts, zero slingshot
-//
-// PI controller with anti-windup:
-//   P = Kp * error          — immediate reaction
-//   I = Ki * accumulated    — eliminates steady-state drift
-//   correction = clamp(P + I, -maxCorr, +maxCorr)
-//
-// Three layers of anti-windup protection:
-//   1. Freeze during human interaction (nudge, jog, scratch)
-//   2. Symmetric integral clamp (never exceeds ±integralMax)
-//   3. Reset on large discontinuity (seek, hot cue, loop exit)
 // ─────────────────────────────────────────────────────────────
 
 import type { DeckId } from '../types';
 import { MixiEngine } from './MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 // ── PI constants (tuned for DJ use) ─────────────────────────
 
@@ -57,6 +53,22 @@ const DISCONTINUITY_THRESHOLD = 0.25;
 /** PLL tick interval in ms (~20 Hz). */
 const TICK_INTERVAL_MS = 50;
 
+// ── Drift compensation constants ────────────────────────────
+
+/** Ring buffer size for drift samples (100 × 500ms = 50s window). */
+const DRIFT_BUFFER_SIZE = 100;
+
+/** Drift sample interval: every 10 ticks = 500ms. */
+const DRIFT_SAMPLE_INTERVAL = 10;
+
+/** Minimum slope to trigger drift correction (ms/s). */
+const DRIFT_SLOPE_THRESHOLD = 0.01;
+
+// ── Clock reconciliation constants ──────────────────────────
+
+/** How often to recalibrate clocks (every 200 ticks = 10s). */
+const CLOCK_CAL_INTERVAL = 200;
+
 // ── Controller state per deck ───────────────────────────────
 
 interface PllState {
@@ -70,6 +82,49 @@ function createPllState(): PllState {
   return { integral: 0, lastPhaseDelta: 0, lastCorrection: 0, frozen: false };
 }
 
+// ── Drift tracker ───────────────────────────────────────────
+
+interface DriftTracker {
+  samples: number[];  // ring buffer of phaseDelta values
+  writeIdx: number;
+  tickCounter: number;
+  rateCorrection: number;  // accumulated base rate correction
+}
+
+function createDriftTracker(): DriftTracker {
+  return { samples: [], writeIdx: 0, tickCounter: 0, rateCorrection: 0 };
+}
+
+/** Simple linear regression slope on a ring buffer. */
+function linearRegressionSlope(samples: number[]): number {
+  const n = samples.length;
+  if (n < 10) return 0;  // need minimum data
+
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += samples[i];
+    sumXY += i * samples[i];
+    sumX2 += i * i;
+  }
+  const denom = n * sumX2 - sumX * sumX;
+  if (Math.abs(denom) < 1e-12) return 0;
+  return (n * sumXY - sumX * sumY) / denom;
+}
+
+// ── Clock calibration ───────────────────────────────────────
+
+interface ClockCal {
+  audioTimeAtSync: number;
+  perfTimeAtSync: number;
+  clockRatio: number;
+  tickCounter: number;
+}
+
+function createClockCal(): ClockCal {
+  return { audioTimeAtSync: 0, perfTimeAtSync: 0, clockRatio: 1.0, tickCounter: 0 };
+}
+
 // ── PLL singleton ───────────────────────────────────────────
 
 class PhaseLockLoop {
@@ -78,6 +133,13 @@ class PhaseLockLoop {
     B: createPllState(),
   };
 
+  private drift: Record<DeckId, DriftTracker> = {
+    A: createDriftTracker(),
+    B: createDriftTracker(),
+  };
+
+  private clockCal: ClockCal = createClockCal();
+
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -85,6 +147,15 @@ class PhaseLockLoop {
   start(): void {
     if (this.running) return;
     this.running = true;
+
+    // Initialize clock calibration
+    const engine = MixiEngine.getInstance();
+    if (engine.isInitialized) {
+      this.clockCal.audioTimeAtSync = engine.getAudioContextTime();
+      this.clockCal.perfTimeAtSync = performance.now();
+      this.clockCal.clockRatio = 1.0;
+    }
+
     this.timer = setInterval(() => this.tick(), TICK_INTERVAL_MS);
   }
 
@@ -98,6 +169,9 @@ class PhaseLockLoop {
     }
     this.states.A = createPllState();
     this.states.B = createPllState();
+    this.drift.A = createDriftTracker();
+    this.drift.B = createDriftTracker();
+    this.clockCal = createClockCal();
   }
 
   /** Freeze the PLL for a deck (during human nudge/jog). */
@@ -116,13 +190,23 @@ class PhaseLockLoop {
   /** Reset on discontinuity (seek, hot cue, loop exit). */
   reset(deck: DeckId): void {
     this.states[deck] = createPllState();
+    this.drift[deck] = createDriftTracker();
   }
 
-  /** Core tick — runs for each synced deck. */
+  /** Audio clock ratio (for external consumers). */
+  get audioClockRatio(): number {
+    return this.clockCal.clockRatio;
+  }
+
+  // ── Core tick ─────────────────────────────────────────────
+
   private tick(): void {
     const store = useMixiStore.getState();
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return;
+
+    // Clock reconciliation (every ~10s)
+    this.tickClockCal(engine);
 
     for (const deck of ['A', 'B'] as DeckId[]) {
       const d = store.decks[deck];
@@ -135,12 +219,16 @@ class PhaseLockLoop {
       const phaseDelta = this.computePhaseDelta(deck, masterDeck, engine, store);
       if (phaseDelta === null) continue;
 
+      // Drift compensation (sample + correct)
+      this.tickDrift(deck, phaseDelta, master.bpm);
+
       const correction = this.computePI(deck, phaseDelta);
       this.applyCorrection(deck, correction, engine);
     }
   }
 
-  /** Compute signed phase delta (fraction of beat, -0.5 to +0.5). */
+  // ── Phase computation ─────────────────────────────────────
+
   private computePhaseDelta(
     slaveDeck: DeckId,
     masterDeck: DeckId,
@@ -166,7 +254,8 @@ class PhaseLockLoop {
     return delta;
   }
 
-  /** PI controller with anti-windup. Returns rate correction factor. */
+  // ── PI controller ─────────────────────────────────────────
+
   private computePI(deck: DeckId, phaseDelta: number): number {
     const s = this.states[deck];
 
@@ -183,18 +272,28 @@ class PhaseLockLoop {
 
     s.lastPhaseDelta = phaseDelta;
 
+    // Groove offset: shift the target from 0 to the user's preferred offset
+    const grooveMs = useSettingsStore.getState().grooveOffsetMs;
+    const store = useMixiStore.getState();
+    const masterDeck: DeckId = deck === 'A' ? 'B' : 'A';
+    const masterBpm = store.decks[masterDeck].bpm;
+    const beatPeriodMs = masterBpm > 0 ? (60 / masterBpm) * 1000 : 500;
+    const grooveTarget = grooveMs / beatPeriodMs;  // convert ms to beat fraction
+
+    // Error = actual phase delta - desired groove offset
+    const error = phaseDelta - grooveTarget;
+
     // Deadzone: ignore tiny errors (inaudible)
-    if (Math.abs(phaseDelta) < DEADZONE) {
-      // Slowly decay integral toward zero when in deadzone
+    if (Math.abs(error) < DEADZONE) {
       s.integral *= 0.95;
       return 0;
     }
 
     // P term
-    const P = Kp * phaseDelta;
+    const P = Kp * error;
 
     // I term with anti-windup clamp (Layer 2)
-    s.integral += phaseDelta * (TICK_INTERVAL_MS / 1000);
+    s.integral += error * (TICK_INTERVAL_MS / 1000);
     s.integral = Math.max(-INTEGRAL_MAX, Math.min(INTEGRAL_MAX, s.integral));
     const I = Ki * s.integral;
 
@@ -204,20 +303,87 @@ class PhaseLockLoop {
     return correction;
   }
 
-  /** Apply correction to the AudioBufferSourceNode playbackRate. */
-  private applyCorrection(deck: DeckId, correction: number, engine: MixiEngine): void {
-    if (Math.abs(correction) < 1e-7) return;
+  // ── Apply correction ──────────────────────────────────────
 
-    // Access transport via engine's public method
+  private applyCorrection(deck: DeckId, correction: number, engine: MixiEngine): void {
+    const driftCorr = this.drift[deck].rateCorrection;
+
+    // Skip if no meaningful correction needed
+    if (Math.abs(correction) < 1e-7 && Math.abs(driftCorr) < 1e-7) return;
+
     const store = useMixiStore.getState();
     const baseRate = store.decks[deck].playbackRate;
     const nudgeOffset = engine.getNudge(deck);
 
-    // Effective rate = base + nudge + PLL correction
-    const effectiveRate = baseRate * (1 + correction) + nudgeOffset;
+    // Effective rate = base × (1 + PI correction + drift correction) + nudge
+    const effectiveRate = baseRate * (1 + correction + driftCorr) + nudgeOffset;
 
-    // Apply directly to the AudioNode — don't touch the store
     engine.applyPllRate(deck, effectiveRate);
+  }
+
+  // ── Drift compensation ────────────────────────────────────
+
+  private tickDrift(deck: DeckId, phaseDelta: number, masterBpm: number): void {
+    const d = this.drift[deck];
+    d.tickCounter++;
+
+    // Sample every 500ms
+    if (d.tickCounter % DRIFT_SAMPLE_INTERVAL !== 0) return;
+
+    // Convert phase delta to ms for the ring buffer
+    const beatPeriod = 60 / masterBpm;
+    const deltaMs = phaseDelta * beatPeriod * 1000;
+
+    if (d.samples.length < DRIFT_BUFFER_SIZE) {
+      d.samples.push(deltaMs);
+    } else {
+      d.samples[d.writeIdx] = deltaMs;
+    }
+    d.writeIdx = (d.writeIdx + 1) % DRIFT_BUFFER_SIZE;
+
+    // Need at least 20 samples (~10s) for reliable regression
+    if (d.samples.length < 20) return;
+
+    // Linear regression: slope = ms drift per sample interval
+    // Each sample interval = 500ms, so slope is in ms per 500ms
+    const slope = linearRegressionSlope(d.samples);
+    const slopePerSecond = slope * (1000 / (DRIFT_SAMPLE_INTERVAL * TICK_INTERVAL_MS));
+
+    if (Math.abs(slopePerSecond) > DRIFT_SLOPE_THRESHOLD) {
+      // Apply 10% of correction per iteration (smooth convergence)
+      const rateCorrectionDelta = -slopePerSecond / (beatPeriod * 1000) * 0.1;
+      d.rateCorrection += rateCorrectionDelta;
+      // Clamp total drift correction to ±0.05% (safety)
+      d.rateCorrection = Math.max(-0.0005, Math.min(0.0005, d.rateCorrection));
+    }
+  }
+
+  // ── Clock reconciliation ──────────────────────────────────
+
+  private tickClockCal(engine: MixiEngine): void {
+    const cal = this.clockCal;
+    cal.tickCounter++;
+
+    if (cal.tickCounter % CLOCK_CAL_INTERVAL !== 0) return;
+    if (cal.perfTimeAtSync === 0) return;
+
+    const nowAudio = engine.getAudioContextTime();
+    const nowPerf = performance.now();
+
+    const expectedAudioElapsed = (nowPerf - cal.perfTimeAtSync) / 1000;
+    const actualAudioElapsed = nowAudio - cal.audioTimeAtSync;
+
+    if (expectedAudioElapsed < 1) return;  // too early
+
+    const newRatio = actualAudioElapsed / expectedAudioElapsed;
+    // Exponential moving average (α = 0.1)
+    cal.clockRatio = cal.clockRatio * 0.9 + newRatio * 0.1;
+
+    // Log significant divergence (>0.1% = problem with audio interface)
+    if (Math.abs(cal.clockRatio - 1.0) > 0.001) {
+      // Could emit a warning to the UI in the future
+      // For now, the drift compensation handles it via rate correction
+    }
   }
 }
 

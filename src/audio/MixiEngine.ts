@@ -316,6 +316,11 @@ export class MixiEngine {
     return this.initialized;
   }
 
+  /** Raw AudioContext.currentTime (for clock reconciliation). */
+  getAudioContextTime(): number {
+    return this.initialized ? this.ctx.currentTime : 0;
+  }
+
   /** Audio output latency in seconds (0 if not initialized). */
   get latency(): number {
     return this.initialized ? (this.ctx.baseLatency || 0) : 0;
