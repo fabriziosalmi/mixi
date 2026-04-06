@@ -98,6 +98,7 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
   const [cpuPct, setCpuPct] = useState(0);
   const [latAlert, setLatAlert] = useState<AlertLevel>('nominal');
   const [midiConnected, setMidiConnected] = useState(false);
+  const [audioOut, setAudioOut] = useState<'running' | 'suspended' | 'closed'>('suspended');
   const [wasmReady, setWasmReady] = useState(isWasmReady());
   const [booting, setBooting] = useState(true);
   const [dimmed, setDimmed] = useState(false);
@@ -178,6 +179,7 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
       if (engine.isInitialized) {
         const latRaw = engine.latency * 1000;
         setLatAlert(getAlertLevel(latLogScale(latRaw)));
+        setAudioOut(engine.getAudioContext().state as 'running' | 'suspended' | 'closed');
       }
     }, 3000);
     return () => clearInterval(timer);
@@ -221,6 +223,18 @@ export const SystemHud: FC<{ mcpConnected?: boolean }> = ({ mcpConnected = false
           <div className="flex items-center gap-1" title="Latency">
             <LatIcon color="var(--txt-muted)" />
             <StatusDot alert={latAlert} />
+          </div>
+
+          {/* OUT: audio output state */}
+          <div className="flex items-center gap-1" title={`Audio Output: ${audioOut}`}>
+            <span className="text-[7px] font-mono font-bold tracking-wider" style={{ color: audioOut === 'running' ? 'var(--status-ok)' : 'var(--status-error-dim)' }}>OUT</span>
+            <div
+              className="h-[6px] w-[6px] rounded-full shrink-0"
+              style={{
+                backgroundColor: audioOut === 'running' ? 'var(--status-ok)' : audioOut === 'suspended' ? 'var(--status-warn)' : 'var(--status-error)',
+                boxShadow: audioOut === 'running' ? '0 0 6px var(--status-ok)66' : 'none',
+              }}
+            />
           </div>
 
           {/* ── gap: System | Audio ── */}

@@ -180,7 +180,7 @@ const HudKnob: FC<HudKnobProps> = ({
       <Knob
         value={value} min={min} max={max}
         onChange={onChange} color={color}
-        scale={0.5} ghost={ghost}
+        scale={0.65} ghost={ghost}
         defaultValue={defaultValue} bipolar={bipolar}
       />
     </div>
