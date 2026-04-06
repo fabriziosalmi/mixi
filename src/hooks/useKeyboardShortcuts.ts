@@ -33,6 +33,7 @@
 
 import { useEffect } from 'react';
 import { useMixiStore } from '../store/mixiStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { MixiEngine } from '../audio/MixiEngine';
 
 export function useKeyboardShortcuts() {
@@ -200,6 +201,15 @@ export function useKeyboardShortcuts() {
           if (!e.shiftKey) {
             e.preventDefault();
             store.alignDrops();
+          }
+          break;
+
+        // ── O: Toggle phase overlay (ghost deck anaglifo) ──
+        case 'KeyO':
+          if (!e.shiftKey) {
+            e.preventDefault();
+            const settings = useSettingsStore.getState();
+            settings.setShowPhaseOverlay(!settings.showPhaseOverlay);
           }
           break;
 

@@ -83,6 +83,8 @@ export interface SettingsState {
   useWasmDsp: boolean;
   /** Groove offset in ms (-10 to +10). Positive = push (urgency), negative = lay back. */
   grooveOffsetMs: number;
+  /** Show phase overlay (ghost deck) on waveforms. */
+  showPhaseOverlay: boolean;
 }
 
 export interface SettingsActions {
@@ -100,6 +102,7 @@ export interface SettingsActions {
   setQuantizeResolution: (res: QuantizeResolution) => void;
   setUseWasmDsp: (v: boolean) => void;
   setGrooveOffset: (ms: number) => void;
+  setShowPhaseOverlay: (v: boolean) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -119,6 +122,7 @@ export const useSettingsStore = create<SettingsStore>()(
       quantizeResolution: 1 as QuantizeResolution,
       useWasmDsp: false,
       grooveOffsetMs: 0,
+      showPhaseOverlay: true,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -142,6 +146,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setQuantizeResolution: (res) => set({ quantizeResolution: res }),
       setUseWasmDsp: (v) => set({ useWasmDsp: v }),
       setGrooveOffset: (ms) => set({ grooveOffsetMs: Math.max(-10, Math.min(10, ms)) }),
+      setShowPhaseOverlay: (v) => set({ showPhaseOverlay: v }),
     }),
     {
       name: 'mixi-settings',

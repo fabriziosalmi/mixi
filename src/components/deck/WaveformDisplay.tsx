@@ -27,6 +27,11 @@ import { POINTS_PER_SECOND } from '../../audio/WaveformAnalyzer';
 import type { DeckId, WaveformPoint } from '../../types';
 import { CUE_COLORS, themeVar } from '../../theme';
 
+// ── Phase overlay constants ─────────────────────────────────
+const PHASE_OVERLAY_ALPHA_ALIGNED = 0.30; // white when kicks match
+const PHASE_OVERLAY_ALPHA_DIFF = 0.25;    // red/cyan intensity
+const PHASE_DIFF_THRESHOLD = 0.10;         // energy diff below = aligned
+
 // ── Drawing constants ────────────────────────────────────────
 
 const PLAYHEAD_RATIO = 1 / 3;
@@ -134,6 +139,12 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     let cachedOffset = useMixiStore.getState().decks[deckId].firstBeatOffset;
     let cachedLoop = useMixiStore.getState().decks[deckId].activeLoop;
 
+    // ── Other deck cache for phase overlay ────────────────
+    const otherDeckId: DeckId = deckId === 'A' ? 'B' : 'A';
+    let otherWaveform = useMixiStore.getState().decks[otherDeckId].waveformData;
+    let otherBpm = useMixiStore.getState().decks[otherDeckId].bpm;
+    let otherIsPlaying = useMixiStore.getState().decks[otherDeckId].isPlaying;
+
     // H1: Selective subscribe — only fire when our deck's data changes,
     // not on every store dispatch (volume, crossfader, other deck, etc.)
     const unsub = useMixiStore.subscribe(
@@ -145,6 +156,16 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
         cachedBpm = d.bpm;
         cachedOffset = d.firstBeatOffset;
         cachedLoop = d.activeLoop;
+      },
+    );
+
+    // Subscribe to other deck changes (for phase overlay)
+    const unsubOther = useMixiStore.subscribe(
+      (s) => s.decks[otherDeckId],
+      (d) => {
+        otherWaveform = d.waveformData;
+        otherBpm = d.bpm;
+        otherIsPlaying = d.isPlaying;
       },
     );
 
@@ -211,6 +232,56 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
       // Reset composite for UI overlays
       ctx.globalCompositeOperation = 'source-over';
+
+      // ── Differential Phase Overlay (Ghost Deck Anaglifo) ─
+      // Items 19+20: Draw other deck's energy as red/cyan/white
+      // differential overlay. White = kicks aligned, red/cyan = misaligned.
+      const showOverlay = useSettingsStore.getState().showPhaseOverlay;
+      if (showOverlay && otherIsPlaying && otherWaveform && otherWaveform.length > 0 && otherBpm > 0) {
+        const otherTime = engine.isInitialized
+          ? engine.getCurrentTime(otherDeckId) : 0;
+        const otherCurrentIndex = otherTime * POINTS_PER_SECOND;
+        const otherBarsLeft = (playheadX / BAR_STEP) | 0;
+        const otherStartIndex = otherCurrentIndex - otherBarsLeft * zoom;
+
+        ctx.globalCompositeOperation = 'screen';
+
+        for (let i = 0; i < totalBars; i++) {
+          const myIdx = (startIndex + i * zoom) | 0;
+          const otherIdx = (otherStartIndex + i * zoom) | 0;
+
+          if (myIdx < 0 || myIdx >= waveform.length) continue;
+          if (otherIdx < 0 || otherIdx >= otherWaveform.length) continue;
+
+          const myPoint: WaveformPoint = waveform[myIdx];
+          const otherPoint: WaveformPoint = otherWaveform[otherIdx];
+          const x = i * BAR_STEP;
+
+          // Use low-frequency energy (kick/bass) for differential
+          const myEnergy = myPoint.low;
+          const otherEnergy = otherPoint.low;
+          const diff = myEnergy - otherEnergy;
+
+          // Height based on max energy of the two
+          const maxE = Math.max(myEnergy, otherEnergy, 0.01);
+          const h = (maxE * halfHeight * 0.6) | 0;
+
+          if (Math.abs(diff) < PHASE_DIFF_THRESHOLD) {
+            // ALIGNED: constructive — white solid
+            ctx.fillStyle = `rgba(255, 255, 255, ${(PHASE_OVERLAY_ALPHA_ALIGNED * maxE).toFixed(2)})`;
+          } else if (diff > 0) {
+            // Master (this deck) dominates: RED
+            ctx.fillStyle = `rgba(255, 60, 60, ${(PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff)).toFixed(2)})`;
+          } else {
+            // Slave (other deck) dominates: CYAN
+            ctx.fillStyle = `rgba(0, 240, 255, ${(PHASE_OVERLAY_ALPHA_DIFF * Math.abs(diff)).toFixed(2)})`;
+          }
+
+          ctx.fillRect(x, halfHeight - h, BAR_WIDTH, h * 2);
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+      }
 
       // ── Beatgrid ─────────────────────────────────────────
 
@@ -369,7 +440,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     }
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(rafRef.current); unsub(); };
+    return () => { cancelAnimationFrame(rafRef.current); unsub(); unsubOther(); };
   }, [deckId, width, height]);
 
   const handleWheel = useCallback(

@@ -31,6 +31,8 @@ import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { crossCorrelatePhase, extractChunk } from './onsetCorrelation';
 import { detectPhaseCancellation, extractLowFreq } from './phaseCancellation';
+import { findBestRatio, virtualBeatPeriod } from './harmonicSync';
+import { phasePredictor } from './predictivePhase';
 
 // ── PI constants (tuned for DJ use) ─────────────────────────
 
@@ -274,7 +276,13 @@ class PhaseLockLoop {
     const slaveTime = engine.getCurrentTime(slaveDeck);
 
     const masterPeriod = 60 / master.bpm;
-    const slavePeriod = 60 / slave.bpm;
+
+    // Harmonic sync: use virtual beat period if ratio != 1
+    const ratio = findBestRatio(master.bpm, slave.originalBpm);
+    const slavePeriod = ratio !== 1
+      ? virtualBeatPeriod(slave.bpm, ratio)
+      : 60 / slave.bpm;
+    if (slavePeriod <= 0) return null;
 
     const masterFrac = (((masterTime - master.firstBeatOffset) / masterPeriod) % 1 + 1) % 1;
     const slaveFrac = (((slaveTime - slave.firstBeatOffset) / slavePeriod) % 1 + 1) % 1;
@@ -330,8 +338,12 @@ class PhaseLockLoop {
     s.integral = Math.max(-INTEGRAL_MAX, Math.min(INTEGRAL_MAX, s.integral));
     const I = Ki * s.integral;
 
-    // Combined + clamp
-    const correction = Math.max(-MAX_CORRECTION, Math.min(MAX_CORRECTION, P + I));
+    // Predictive feed-forward term
+    const predicted = phasePredictor.update(deck, phaseDelta);
+
+    // Combined: PI + predictive feed-forward, clamped
+    const raw = P + I + predicted * 0.001;  // scale prediction to correction range
+    const correction = Math.max(-MAX_CORRECTION, Math.min(MAX_CORRECTION, raw));
     s.lastCorrection = correction;
     return correction;
   }

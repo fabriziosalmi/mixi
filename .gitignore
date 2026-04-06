@@ -45,6 +45,7 @@ MISSING.md
 docs/FX_REFACTORING_PLAN.md
 ROAD_TO_TRAKTOR.md
 DECKS_MARKETPLACE.md
+LOADERS.md
 
 # Rust/Wasm build artifacts
 mixi-core/target/
