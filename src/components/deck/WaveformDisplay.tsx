@@ -35,6 +35,8 @@ const BAR_GAP = 1;
 const BAR_STEP = BAR_WIDTH + BAR_GAP;
 
 const COLOR_DOWNBEAT = 'rgba(255, 255, 255, 0.3)';
+const COLOR_BEAT_NUM = 'rgba(255, 255, 255, 0.35)';
+const PLAYHEAD_COLOR = '#ff2222'; // Razor-red playhead (Traktor-style)
 
 // ── Component ────────────────────────────────────────────────
 
@@ -96,7 +98,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     const COLOR_MID = themeVar('wave-mid', '#aa6611');
     const COLOR_HIGH = themeVar('wave-high', '#2266aa');
     const COLOR_BG = themeVar('wave-bg', '#0a0a0a');
-    const COLOR_PLAYHEAD = themeVar('wave-playhead', '#ffffff');
+    const COLOR_PLAYHEAD = PLAYHEAD_COLOR;
     const WAVE_DROP = themeVar('wave-drop', '#ff0044');
     const WAVE_LOOP = themeVar('wave-loop', '74, 222, 128');
 
@@ -255,10 +257,10 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
             ctx.fill();
           }
 
-          // Beat numbers — only on downbeats to save draw calls
-          if (isDownbeat) {
+          // Beat numbers — show 1-2-3-4 on every beat for visual orientation
+          {
             const beatInBar = ((n % 4) + 4) % 4 + 1;
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.fillStyle = isDownbeat ? COLOR_BEAT_NUM : 'rgba(255,255,255,0.18)';
             ctx.fillText(String(beatInBar), bx, height - 1);
           }
         }
@@ -334,10 +336,10 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       ctx.fillRect(0, halfHeight | 0, width, 1);
       ctx.globalAlpha = 1;
 
-      // ── Playhead — bright white with neon glow ──────────
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      // ── Playhead — razor-red with neon glow (Traktor-style) ──
+      ctx.fillStyle = 'rgba(255, 34, 34, 0.06)';
       ctx.fillRect(playheadX - 6, 0, 13, height);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.fillStyle = 'rgba(255, 34, 34, 0.12)';
       ctx.fillRect(playheadX - 2, 0, 5, height);
       ctx.fillStyle = COLOR_PLAYHEAD;
       ctx.fillRect(playheadX, 0, 1, height);

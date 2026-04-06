@@ -55,3 +55,38 @@ export const CUE_COLORS = [
   '#06b6d4', // 7 cyan
   '#ff6a00', // 8 orange
 ] as const;
+
+/**
+ * Camelot Key → Color mapping.
+ * 12 hues spread evenly across the color wheel.
+ * Minor (A) and Major (B) share the same hue but minor is
+ * slightly desaturated.
+ */
+export const CAMELOT_KEY_COLORS: Record<string, string> = {
+  // ── Minor (A) ─────────────────────────
+  '1A':  '#5bbfff',  // A♭m
+  '2A':  '#5b8fff',  // E♭m
+  '3A':  '#7b6bff',  // B♭m
+  '4A':  '#a85bff',  // Fm
+  '5A':  '#d45bff',  // Cm
+  '6A':  '#ff5bd5',  // Gm
+  '7A':  '#ff5b8f',  // Dm
+  '8A':  '#ff5b5b',  // Am
+  '9A':  '#ff8f5b',  // Em
+  '10A': '#ffc35b',  // Bm
+  '11A': '#e0e050',  // F♯m
+  '12A': '#5bff8f',  // D♭m
+  // ── Major (B) ─────────────────────────
+  '1B':  '#33d4ff',  // B
+  '2B':  '#3399ff',  // F♯
+  '3B':  '#5544ff',  // D♭
+  '4B':  '#8833ff',  // A♭
+  '5B':  '#bb33ff',  // E♭
+  '6B':  '#ff33bb',  // B♭
+  '7B':  '#ff3366',  // F
+  '8B':  '#ff3333',  // C
+  '9B':  '#ff6633',  // G
+  '10B': '#ffaa33',  // D
+  '11B': '#cccc22',  // A
+  '12B': '#33ff66',  // E
+};

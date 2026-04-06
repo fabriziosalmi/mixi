@@ -120,18 +120,24 @@ const KillBtn: FC<{ killed: boolean; onKill: () => void }> = ({ killed, onKill }
   <button
     type="button"
     onClick={onKill}
-    className="flex items-center justify-center rounded-full transition-all duration-150 active:scale-90"
+    className="flex items-center justify-center rounded transition-all duration-150 active:scale-90"
     style={{
-      width: 20,
-      height: 20,
-      background: killed ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.03)',
-      border: `1px solid ${killed ? 'var(--clr-kill)44' : 'var(--srf-light)'}`,
-      boxShadow: killed ? '0 0 6px rgba(220,38,38,0.2)' : 'inset 0 1px 2px rgba(0,0,0,0.4), 0 0 2px rgba(255,255,255,0.03)',
+      width: 26,
+      height: 26,
+      background: killed ? 'rgba(220,38,38,0.2)' : 'rgba(255,255,255,0.04)',
+      border: `1.5px solid ${killed ? 'var(--clr-kill)' : 'var(--srf-light)'}`,
+      boxShadow: killed
+        ? '0 0 10px rgba(220,38,38,0.35), inset 0 0 6px rgba(220,38,38,0.15)'
+        : 'inset 0 1px 2px rgba(0,0,0,0.4), 0 0 2px rgba(255,255,255,0.03)',
+      borderRadius: 5,
     }}
   >
     <span
-      className="text-[7px] font-mono font-bold"
-      style={{ color: killed ? 'var(--clr-kill)' : 'var(--txt-muted)' }}
+      className="text-[9px] font-mono font-black tracking-wider"
+      style={{
+        color: killed ? 'var(--clr-kill)' : 'var(--txt-muted)',
+        textShadow: killed ? '0 0 6px rgba(220,38,38,0.5)' : 'none',
+      }}
     >
       K
     </span>

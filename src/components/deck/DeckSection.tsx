@@ -24,6 +24,7 @@ import { TrackInfo } from './TrackInfo';
 import { PerformancePads } from './PerformancePads';
 import { PitchStrip } from './PitchStrip';
 import type { DeckId } from '../../types';
+import { CAMELOT_KEY_COLORS } from '../../theme';
 
 interface DeckSectionProps {
   deckId: DeckId;
@@ -115,15 +116,18 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         )}
         {/* Spacer when no track */}
         {!isTrackLoaded && <span className="flex-1" />}
-        {/* Key badge */}
-        {musicalKey && (
-          <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
-            style={{ background: `${color}15`, border: `1px solid ${color}33`, color }}
-          >
-            {musicalKey}
-          </span>
-        )}
+        {/* Key badge — Camelot-colored */}
+        {musicalKey && (() => {
+          const keyColor = CAMELOT_KEY_COLORS[musicalKey] || color;
+          return (
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
+              style={{ background: `${keyColor}15`, border: `1px solid ${keyColor}44`, color: keyColor, textShadow: `0 0 6px ${keyColor}44` }}
+            >
+              {musicalKey}
+            </span>
+          );
+        })()}
         {/* BPM + Beat counter */}
         {bpm > 0 && (
           <div className="flex items-baseline shrink-0">
@@ -221,7 +225,7 @@ const BeatCounter: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) =
 const GATE_LABELS = ['1/32', '1/16', '1/8', '1/4', '1/2'];
 function snapGate(v: number): number { return Math.round(v); }
 
-const FX_IDS = ['flt', 'dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const;
+const FX_IDS = ['dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise'] as const;
 
 const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const [fx, setFx] = useState(() => Array<number>(FX_IDS.length).fill(0));
@@ -231,7 +235,7 @@ const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const activeRef = useRef(active);
   useEffect(() => { activeRef.current = active; }, [active]);
 
-  const labels = ['FLT', 'DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH', 'TAP', 'NOI'];
+  const labels = ['DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH', 'TAP', 'NOI'];
 
   const toggleFx = useCallback((i: number) => {
     setActive((a) => {
@@ -259,7 +263,7 @@ const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
       }}
     >
       {FX_IDS.map((_, i) => {
-        const isGate = i === 5;
+        const isGate = FX_IDS[i] === 'gate';
         return (
           <FxSlot
             key={i}
@@ -307,11 +311,11 @@ const FxSlot: FC<{
         className="mixi-btn rounded flex items-center justify-center transition-all active:scale-95"
         style={{
           width: 36,
-          height: 16,
-          background: active ? `${color}15` : 'rgba(255,255,255,0.03)',
-          border: 'none',
+          height: 18,
+          background: active ? `${color}25` : 'rgba(255,255,255,0.04)',
+          border: active ? `1px solid ${color}66` : '1px solid rgba(255,255,255,0.06)',
           boxShadow: active
-            ? `0 0 6px ${color}22, inset 0 1px 2px rgba(0,0,0,0.3)`
+            ? `0 0 10px ${color}44, inset 0 0 6px ${color}22, inset 0 1px 2px rgba(0,0,0,0.3)`
             : 'inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.02)',
           borderRadius: 4,
         }}
@@ -319,8 +323,8 @@ const FxSlot: FC<{
         <span
           className="text-[7px] font-mono font-bold tracking-wider"
           style={{
-            color: active ? color : 'var(--txt-tertiary)',
-            textShadow: active ? `0 0 4px ${color}44` : 'none',
+            color: active ? color : 'var(--txt-muted)',
+            textShadow: active ? `0 0 6px ${color}88` : 'none',
           }}
         >
           {active && valueLabel ? valueLabel : label}

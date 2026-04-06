@@ -69,10 +69,10 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
 
   if (compact) {
     return (
-      <div className="shrink-0 flex items-baseline gap-1 font-mono text-[10px] font-light">
-        <span ref={elapsedRef} className="text-zinc-400">0:00</span>
-        <span className="text-zinc-500/80">/</span>
-        <span ref={remainRef}>-0:00</span>
+      <div className="shrink-0 flex items-baseline gap-1 font-mono">
+        <span ref={elapsedRef} className="text-[12px] font-bold text-white" style={{ fontFeatureSettings: '"tnum"' }}>0:00</span>
+        <span className="text-zinc-600 text-[9px]">/</span>
+        <span ref={remainRef} className="text-[9px] font-normal text-zinc-500" style={{ fontFeatureSettings: '"tnum"' }}>-0:00</span>
       </div>
     );
   }

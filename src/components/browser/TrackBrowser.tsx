@@ -24,7 +24,7 @@ import { useMixiStore } from '../../store/mixiStore';
 import { detectBpm } from '../../audio/BpmDetector';
 import { useSettingsStore, BPM_RANGE_PRESETS } from '../../store/settingsStore';
 import { detectKey } from '../../audio/KeyDetector';
-import { COLOR_DECK_A, COLOR_DECK_B } from '../../theme';
+import { COLOR_DECK_A, COLOR_DECK_B, CAMELOT_KEY_COLORS } from '../../theme';
 import type { DeckId } from '../../types';
 import { log } from '../../utils/logger';
 import { parseTrackMeta } from '../../audio/metadataParser';
@@ -520,7 +520,7 @@ export const TrackBrowser: FC = () => {
                 </td>
                 <td className="px-2 py-1 truncate">{t.artist}</td>
                 <td className="px-2 py-1 text-center">{t.bpm || '—'}</td>
-                <td className="px-2 py-1 text-center">{t.key || '—'}</td>
+                <td className="px-2 py-1 text-center font-bold text-[11px]" style={{ color: CAMELOT_KEY_COLORS[t.key] || 'var(--txt-muted)', textShadow: CAMELOT_KEY_COLORS[t.key] ? `0 0 6px ${CAMELOT_KEY_COLORS[t.key]}44` : 'none' }}>{t.key || '—'}</td>
                 <td className="px-2 py-1 text-center">{fmtDuration(t.duration)}</td>
                 {/* Star rating */}
                 <td className="px-1 py-1 text-center">
