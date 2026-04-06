@@ -1374,10 +1374,14 @@ export class MixiEngine {
 
       // Wait for worklet ready signal
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Worklet init timeout')), 3000);
+        const timeout = setTimeout(() => {
+          tapNode.port.onmessage = null;
+          reject(new Error('Worklet init timeout'));
+        }, 3000);
         tapNode.port.onmessage = (e) => {
           if (e.data.type === 'ready') {
             clearTimeout(timeout);
+            tapNode.port.onmessage = null;
             resolve();
           }
         };

@@ -240,6 +240,7 @@ export function useKeyboardShortcuts() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      activeNudge.clear();
     };
   }, []);
 }

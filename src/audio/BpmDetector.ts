@@ -197,7 +197,7 @@ function estimateBpm(onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT
         wSum += g;
       }
     }
-    smoothed[i] = sum / wSum;
+    smoothed[i] = wSum > 0 ? sum / wSum : 0;
   }
 
   // Find the peak bin

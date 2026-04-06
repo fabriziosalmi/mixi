@@ -31,6 +31,14 @@ import { tmpdir } from 'os';
 import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
 import { createSocket, Socket as DgramSocket } from 'dgram';
 
+// ── Process-level crash guards ──────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[mixi] Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[mixi] Unhandled rejection:', reason);
+});
+
 // ── Chromium Audio & Performance Flags ───────────────────────
 // These must be set BEFORE app.ready fires.
 
@@ -568,8 +576,12 @@ function setupDiskRecordingIPC(): void {
 
   // Discard an orphan recording
   ipcMain.handle('disk-rec:discard', (_event, args: { path: string }) => {
-    try { unlinkSync(args.path); } catch { /* may not exist */ }
-    console.log(`[mixi-rec] Discarded: ${args.path}`);
+    const resolvedPath = resolve(args.path);
+    if (!resolvedPath.startsWith(tmpdir())) {
+      throw new Error('Path outside temp directory');
+    }
+    try { unlinkSync(resolvedPath); } catch { /* may not exist */ }
+    console.log(`[mixi-rec] Discarded: ${resolvedPath}`);
   });
 }
 
@@ -586,6 +598,9 @@ function setupMixiSyncIPC(): void {
 
     try {
       syncSocket = createSocket({ type: 'udp4', reuseAddr: true });
+      syncSocket.on('error', (err) => {
+        console.error('[mixi-sync] Socket error:', err.message);
+      });
       syncSocket.bind(4303, () => {
         syncSocket!.setBroadcast(true);
         console.log('[mixi-sync] UDP socket bound to :4303');
@@ -631,17 +646,21 @@ function setupMixiSyncIPC(): void {
     if (!syncSocket) return;
     const buf = Buffer.from(args.data);
 
-    if (args.broadcast) {
-      // Broadcast (ANNOUNCE only)
-      syncSocket.send(buf, 0, buf.length, 4303, '255.255.255.255');
-    } else if (args.targetIp) {
-      // Unicast to specific peer
-      syncSocket.send(buf, 0, buf.length, 4303, args.targetIp);
-    } else {
-      // Unicast to all known peers
-      for (const [, peer] of syncPeers) {
-        syncSocket.send(buf, 0, buf.length, 4303, peer.ip);
+    try {
+      if (args.broadcast) {
+        // Broadcast (ANNOUNCE only)
+        syncSocket.send(buf, 0, buf.length, 4303, '255.255.255.255');
+      } else if (args.targetIp) {
+        // Unicast to specific peer
+        syncSocket.send(buf, 0, buf.length, 4303, args.targetIp);
+      } else {
+        // Unicast to all known peers
+        for (const [, peer] of syncPeers) {
+          syncSocket.send(buf, 0, buf.length, 4303, peer.ip);
+        }
       }
+    } catch (err) {
+      console.error('[mixi-sync] Send error:', err);
     }
   });
 

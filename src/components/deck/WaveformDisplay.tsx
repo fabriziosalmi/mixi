@@ -82,6 +82,8 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   /** Drag-to-scrub state */
   const isDraggingRef = useRef(false);
   const scrubTimeRef = useRef<number | null>(null);
+  /** Cleanup for drag listeners on unmount */
+  const dragCleanupRef = useRef<(() => void) | null>(null);
   /** Beatgrid edit flash */
   const gridFlashRef = useRef<{ x: number; until: number } | null>(null);
   const [measuredWidth, setMeasuredWidth] = useState(propWidth || 500);
@@ -574,9 +576,22 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
+
+      // Store cleanup so unmount can remove listeners
+      dragCleanupRef.current = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        isDraggingRef.current = false;
+        scrubTimeRef.current = null;
+      };
     },
     [deckId, mouseXToTime],
   );
+
+  // Clean up drag listeners on unmount
+  useEffect(() => {
+    return () => { dragCleanupRef.current?.(); };
+  }, []);
 
   return (
     <div ref={containerRef} className="w-full relative">

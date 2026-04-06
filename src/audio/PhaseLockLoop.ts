@@ -238,7 +238,7 @@ class PhaseLockLoop {
 
     for (const deck of ['A', 'B'] as DeckId[]) {
       const d = store.decks[deck];
-      if (!d.isSynced || !d.isPlaying) continue;
+      if (!d || !d.isSynced || !d.isPlaying) continue;
 
       const masterDeck: DeckId = deck === 'A' ? 'B' : 'A';
       const master = store.decks[masterDeck];
