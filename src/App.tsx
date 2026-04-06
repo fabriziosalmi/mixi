@@ -54,16 +54,20 @@ const MiniMasterVu: FC = () => {
 
   useEffect(() => {
     let raf = 0;
+    let skip = false;
     function tick() {
-      const engine = MixiEngine.getInstance();
-      if (engine.isInitialized && barLRef.current && barRRef.current) {
-        const level = engine.getMasterLevel();
-        const pct = Math.min(100, Math.max(0, level * 100));
-        const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
-        barLRef.current.style.width = `${pct}%`;
-        barLRef.current.style.backgroundColor = color;
-        barRRef.current.style.width = `${pct}%`;
-        barRRef.current.style.backgroundColor = color;
+      skip = !skip;
+      if (!skip) {
+        const engine = MixiEngine.getInstance();
+        if (engine.isInitialized && barLRef.current && barRRef.current) {
+          const level = engine.getMasterLevel();
+          const pct = Math.min(100, Math.max(0, level * 100));
+          const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
+          barLRef.current.style.width = `${pct}%`;
+          barLRef.current.style.backgroundColor = color;
+          barRRef.current.style.width = `${pct}%`;
+          barRRef.current.style.backgroundColor = color;
+        }
       }
       raf = requestAnimationFrame(tick);
     }
