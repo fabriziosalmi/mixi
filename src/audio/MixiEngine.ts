@@ -37,6 +37,7 @@ import { HeadphoneBus } from './nodes/HeadphoneBus';
 import { crossfaderGains } from './utils/mathUtils';
 import { smoothParam } from './utils/paramSmooth';
 import { analyzeWaveform } from './WaveformAnalyzer';
+import { findAutoCuePoint } from './autoCue';
 import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
@@ -461,6 +462,12 @@ export class MixiEngine {
     store.setDeckWaveform(deck, analysis.waveform, buffer.duration);
     store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset);
     store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
+
+    // ── Smart Auto-Cue: seek to first energetic downbeat ──
+    const autoCue = findAutoCuePoint(buffer, analysis.bpm, analysis.firstBeatOffset);
+    if (autoCue > 0.01) {
+      transport.offset = autoCue;
+    }
 
     // ── Auto-gain: normalise trim so all tracks peak at 0 dBFS ──
     this.autoGain[deck] = Math.min(2.0, Math.max(0.5, 1 / analysis.peakLevel));

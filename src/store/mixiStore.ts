@@ -88,6 +88,8 @@ export interface MixiActions {
 
   // Beat Jump
   beatJump: (deck: DeckId, beats: number) => void;
+  // Shift Beatgrid
+  shiftGrid: (deck: DeckId, beats: number) => void;
   // Vinyl Brake
   vinylBrake: (deck: DeckId) => void;
   // Slip Mode
@@ -553,6 +555,21 @@ export const useMixiStore = create<MixiStore>()(
       const jumpSeconds = beats * beatPeriod;
       const newTime = Math.max(0, Math.min(d.duration, currentTime + jumpSeconds));
       engine.seek(deck, newTime);
+    },
+
+    shiftGrid: (deck, beats) => {
+      const s = get();
+      const d = s.decks[deck];
+      if (!d.isTrackLoaded || d.bpm <= 0) return;
+
+      const beatPeriod = 60 / d.bpm;
+      const newOffset = d.firstBeatOffset + beats * beatPeriod;
+      set((st) => ({
+        decks: {
+          ...st.decks,
+          [deck]: { ...st.decks[deck], firstBeatOffset: newOffset },
+        },
+      }));
     },
 
     vinylBrake: (deck) => {

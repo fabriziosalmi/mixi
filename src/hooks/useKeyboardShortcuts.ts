@@ -26,6 +26,7 @@
 //   Escape   = eject focused deck
 //   ↑/↓      = nudge Deck A ±4% (hold), Ctrl: fine ±1%
 //   Shift+↑/↓= nudge Deck B ±4% (hold), Ctrl: fine ±1%
+//   [ / ]    = shift beatgrid ±1 beat (Deck A), Shift: Deck B
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect } from 'react';
@@ -144,6 +145,17 @@ export function useKeyboardShortcuts() {
         case 'ArrowRight':
           e.preventDefault();
           store.beatJump('A', e.shiftKey ? 4 : 1);
+          break;
+
+        // ── [ / ]: Shift beatgrid ±1 beat ──────────────────
+        // No shift: Deck A, Shift: Deck B
+        case 'BracketLeft':
+          e.preventDefault();
+          store.shiftGrid(e.shiftKey ? 'B' : 'A', -1);
+          break;
+        case 'BracketRight':
+          e.preventDefault();
+          store.shiftGrid(e.shiftKey ? 'B' : 'A', 1);
           break;
 
         default:
