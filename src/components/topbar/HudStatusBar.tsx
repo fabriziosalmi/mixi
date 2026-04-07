@@ -90,11 +90,11 @@ export const HudStatusBar: FC = () => {
       // Set text and color
       el.textContent = msg.text;
       el.style.color = TYPE_COLORS[msg.type];
-      bar.style.opacity = '1';
+      el.style.opacity = '1';
 
-      // Auto-fade after 2s
+      // Auto-dim text after 2s
       timerRef.current = setTimeout(() => {
-        if (bar) bar.style.opacity = '0.3';
+        if (el) el.style.opacity = '0.4';
       }, 2000);
     });
   }, []);
@@ -107,10 +107,9 @@ export const HudStatusBar: FC = () => {
         gridColumn: '1 / -1',
         gridTemplateColumns: 'subgrid',
         height: 18,
-        background: '#000',
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        opacity: 0.3,
-        transition: 'opacity 0.3s ease',
+        background: 'rgba(0,0,0,0.9)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
       }}
     >
       {/* Left — deck A context / param feedback */}
