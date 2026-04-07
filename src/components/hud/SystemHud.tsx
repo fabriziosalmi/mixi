@@ -16,7 +16,8 @@
 //   critical → white text, red bg + glow
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState, type FC } from 'react';
+import { useEffect, useRef, useState, useCallback, type FC } from 'react';
+import { MixiEngine } from '../../audio/MixiEngine';
 
 const HISTORY_SIZE = 8;
 const RISING_THRESHOLD = 4;
@@ -126,5 +127,50 @@ export const CpuBadge: FC = () => {
     >
       {booting ? '...' : `${cpuPct}%`}
     </button>
+  );
+};
+
+// ── Audio OUT Dot ──────────────────────────────────────────
+
+export const AudioOutDot: FC = () => {
+  const [state, setState] = useState<AudioContextState>('suspended');
+
+  const poll = useCallback(() => {
+    try {
+      const engine = MixiEngine.getInstance();
+      if (engine.isInitialized) {
+        setState(engine.getAudioContext().state);
+      }
+    } catch { /* engine not ready */ }
+  }, []);
+
+  useEffect(() => {
+    poll();
+    const timer = setInterval(poll, 2000);
+    return () => clearInterval(timer);
+  }, [poll]);
+
+  const isRunning = state === 'running';
+  const color = isRunning ? 'var(--status-ok)' : 'var(--status-error-dim)';
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      title={`Audio output: ${state}`}
+    >
+      <div
+        className="h-1.5 w-1.5 rounded-full"
+        style={{
+          backgroundColor: color,
+          boxShadow: isRunning ? `0 0 4px ${color}` : 'none',
+        }}
+      />
+      <span
+        className="text-[9px] font-mono font-bold uppercase"
+        style={{ color }}
+      >
+        OUT
+      </span>
+    </div>
   );
 };

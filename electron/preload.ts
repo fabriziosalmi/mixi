@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('mixi', {
   /** Trigger a manual update check (shows native dialog if update available) */
   checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),
 
+  /** Listen for update-available notification from main process */
+  onUpdateAvailable: (cb: (version: string) => void) => {
+    ipcRenderer.on('app:update-available', (_event, version: string) => cb(version));
+  },
+
   // ── Native Audio I/O (cpal) ──────────────────────────────
   nativeAudio: {
     /** Check if native audio addon is available */

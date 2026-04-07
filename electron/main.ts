@@ -337,6 +337,9 @@ async function checkForUpdates(): Promise<void> {
     if (!shouldShowUpdate(currentVersion, latestVersion, getSkippedVersion())) return;
     if (!mainWindow) return;
 
+    // Notify renderer that an update is available (for badge dot)
+    mainWindow.webContents.send('app:update-available', latestVersion);
+
     const { response: choice } = await dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Update Available',

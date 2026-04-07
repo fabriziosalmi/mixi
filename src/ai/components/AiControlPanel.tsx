@@ -116,49 +116,51 @@ export const AiControlPanel: FC<AiControlPanelProps> = ({
         type="button"
         onClick={cycleMode}
         className="rounded-md p-1 transition-all active:scale-90"
-        title={`AI: ${aiState.mode}`}
+        title={`AI: ${aiState.mode}${aiState.mode === 'OFF' ? ' (click to enable)' : ''}`}
       >
         <SparklesIcon active={isActive} mode={aiState.mode} />
       </button>
 
-      {/* 3-position toggle track */}
-      <div
-        className="relative flex items-center w-[52px] h-[18px] rounded-full cursor-pointer"
-        style={{ background: 'var(--srf-mid)', border: '1px solid var(--brd-default)' }}
-      >
-        {/* Sliding indicator */}
+      {/* 3-position toggle track — hidden when OFF to save space */}
+      {aiState.mode !== 'OFF' && (
         <div
-          className="absolute h-[12px] w-[14px] rounded-full transition-all duration-200"
-          style={{
-            left: currentIdx === 0 ? 2 : currentIdx === 1 ? 18 : 34,
-            background: color,
-            boxShadow: aiState.mode !== 'OFF' ? `0 0 6px ${color}88` : 'none',
-          }}
-        />
-
-        {/* 3 click zones */}
-        {MODES.map((mode) => (
+          className="relative flex items-center w-[52px] h-[18px] rounded-full cursor-pointer"
+          style={{ background: 'var(--srf-mid)', border: '1px solid var(--brd-default)' }}
+        >
+          {/* Sliding indicator */}
           <div
-            key={mode}
-            className="flex-1 h-full cursor-pointer z-10"
-            onClick={() => handleModeChange(mode)}
-            title={mode}
+            className="absolute h-[12px] w-[14px] rounded-full transition-all duration-200"
+            style={{
+              left: currentIdx === 1 ? 18 : 34,
+              background: color,
+              boxShadow: `0 0 6px ${color}88`,
+            }}
           />
-        ))}
 
-        {/* Dot markers */}
-        <div className="absolute inset-0 flex items-center justify-between px-[6px] pointer-events-none">
-          {MODES.map((mode, i) => (
+          {/* 3 click zones */}
+          {MODES.map((mode) => (
             <div
               key={mode}
-              className="h-[4px] w-[4px] rounded-full"
-              style={{
-                background: currentIdx === i ? 'transparent' : 'var(--txt-dim)',
-              }}
+              className="flex-1 h-full cursor-pointer z-10"
+              onClick={() => handleModeChange(mode)}
+              title={mode}
             />
           ))}
+
+          {/* Dot markers */}
+          <div className="absolute inset-0 flex items-center justify-between px-[6px] pointer-events-none">
+            {MODES.map((mode, i) => (
+              <div
+                key={mode}
+                className="h-[4px] w-[4px] rounded-full"
+                style={{
+                  background: currentIdx === i ? 'transparent' : 'var(--txt-dim)',
+                }}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Paused indicator — only when ASSIST is paused */}
       {isPaused && (

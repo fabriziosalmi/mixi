@@ -29,7 +29,7 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { useSettingsStore } from './store/settingsStore';
 import { SkinSelector } from './components/hud/SkinSelector';
 import { injectAllCustomSkins } from './utils/skinLoader';
-import { CpuBadge } from './components/hud/SystemHud';
+import { CpuBadge, AudioOutDot } from './components/hud/SystemHud';
 import { MasterHud } from './components/hud/MasterHud';
 import { RecPanel } from './components/hud/RecPanel';
 import { MasterClock, useMidiClockActive, toggleMidiClock } from './components/hud/MasterClock';
@@ -178,6 +178,13 @@ const App: FC = () => {
   const [audioStarted, setAudioStarted] = useState(false);
   const [vfxActive, setVfxActive] = useState(false);
   const [panicFlash, setPanicFlash] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  // Listen for update-available notification from main process
+  useEffect(() => {
+    const mixi = (window as unknown as { mixi?: { onUpdateAvailable?: (cb: (v: string) => void) => void } }).mixi;
+    mixi?.onUpdateAvailable?.(() => setUpdateAvailable(true));
+  }, []);
 
   const handleStart = useCallback(async () => {
     try {
@@ -311,7 +318,7 @@ const App: FC = () => {
       <VfxCanvas active={vfxActive} />
       {/* Top bar — subgrid shares column tracks with main */}
       <header
-        className="grid items-center border-b border-zinc-800/40 px-4 py-1.5 mixi-topbar gap-4 transition-colors duration-200"
+        className="grid items-center border-b border-zinc-800/40 px-4 h-10 mixi-topbar gap-4 transition-colors duration-200 overflow-hidden"
         style={{
           gridColumn: '1 / -1',
           gridTemplateColumns: 'subgrid',
@@ -321,9 +328,7 @@ const App: FC = () => {
         {/* ── Left: Master FX + AI + Intent ── */}
         <div className="mixi-hud-group justify-self-start">
           <MasterHud />
-          <div className="h-4 border-r border-zinc-700/40" />
           <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
-          <div className="h-4 border-r border-zinc-700/40" />
           <IntentDisplay engineState={aiState} />
         </div>
 
@@ -351,6 +356,7 @@ const App: FC = () => {
             >
               <div className="flex items-center justify-between w-full">
                 <MasterClock />
+                <AudioOutDot />
                 <CpuBadge />
               </div>
               <MiniMasterVu />
@@ -383,8 +389,6 @@ const App: FC = () => {
               <rect x="14" y="14" width="7" height="7" />
             </svg>
           </button>
-
-          <div className="h-4 border-r border-zinc-700/40" />
 
           {/* Skin selector */}
           <SkinSelector />
@@ -436,19 +440,20 @@ const App: FC = () => {
             </svg>
           </button>
 
-          <div className="h-4 border-r border-zinc-700/40" />
-
           {/* Settings gear */}
           <button
             type="button"
             onClick={toggleSettings}
-            className="mixi-gear rounded p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Settings"
+            className="mixi-gear relative rounded p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title={updateAvailable ? 'Settings — Update available!' : 'Settings'}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
+            {updateAvailable && (
+              <span className="absolute -top-0.5 -right-0.5 block h-2 w-2 rounded-full bg-orange-500 ring-1 ring-zinc-900" />
+            )}
           </button>
           </div>
         </div>
