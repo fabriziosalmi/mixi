@@ -1339,22 +1339,52 @@ export class MixiEngine {
    * simply won't be available).
    */
   private async loadPitchWorklet(): Promise<void> {
+    // Try Rust/Wasm pitch shift first (runs at native speed on audio thread)
+    let useWasm = false;
     try {
-      await this.ctx.audioWorklet.addModule(
-        new URL('./pitch-shift-processor.ts', import.meta.url),
-      );
+      const wasmWorkletUrl = new URL('/worklets/pitch-shift-wasm-processor.js', import.meta.url);
+      await this.ctx.audioWorklet.addModule(wasmWorkletUrl.href);
+
+      // Compile the Wasm module
+      const wasmUrl = new URL('../../mixi-core/pkg/mixi_core_bg.wasm', import.meta.url);
+      const wasmResp = await fetch(wasmUrl.href);
+      const wasmModule = await WebAssembly.compile(await wasmResp.arrayBuffer());
 
       for (const deck of ['A', 'B'] as const) {
-        const node = new AudioWorkletNode(this.ctx, 'pitch-shift-processor', {
+        const node = new AudioWorkletNode(this.ctx, 'pitch-shift-wasm-processor', {
           numberOfInputs: 1,
           numberOfOutputs: 1,
           outputChannelCount: [2],
         });
+        node.port.postMessage({ type: 'wasm-module', module: wasmModule });
         node.connect(this.channels[deck].input);
         this.pitchShifters[deck] = node;
       }
-    } catch (err) {
-      log.warn('Engine', `Pitch-shift worklet failed to load: ${err}`);
+      useWasm = true;
+      log.info('Engine', 'Wasm pitch shift processor loaded');
+    } catch {
+      // Wasm pitch shift not available — fall back to JS
+    }
+
+    // Fallback: JavaScript pitch shift processor
+    if (!useWasm) {
+      try {
+        await this.ctx.audioWorklet.addModule(
+          new URL('./pitch-shift-processor.ts', import.meta.url),
+        );
+        for (const deck of ['A', 'B'] as const) {
+          const node = new AudioWorkletNode(this.ctx, 'pitch-shift-processor', {
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
+            outputChannelCount: [2],
+          });
+          node.connect(this.channels[deck].input);
+          this.pitchShifters[deck] = node;
+        }
+        log.info('Engine', 'JS pitch shift processor loaded (fallback)');
+      } catch (err) {
+        log.warn('Engine', `Pitch-shift worklet failed to load: ${err}`);
+      }
     }
   }
 

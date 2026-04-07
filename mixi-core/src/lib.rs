@@ -88,6 +88,121 @@ pub fn crossfader_gains(position: f32) -> Vec<f32> {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 4: Granular Pitch Shifter (standalone AudioWorklet)
+// ─────────────────────────────────────────────────────────────
+
+/// Granular overlap-add pitch shifter for Key Lock.
+/// Designed to run inside a standalone AudioWorklet (separate from DspEngine).
+/// JS sends pitch_ratio and enabled state via message port.
+#[wasm_bindgen]
+pub struct PitchShifter {
+    inner: dsp::pitch_shift::GrainPitchShift,
+}
+
+#[wasm_bindgen]
+impl PitchShifter {
+    /// Create a new pitch shifter (Hann window precomputed).
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: dsp::pitch_shift::GrainPitchShift::new(),
+        }
+    }
+
+    /// Set pitch shift ratio. 1.0 = no shift. 1/playbackRate for key lock.
+    pub fn set_pitch_ratio(&mut self, ratio: f32) {
+        self.inner.set_pitch_ratio(ratio);
+    }
+
+    /// Enable or disable pitch shifting.
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.inner.set_enabled(enabled);
+    }
+
+    /// Process a block of mono audio samples (typically 128 frames).
+    /// Input and output must be the same length.
+    pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
+        self.inner.process_block(input, output);
+    }
+
+    /// Reset all internal state.
+    pub fn reset(&mut self) {
+        self.inner.reset();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Raw C-style exports for AudioWorklet (no wasm-bindgen glue)
+//
+// AudioWorklets can't use wasm-bindgen JS glue. These functions
+// are called directly via instance.exports from the worklet.
+// ─────────────────────────────────────────────────────────────
+
+static mut PITCH_SHIFTER_L: Option<dsp::pitch_shift::GrainPitchShift> = None;
+static mut PITCH_SHIFTER_R: Option<dsp::pitch_shift::GrainPitchShift> = None;
+
+/// Initialize pitch shifters (call once after Wasm instantiation).
+#[no_mangle]
+pub extern "C" fn pitch_shifter_init() {
+    unsafe {
+        PITCH_SHIFTER_L = Some(dsp::pitch_shift::GrainPitchShift::new());
+        PITCH_SHIFTER_R = Some(dsp::pitch_shift::GrainPitchShift::new());
+    }
+}
+
+/// Set pitch ratio on both L/R shifters.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_set_ratio(ratio: f32) {
+    unsafe {
+        if let Some(ref mut s) = PITCH_SHIFTER_L { s.set_pitch_ratio(ratio); }
+        if let Some(ref mut s) = PITCH_SHIFTER_R { s.set_pitch_ratio(ratio); }
+    }
+}
+
+/// Enable/disable both L/R shifters (0 = disabled, 1 = enabled).
+#[no_mangle]
+pub extern "C" fn pitch_shifter_set_enabled(enabled: i32) {
+    unsafe {
+        let e = enabled != 0;
+        if let Some(ref mut s) = PITCH_SHIFTER_L { s.set_enabled(e); }
+        if let Some(ref mut s) = PITCH_SHIFTER_R { s.set_enabled(e); }
+    }
+}
+
+/// Allocate a buffer in Wasm linear memory. Returns pointer.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_alloc(frames: usize) -> *mut f32 {
+    let mut buf = vec![0.0f32; frames];
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf); // leak intentionally — worklet manages lifetime
+    ptr
+}
+
+/// Process mono audio. Reads `frames` f32s from `in_ptr`, writes to `out_ptr`.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_process_l(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+    unsafe {
+        let input = std::slice::from_raw_parts(in_ptr, frames);
+        let output = std::slice::from_raw_parts_mut(out_ptr, frames);
+        if let Some(ref mut s) = PITCH_SHIFTER_L {
+            s.process_block(input, output);
+        }
+    }
+}
+
+/// Process right channel.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_process_r(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+    unsafe {
+        let input = std::slice::from_raw_parts(in_ptr, frames);
+        let output = std::slice::from_raw_parts_mut(out_ptr, frames);
+        if let Some(ref mut s) = PITCH_SHIFTER_R {
+            s.process_block(input, output);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Tests (run with `cargo test` or `wasm-pack test`)
 // ─────────────────────────────────────────────────────────────
 

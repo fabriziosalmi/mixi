@@ -16,4 +16,5 @@ pub mod gate;
 pub mod waveshaper;
 pub mod smoother;
 pub mod predictive_limiter;
+pub mod pitch_shift;
 pub mod engine;
