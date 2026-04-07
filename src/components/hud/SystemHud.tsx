@@ -155,22 +155,14 @@ export const AudioOutDot: FC = () => {
 
   return (
     <div
-      className="flex flex-col items-center gap-0"
+      className="rounded-full"
       title={`Audio output: ${state}`}
-    >
-      <div
-        className="h-2 w-2 rounded-full"
-        style={{
-          backgroundColor: color,
-          boxShadow: isRunning ? `0 0 6px ${color}` : 'none',
-        }}
-      />
-      <span
-        className="text-[6px] font-mono font-bold uppercase leading-none"
-        style={{ color: 'var(--txt-muted)' }}
-      >
-        OUT
-      </span>
-    </div>
+      style={{
+        width: 8, height: 8,
+        backgroundColor: color,
+        boxShadow: isRunning ? `0 0 6px ${color}` : 'none',
+        border: '2px solid #000',
+      }}
+    />
   );
 };
