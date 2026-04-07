@@ -89,9 +89,9 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
     <div className="flex flex-col gap-1.5 w-full">
       {/* ── Header row: FX | mode tabs | QT ─────────────────── */}
       <div className="flex gap-2 items-end w-full">
-        {/* FX label — aligned with FX column below */}
-        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0"
-          style={{ color: 'var(--txt-muted)', width: 48 }}>FX</span>
+        {/* FX label — same underline style as mode tabs but fixed gray */}
+        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
+          style={{ color: 'var(--txt-muted)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>FX</span>
 
         {/* Mode tabs */}
         <div className="flex gap-1 items-center flex-1">
@@ -101,9 +101,9 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
           <ModeTab label="LOOP ROLL" active={mode === 'looproll'} onClick={() => setMode('looproll')} color="#22d3ee" />
         </div>
 
-        {/* QT label — aligned with quantize column below */}
-        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0"
-          style={{ color: 'var(--txt-muted)', width: 48 }}>QT</span>
+        {/* QT label — same underline style as mode tabs but fixed gray */}
+        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
+          style={{ color: 'var(--txt-muted)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>QT</span>
       </div>
 
       {/* ── FX toggle + Pads + Quantize strip ──────────────── */}
