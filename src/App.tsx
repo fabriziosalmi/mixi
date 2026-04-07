@@ -11,7 +11,7 @@
 // Mixi – Main Application Shell
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, type FC } from 'react';
+import { useState, useCallback, useEffect, useRef, type FC } from 'react';
 import { useMixiSync } from './hooks/useMixiSync';
 import { useMixiBridge } from './hooks/useMixiBridge';
 import { useMixiStore } from './store/mixiStore';
@@ -147,8 +147,22 @@ const App: FC = () => {
     return () => { canvas?.remove(); };
   }, []);
 
-  // ── Panic reset (Escape key or button) ──────────────────
+  // ── Panic reset (requires double-press within 500ms) ────
+  const panicPendingRef = useRef(false);
+  const panicTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handlePanic = useCallback(() => {
+    if (!panicPendingRef.current) {
+      // First press — arm with subtle flash, wait for second
+      panicPendingRef.current = true;
+      setPanicFlash(true);
+      setTimeout(() => setPanicFlash(false), 100); // dim flash = "armed"
+      panicTimerRef.current = setTimeout(() => { panicPendingRef.current = false; }, 500);
+      return; // don't fire yet
+    }
+    // Second press within 500ms — fire panic
+    panicPendingRef.current = false;
+    if (panicTimerRef.current) clearTimeout(panicTimerRef.current);
     const store = useMixiStore.getState();
     const engine = MixiEngine.getInstance();
 
@@ -227,7 +241,10 @@ const App: FC = () => {
           gridColumn: '1 / -1',
           gridTemplateColumns: 'subgrid',
           background: 'rgba(0,0,0,0.6)',
-          ...(panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : {}),
+          ...(panicFlash ? {
+            backgroundColor: panicPendingRef.current ? 'rgba(220,38,38,0.06)' : 'rgba(220,38,38,0.25)',
+            borderColor: panicPendingRef.current ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.5)',
+          } : {}),
         }}
       >
         {/* ── Left: Master FX + AI + Intent ── */}
