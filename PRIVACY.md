@@ -12,15 +12,19 @@ MIXI does **not** collect, transmit, or store any personal data on external serv
 
 ### What is stored locally
 
-| Data | Storage | Purpose | Retention |
-|------|---------|---------|-----------|
-| Track library metadata | IndexedDB | Library management | Until cleared by user |
-| Audio file blobs | IndexedDB | Offline playback | Until cleared by user |
-| Hot cues & loop points | localStorage | Session recall | Until cleared by user |
-| Settings & preferences | localStorage (`mixi-settings`) | User preferences | Until cleared by user |
-| Session snapshots | localStorage (`mixi-session`) | Save/restore mixer state | Until cleared by user |
-| MIDI mappings | localStorage (`mixi-midi`) | Controller configuration | Until cleared by user |
-| Custom skins | localStorage | Skin persistence | Until cleared by user |
+| Data | Storage | Key | Retention |
+|------|---------|-----|-----------|
+| Track library metadata | IndexedDB | `MixiTrackDB` | Until cleared by user |
+| Audio file blobs | IndexedDB | `MixiTrackDB.audio` | Until cleared by user |
+| Sample pad buffers | IndexedDB | `MixiSampleDB.samples` | Until cleared by user |
+| Mixer preferences | localStorage | `mixi-prefs` | Until cleared by user |
+| App settings | localStorage | `mixi-settings` | Until cleared by user |
+| Browser/library state | localStorage | `mixi-browser` | Until cleared by user |
+| Session snapshots | localStorage | `mixi-sessions` | Until cleared by user |
+| Hot cues per track | localStorage | `mixi_hotcues` | Until cleared by user |
+| MIDI mappings | localStorage | `mixi-midi-bindings` | Until cleared by user |
+| Playlists | localStorage | `mixi-playlists` | Until cleared by user |
+| Onboarding flag | localStorage | `mixi-onboarding-done` | Boolean, permanent |
 
 ### What is NOT collected
 
@@ -37,17 +41,21 @@ Mix recordings are stored **locally only** — on your filesystem (Electron) or 
 
 ## Audio Watermarking
 
-MIXI includes an optional watermarking system for intellectual property protection:
-- **UI fingerprint**: Invisible canvas overlay (sub-1% opacity)
-- **Audio container metadata**: Build info appended to recording container (no audio samples modified)
-- No watermark data is transmitted externally
+MIXI includes a three-tier watermarking system for intellectual property protection:
+- **Tier 1 — UI fingerprint**: Invisible canvas overlay at 0.8% opacity. The fingerprint hash is derived from `navigator.userAgent` and screen dimensions. This hash is stored in-memory only and never transmitted externally.
+- **Tier 2 — Code fingerprint**: Zero-Width Character (ZWC) steganography may be embedded in compiled CSS and skin files at build time. This identifies the build version, not individual users. Invisible in editors and browsers.
+- **Tier 3 — Audio container metadata**: Build and session metadata appended to exported recording containers. No audio samples are modified — the watermark exists in the container metadata layer only.
+
+All three tiers operate independently. **No watermark data is transmitted externally.** The fingerprint inputs (user agent, screen size) are hashed locally and never sent to any server.
 
 ## Third-Party Services
 
 | Service | When | Data sent |
 |---------|------|-----------|
-| SoundCloud proxy | User pastes URL | The URL only |
-| GitHub Releases API | Update check (opt-in) | None (public API read) |
+| SoundCloud proxy | User pastes URL | The URL only (resolved via yt-dlp on local backend) |
+| GitHub Releases API | Automatic on Electron app launch | App version in User-Agent header (standard HTTP, no user ID) |
+
+The GitHub update check runs automatically in the Electron desktop app on launch. It contacts the public GitHub API (`api.github.com/repos/fabriziosalmi/mixi/releases/latest`) with no authentication. Users can skip specific versions. The web browser version does not perform update checks.
 
 ## Children's Privacy
 
