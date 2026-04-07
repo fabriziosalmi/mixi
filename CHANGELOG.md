@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 2026-04-07
+
+### Added
+- **TurboBass v3** — Complete acid synth rewrite with circuit-level DSP modeling
+  - 4-pole diode ladder filter via AudioWorklet (mismatched first pole, per-sample tanh saturation, 2× oversampling, TPT zero-delay feedback)
+  - All parameters mathematically derived: VT from geometric mean of pole signal levels, k_max from Barkhausen criterion, resonance compensation √(1+k), quadratic resonance curve
+  - Bipolar filter envelope (spike → undershoot → recovery), octave-based env mod sweep
+  - Variable duty-cycle square wave derived from sawtooth (71% low → 45% high)
+  - Pre-filter highpass (44Hz), filter tracking (Devil Fish mod, logarithmic)
+  - TIE (legato) sequencer support — gate stays open without envelope re-trigger
+  - Gate length knob (10%–100%), slide time knob (5ms–300ms exponential)
+  - Copy/paste pattern (CPY/PST buttons)
+  - Two-row knob layout with logical grouping (SYNTH, CONTROL, TONE, EFFECTS)
+  - BiquadFilter fallback when AudioWorklet unavailable
+- Waveform viewer tier 3 — cue/loop drag, context menu, zoom-on-mouse, colorblind mode
+- Auto-update check via GitHub Releases + 25 unit tests
+- Dedicated mobile UI with code-split entry point
+- Mobile custom deck infrastructure + TurboKick mobile deck + 42 tests
+- Waveform interaction pure function extraction + 37 unit tests
+- Track loading crumble text + deck quantize polish
+
+### Changed
+- Topbar: master VU meter, BPM sync leader, global quantize, CPU%, limiter RAF
+- Topbar: centered HUD grid, MIDI toggle, REC group, recording format selector
+- Splash screen: faster intro, CSS-only fade, enhanced parallax + ring
+- All VU/limiter RAF loops throttled to 30fps
+
+### Fixed
+- All ESLint errors resolved, React 19 compliance hardened
+- TurboKick BPM detection, analysis CPU spike, sync silent failure
+- 5 latency shortcuts eliminated across audio/sync/render pipeline
+- Topbar height consistency, divider cleanup, AI toggle collapse
+- YouTube references removed from URL placeholder text
+
+### Performance
+- VU/limiter animation loops throttled from 60fps to 30fps
+- 5 latency shortcuts eliminated in audio pipeline
+- Diode ladder worklet: coefficient caching, k-rate optimization
+
 ## [0.2.11] - 2026-04-06
 
 ### Added
