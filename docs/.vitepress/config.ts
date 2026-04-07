@@ -39,20 +39,21 @@ export default defineConfig({
       {
         text: 'Mixing',
         items: [
-          { text: 'Mixer & EQ', link: '/guide/mixer' },
+          { text: 'Mixer, EQ & Effects', link: '/guide/mixer' },
           { text: 'AI AutoMixer', link: '/guide/ai-automixer' },
         ]
       },
       {
         text: 'Instruments',
         items: [
+          { text: 'TurboBass Acid Synth', link: '/guide/turbobass' },
           { text: 'Groovebox', link: '/guide/groovebox' },
-          { text: 'WebAudio Engine', link: '/guide/webaudio' },
         ]
       },
       {
-        text: 'Reference',
+        text: 'Internals',
         items: [
+          { text: 'WebAudio Engine', link: '/guide/webaudio' },
           { text: 'BPM Detection', link: '/BPM' },
         ]
       }
