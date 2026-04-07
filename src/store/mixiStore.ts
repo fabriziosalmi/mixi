@@ -329,7 +329,7 @@ export const useMixiStore = create<MixiStore>()(
 
     setDeckPlaybackRate: (deck, v) =>
       set((s) => {
-        const clamped = clamp(v, 0.92, 1.08);
+        const clamped = clamp(v, 0.5, 2.0);
         const d = s.decks[deck];
         const effectiveBpm = d.originalBpm > 0
           ? Math.round(d.originalBpm * clamped * 10) / 10
@@ -426,13 +426,16 @@ export const useMixiStore = create<MixiStore>()(
           console.warn(`[mixi-sync] Cannot sync deck ${deck}: ` +
             `thisBpm=${thisDeck.originalBpm.toFixed(1)}, otherBpm=${other.bpm.toFixed(1)}` +
             (thisDeck.originalBpm <= 0 ? ' — BPM detection may have failed (try a different BPM range preset)' : ''));
+          // Notify user visually (fire-and-forget dynamic import)
+          import('../components/topbar/HudNotifications').then(m =>
+            m.notify.warn(`Cannot sync: ${thisDeck.originalBpm <= 0 ? 'Deck ' + deck + ' BPM not detected' : 'Deck ' + otherDeckId + ' BPM not detected'}`)
+          ).catch(() => {});
           return s;
         }
 
-        // ── 1. Tempo match ───────────────────────────────────
+        // ── 1. Tempo match (no rate clamp — full range like Traktor) ──
         const newRate = other.bpm / thisDeck.originalBpm;
-        const clamped = clamp(newRate, 0.92, 1.08);
-        const effectiveBpm = Math.round(thisDeck.originalBpm * clamped * 10) / 10;
+        const effectiveBpm = Math.round(thisDeck.originalBpm * newRate * 10) / 10;
 
         // ── 2. Phase align ───────────────────────────────────
         // Calculate where the master beat grid is right now,
@@ -489,7 +492,7 @@ export const useMixiStore = create<MixiStore>()(
             ...s.decks,
             [deck]: {
               ...thisDeck,
-              playbackRate: clamped,
+              playbackRate: newRate,
               bpm: effectiveBpm,
               isSynced: true,
             },
