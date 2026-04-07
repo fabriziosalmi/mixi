@@ -96,7 +96,8 @@ export class DeckFx {
   private readonly echoFeedback: GainNode;
   private readonly echoWet: GainNode;
 
-  // TAPE (tape stop — pitch ramp simulation via playbackRate trick)
+  // TAPE (tape stop — LP darkening + volume pump simulates slowdown)
+  private readonly tapeFilter: BiquadFilterNode;
   private readonly tapeWet: GainNode;
 
   // NOISE (white noise sweep for buildups)
@@ -198,7 +199,11 @@ export class DeckFx {
     this.echoWet = ctx.createGain();
     this.echoWet.gain.value = 0;
 
-    // ── TAPE (tape stop — low-pass darkening simulates slowdown) ─
+    // ── TAPE (tape stop — LP darkening + volume pump) ──────────
+    this.tapeFilter = ctx.createBiquadFilter();
+    this.tapeFilter.type = 'lowpass';
+    this.tapeFilter.frequency.value = 20000;
+    this.tapeFilter.Q.value = 0.5;
     this.tapeWet = ctx.createGain();
     this.tapeWet.gain.value = 0;
 
@@ -295,8 +300,9 @@ export class DeckFx {
     this.echoFilter.connect(this.echoWet);
     this.echoWet.connect(this.gateGain);
 
-    // TAPE: fltMerge → tapeWet → gate (simulates tape saturation/darkening)
-    this.fltMerge.connect(this.tapeWet);
+    // TAPE: fltMerge → tapeFilter (LP darkening) → tapeWet → gate
+    this.fltMerge.connect(this.tapeFilter);
+    this.tapeFilter.connect(this.tapeWet);
     this.tapeWet.connect(this.gateGain);
 
     // NOISE send: noiseSource → noiseFilter → noiseWet → gate (independent, not from fltMerge)
@@ -537,9 +543,15 @@ export class DeckFx {
   // ── TAPE (tape stop tonal simulation) ─────────────────────
 
   private setTape(amount: number, active: boolean, ctx: AudioContext): void {
-    // Simulates the tonal darkening of tape slowing down
-    // Higher amount = more muffled + slight volume pump
-    smoothParam(this.tapeWet.gain, active ? amount * 0.4 : 0, ctx);
+    // Simulates tape slowing down: progressive LP darkening + volume pump.
+    // amount=0: 20kHz (open), amount=1: 200Hz (very muffled)
+    // Frequency: 20000 * (200/20000)^amount = 20000 * 0.01^amount
+    // At 0: 20kHz (bypass), at 0.5: ~2kHz (warm), at 1: 200Hz (underwater)
+    const freq = active ? 20000 * Math.pow(0.01, amount) : 20000;
+    const q = active ? 0.5 + amount * 2 : 0.5; // slight resonance bump at low freqs
+    smoothParam(this.tapeFilter.frequency, freq, ctx);
+    smoothParam(this.tapeFilter.Q, q, ctx);
+    smoothParam(this.tapeWet.gain, active ? 0.3 + amount * 0.3 : 0, ctx);
   }
 
   // ── NOISE (white noise sweep) ─────────────────────────────

@@ -30,6 +30,7 @@ import {
   type Pattern, type VoiceId, type VoiceMixer,
 } from './types';
 import type { DeckId } from '../types';
+import type { FxId } from '../audio/nodes/DeckFx';
 
 /** How far ahead (seconds) we schedule drum hits. */
 const LOOK_AHEAD_S = 0.05;
@@ -96,6 +97,18 @@ export class GrooveboxEngine {
   destroy(): void {
     this.stop();
     this._bus?.destroy();
+  }
+
+  // ── FX (routed via DeckChannel) ───────────────────────────
+
+  /** Toggle an FX on the underlying DeckChannel.
+   *  The groovebox audio passes through DeckChannel's FX chain,
+   *  so we delegate to channel.setFx(). */
+  setFx(id: FxId, amount: number, active: boolean): void {
+    const channel = MixiEngine.getInstance().getChannel(this.deckId);
+    if (channel && this.ctx) {
+      channel.setFx(id, amount, active, this.ctx);
+    }
   }
 
   // ── Transport ──────────────────────────────────────────────

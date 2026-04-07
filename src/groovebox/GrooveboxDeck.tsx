@@ -55,9 +55,9 @@ const MPC_BD = ['1a', '28', '38', '55'] as const;
 
 // ── 303-style FX pads ────────────────────────────────────────
 
-type FxId = 'lpf' | 'hpf' | 'delay' | 'reverb' | 'gate' | 'distort' | 'flanger' | 'stutter';
+type GbFxId = 'lpf' | 'hpf' | 'delay' | 'reverb' | 'gate' | 'distort' | 'flanger' | 'stutter';
 
-interface FxPadDef { id: FxId; label: string; color: string; }
+interface FxPadDef { id: GbFxId; label: string; color: string; }
 
 const FX_PADS: FxPadDef[] = [
   { id: 'lpf',     label: 'LPF',   color: '#00d4aa' },
@@ -69,6 +69,21 @@ const FX_PADS: FxPadDef[] = [
   { id: 'flanger', label: 'FLG',   color: '#22cc77' },
   { id: 'stutter', label: 'STT',   color: '#ffcc00' },
 ];
+
+/** Map UI pad IDs to DeckFx FxId + fixed amount.
+ *  LPF/HPF map to the bipolar filter (negative = LP, positive = HP).
+ *  DISTORT maps to crush, STUTTER maps to gate. */
+import type { FxId as DeckFxId } from '../audio/nodes/DeckFx';
+const FX_MAP: Record<GbFxId, { fxId: DeckFxId; amount: number }> = {
+  lpf:     { fxId: 'flt',   amount: 0.35 },  // LP at ~35% depth
+  hpf:     { fxId: 'flt',   amount: 0.65 },  // HP at ~65% depth
+  delay:   { fxId: 'dly',   amount: 0.5 },
+  reverb:  { fxId: 'rev',   amount: 0.5 },
+  gate:    { fxId: 'gate',  amount: 2 },      // 1/8 note division (index 2)
+  distort: { fxId: 'crush', amount: 0.6 },
+  flanger: { fxId: 'flg',   amount: 0.5 },
+  stutter: { fxId: 'tape',  amount: 0.7 },    // tape darkening effect
+};
 
 // ── Props ────────────────────────────────────────────────────
 
@@ -252,7 +267,7 @@ export const GrooveboxDeck: FC<GrooveboxDeckProps> = ({
     swing: 0,
   }));
 
-  const [activeFx,    setActiveFx]    = useState<Set<FxId>>(new Set());
+  const [activeFx,    setActiveFx]    = useState<Set<GbFxId>>(new Set());
   const [flashedPads, setFlashedPads] = useState<Set<string>>(new Set());
 
   // ── Init engine ───────────────────────────────────────────
@@ -387,8 +402,18 @@ export const GrooveboxDeck: FC<GrooveboxDeckProps> = ({
     return () => window.removeEventListener('MIXIMIDI_GROOVEBOX_PAD', onMidiPadHit);
   }, [deckId, hitVoice]);
 
-  const toggleFx = useCallback((id: FxId) => {
-    setActiveFx((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleFx = useCallback((id: GbFxId) => {
+    setActiveFx((prev) => {
+      const next = new Set(prev);
+      const wasActive = next.has(id);
+      if (wasActive) next.delete(id); else next.add(id);
+      // Wire to actual audio FX via DeckChannel
+      const mapping = FX_MAP[id];
+      if (mapping) {
+        engineRef.current?.setFx(mapping.fxId, mapping.amount, !wasActive);
+      }
+      return next;
+    });
   }, []);
 
   // ── BPM refresh ───────────────────────────────────────────
