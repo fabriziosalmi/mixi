@@ -161,12 +161,12 @@ Parallel compression — dry signal is always present, compressed signal is mixe
 
 | Parameter | Value |
 |-----------|-------|
-| Threshold | **-18 dB** |
-| Ratio | **8:1** |
-| Attack | **5 ms** |
-| Release | **150 ms** |
-| Knee | 6 dB |
-| Wet mix | `amount × 0.5` |
+| Threshold | **-14 dB** |
+| Ratio | **3:1** |
+| Attack | **3 ms** |
+| Release | **120 ms** |
+| Knee | **10 dB** |
+| Wet mix | `amount × 0.5`, compensation = `1 / (1 + wet)` |
 
 ### DC Blocker
 
@@ -182,8 +182,8 @@ Fixed **-0.3 dB** gain reduction before the limiter.
 |-----------|-------|
 | Threshold | **-0.5 dB** |
 | Ratio | **20:1** |
-| Attack | **2 ms** |
-| Release | **50 ms** |
+| Attack | **1 ms** |
+| Release | **100 ms** |
 | Knee | **0 dB** (hard) |
 
 Visual feedback via LimiterDot:
@@ -200,14 +200,15 @@ Both master and headphone output to all speakers.
 Master output → right ear, CUE → left ear (via `ChannelMergerNode`).
 
 ### CUE Mix
-Knob from 0 to 1: 0 = 100% CUE (pre-fader), 1 = 100% MASTER.
+Equal-power cosine crossfade: `cueMix = cos(mix × π/2)`, `masterTap = sin(mix × π/2)`.
+At 0 = 100% CUE, at 0.5 = equal blend, at 1 = 100% MASTER.
 
 ## Crossfader
 
 | Curve | Formula | Character |
 |-------|---------|-----------|
 | `smooth` | `gainA = cos(pos × π/2)`, `gainB = sin(pos × π/2)` | Equal-power, no center dip |
-| `sharp` | Linear cut | Fast cuts, scratch style |
+| `sharp` | Cubic curve with 2% dead zones: `(1-x)³` / `x³` over 0.02–0.98 range | Fast cuts, both full at center |
 
 Position 0 = full Deck A, position 1 = full Deck B.
 
