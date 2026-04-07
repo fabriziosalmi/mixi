@@ -78,6 +78,7 @@ export interface MixiActions {
 
   // BPM & Sync
   setDeckBpm: (deck: DeckId, bpm: number, firstBeatOffset: number, bpmConfidence?: number) => void;
+  setFirstBeatOffset: (deck: DeckId, offset: number) => void;
   setDeckAnalysis: (deck: DeckId, dropBeats: number[], musicalKey: string) => void;
   setDeckTrackName: (deck: DeckId, name: string) => void;
   setDeckLoadingStage: (deck: DeckId, stage: string | null) => void;
@@ -367,6 +368,15 @@ export const useMixiStore = create<MixiStore>()(
             isSynced: false,
             playbackRate: 1.0,
           },
+        },
+      })),
+
+    /** Set firstBeatOffset independently (for beatgrid editing). */
+    setFirstBeatOffset: (deck, offset) =>
+      set((s) => ({
+        decks: {
+          ...s.decks,
+          [deck]: { ...s.decks[deck], firstBeatOffset: offset },
         },
       })),
 

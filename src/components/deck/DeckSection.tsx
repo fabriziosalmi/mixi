@@ -23,6 +23,7 @@ import { TrackInfo } from './TrackInfo';
 import { PerformancePads } from './PerformancePads';
 import { PitchStrip } from './PitchStrip';
 import { FxUnitPanel } from './FxUnitPanel';
+import { BeatgridEditor } from './BeatgridEditor';
 import type { DeckId } from '../../types';
 import { CAMELOT_KEY_COLORS } from '../../theme';
 import { HOUSE_DECKS } from '../../decks';
@@ -58,6 +59,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const waveZoomRef = useRef(1);
   /** BPM inline editing state */
   const [editingBpm, setEditingBpm] = useState(false);
+  const [gridEditMode, setGridEditMode] = useState(false);
   const [bpmInput, setBpmInput] = useState('');
   const bpmInputRef = useRef<HTMLInputElement>(null);
 
@@ -262,10 +264,26 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
           </div>
         )}
         <div className={`flex flex-1 flex-col min-h-0 transition-all duration-500 ease-out ${!isTrackLoaded ? 'pointer-events-none opacity-60 blur-[2px]' : 'opacity-100 blur-0'}`}>
-          {/* Waveform */}
-          <div className="mixi-waveform-area shrink-0 flex flex-col gap-1.5">
-            <WaveformDisplay deckId={deckId} height={70} externalZoomRef={waveZoomRef} />
-            <WaveformOverview deckId={deckId} height={28} zoomRef={waveZoomRef} />
+          {/* Waveform + Beatgrid Editor */}
+          <div className="mixi-waveform-area shrink-0 flex flex-col">
+            <div className="relative">
+              <WaveformDisplay deckId={deckId} height={70} externalZoomRef={waveZoomRef} />
+              {/* Overlay + panel mount when GRID edit is active */}
+              <BeatgridEditor deckId={deckId} color={color} editMode={gridEditMode} waveformWidth={0} />
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              {/* GRID toggle button */}
+              <button type="button" onClick={() => setGridEditMode(g => !g)}
+                className="text-[7px] font-bold tracking-wider px-1.5 py-0.5 rounded active:scale-95 transition-all"
+                style={{
+                  color: gridEditMode ? color : 'var(--txt-muted)',
+                  background: gridEditMode ? `${color}15` : 'transparent',
+                  border: `1px solid ${gridEditMode ? color + '44' : 'rgba(255,255,255,0.06)'}`,
+                }}>
+                GRID
+              </button>
+              <WaveformOverview deckId={deckId} height={24} zoomRef={waveZoomRef} />
+            </div>
           </div>
 
           {/* FX Strip + Jog wheel + Pitch strip */}
