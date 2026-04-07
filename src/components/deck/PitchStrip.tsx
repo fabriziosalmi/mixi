@@ -221,8 +221,13 @@ export const PitchStrip: FC<PitchStripProps> = ({
 
   return (
     <div
-      className="flex flex-col items-center justify-center gap-1.5 shrink-0 py-3 px-2 rounded-md bg-zinc-900/50 border border-zinc-800/40"
-      style={{ width: 48 }}
+      className="flex flex-col items-center justify-center gap-1.5 shrink-0 py-3 px-2 rounded-lg"
+      style={{
+        width: 48,
+        background: 'rgba(20,20,22,0.7)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.02)',
+      }}
     >
       <NudgeBtn direction={1} color={color} onClick={() => handleNudge(1)} />
 
@@ -381,17 +386,18 @@ const NudgeBtn: FC<{
     title={direction === 1 ? 'Nudge faster' : 'Nudge slower'}
     className="mixi-btn flex items-center justify-center rounded shrink-0 transition-all duration-100 active:opacity-70"
     style={{
-      width: 34,
-      height: 24,
+      width: 38,
+      height: 28,
       background: 'var(--srf-mid)',
       border: '1px solid var(--srf-light)',
+      boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
     }}
   >
-    <svg width="10" height="8" viewBox="0 0 10 8">
+    <svg width="14" height="10" viewBox="0 0 14 10">
       {direction === 1 ? (
-        <path d="M1 6L5 2L9 6" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+        <path d="M2 7L7 3L12 7" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
       ) : (
-        <path d="M1 2L5 6L9 2" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+        <path d="M2 3L7 7L12 3" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
       )}
     </svg>
   </button>

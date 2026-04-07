@@ -130,11 +130,12 @@ const FxUnit: FC<FxUnitProps> = ({ unitKey, deckId, color }) => {
 
 export const FxUnitPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => (
   <div
-    className="mixi-fx-strip flex flex-col items-center gap-2 shrink-0 py-1.5 px-1 rounded-md bg-zinc-900/50"
+    className="mixi-fx-strip flex flex-col items-center gap-2 shrink-0 py-1.5 px-1 rounded-lg"
     style={{
       width: 48,
-      border: '1px solid rgba(255,255,255,0.04)',
-      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.02)',
+      background: 'rgba(20,20,22,0.7)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.02)',
     }}
   >
     <FxUnit unitKey="fx1" deckId={deckId} color={color} />
