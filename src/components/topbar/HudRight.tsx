@@ -11,7 +11,9 @@
 //           VFX toggle, Panic button, Settings gear.
 // ─────────────────────────────────────────────────────────────
 
-import type { FC } from 'react';
+import { useCallback, type FC } from 'react';
+import { useMixiStore } from '../../store/mixiStore';
+import { useMidiClockActive, toggleMidiClock } from '../hud/MasterClock';
 import { RecPanel } from '../hud/RecPanel';
 import { SkinSelector } from '../hud/SkinSelector';
 
@@ -37,6 +39,9 @@ export const HudRight: FC<HudRightProps> = ({
       boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
     }}
   >
+    <QuantizeBtn />
+    <MidiClockBtn />
+    <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
     <div className="flex items-center h-full">
       <RecPanel />
     </div>
@@ -129,3 +134,42 @@ export const HudRight: FC<HudRightProps> = ({
     </div>
   </div>
 );
+
+// ── Quantize + MIDI Clock (moved from HudCenter) ───────────
+
+const QuantizeBtn: FC = () => {
+  const qA = useMixiStore((s) => s.decks.A.quantize);
+  const qB = useMixiStore((s) => s.decks.B.quantize);
+  const setQuantize = useMixiStore((s) => s.setQuantize);
+  const active = qA && qB;
+  const partial = qA || qB;
+  const toggle = useCallback(() => { const n = !active; setQuantize('A', n); setQuantize('B', n); }, [active, setQuantize]);
+  return (
+    <button type="button" onClick={toggle}
+      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
+      style={{
+        color: active ? '#000' : partial ? 'var(--status-warn)' : 'var(--txt-muted)',
+        backgroundColor: active ? 'var(--status-ok)' : partial ? 'rgba(245,158,11,0.15)' : 'transparent',
+        border: `1px solid ${active ? 'var(--status-ok)' : partial ? 'var(--status-warn)' : 'rgba(255,255,255,0.1)'}`,
+        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
+      }}
+      title={`Quantize: ${active ? 'ON' : partial ? 'Partial' : 'OFF'}`}
+    >Q</button>
+  );
+};
+
+const MidiClockBtn: FC = () => {
+  const active = useMidiClockActive();
+  return (
+    <button type="button" onClick={toggleMidiClock}
+      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
+      style={{
+        color: active ? '#000' : 'var(--txt-muted)',
+        backgroundColor: active ? 'var(--status-ok)' : 'transparent',
+        border: `1px solid ${active ? 'var(--status-ok)' : 'rgba(255,255,255,0.1)'}`,
+        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
+      }}
+      title={active ? 'MIDI Clock active' : 'Enable MIDI Clock'}
+    >M</button>
+  );
+};

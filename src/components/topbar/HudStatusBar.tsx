@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
+import { AudioOutDot } from '../hud/SystemHud';
 
 // ── Global Status Bus ───────────────────────────────────────
 
@@ -167,19 +168,28 @@ export const HudStatusBar: FC = () => {
           className="text-[9px] font-sans font-medium tracking-wider uppercase"
           style={{ color: 'var(--txt-muted)', letterSpacing: '0.08em' }}
         >
-          MIXI V0.2.12 READY
+          MIXI V0.2.14 READY
         </span>
       </div>
 
-      {/* Center — Symmetric Master VU Meter with divisors */}
+      {/* Center — VU Meter with OUT dot, 15px side padding, green center gradient */}
       <div
-        className="flex items-center h-full justify-self-stretch px-2"
+        className="flex items-center h-full justify-self-stretch relative"
         style={{
           borderLeft: '1px solid rgba(255,255,255,0.08)',
           borderRight: '1px solid rgba(255,255,255,0.08)',
+          padding: '0 15px',
         }}
       >
+        {/* Green center gradient (subtle, dark→green→dark) */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.06) 0%, transparent 60%)',
+        }} />
         <SymmetricMasterVu />
+        {/* OUT dot centered on top of VU */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <AudioOutDot />
+        </div>
       </div>
 
       {/* Right — deck B context / notifications */}

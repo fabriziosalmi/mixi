@@ -4,15 +4,12 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// Topbar HUD Left — Master Processing + AI
-//
-// Aligned with Deck A column via CSS subgrid.
-// Contains: LimiterDot, Master knobs (Vol/Flt/Dist/Pnch),
-//           MiniVu, AI toggle, Intent display.
+// Topbar HUD Left — CPU + Master Processing + AI
 // ─────────────────────────────────────────────────────────────
 
 import type { FC } from 'react';
 import { MasterHud } from '../hud/MasterHud';
+import { CpuBadge } from '../hud/SystemHud';
 import { AiControlPanel } from '../../ai/components/AiControlPanel';
 import { IntentDisplay } from '../../ai/components/IntentDisplay';
 import type { AIEngineState } from '../../ai/AutoMixEngine';
@@ -31,6 +28,7 @@ export const HudLeft: FC<HudLeftProps> = ({ aiState, toggleAI }) => (
       boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
     }}
   >
+    <CpuBadge />
     <MasterHud />
     <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
     <IntentDisplay engineState={aiState} />
