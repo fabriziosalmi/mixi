@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] - 2026-04-07
+
+### Added
+- **FX1/FX2 unit system** — Traktor-style effect units with selectable effect (10 types), dry/wet knob, and ON/OFF toggle. Replaces 7-slot FxStrip. All 10 effects now accessible.
+- **FX1/FX2 toggle buttons** in performance pads left column, symmetric with Q/resolution on right
+- **PhaseMeter dual-disc convergence** — discs grow as they approach center, transition cyan/orange → green → white at sync
+- **Rust pitch shift processor** — granular overlap-add pitch shifter ported to Rust/Wasm AudioWorklet (was last JS on audio thread). JS fallback maintained.
+- **Rust PLL analysis module** — onset cross-correlation, phase cancellation detection, variable beatgrid, linear regression, predictive phase, auto-cue point — all ported to Rust
+- **100% Rust/Wasm coverage** — zero JS hot paths remaining on audio thread
+
+### Changed
+- PhaseMeter track extended from 200px to 240px for more visual resolution
+- FX panel compact layout: selector + knob only (ON/OFF moved to pad buttons)
+
+### Fixed
+- **TAPE effect was a stub** — now implements LP frequency sweep (20kHz→200Hz) with resonance
+- **Groovebox FX pads were visual-only** — now wired to DeckChannel.setFx() via engine
+- **Master VU was mono** — L/R now read from separate analyserL/analyserR (true stereo)
+- **MIDI DECK_PITCH hardcoded ±8%** — now reads from settingsStore.pitchRange (configurable)
+- README FX count clarified: 7 in strip + 3 system = 10 total
+
+### Documentation
+- Phase 1: Getting Started (NEW, 230 lines) + Architecture (33→280 lines)
+- Phase 2-3: Mixer/EQ/Effects (15→350 lines) + TurboBass reference (NEW, 350 lines)
+- Phase 4: AI AutoMixer 18 intents + MIDI + Skins + Groovebox + Wasm DSP
+- Landing page stats fixed (343 tests, 20 skins)
+- Architecture values corrected from second source audit
+
+### Performance
+- Pitch shift: JS AudioWorklet (344×/sec) → Rust/Wasm AudioWorklet
+- Rust tests: 217 passed across 3 crates
+
 ## [0.2.13] - 2026-04-07
 
 ### Added
