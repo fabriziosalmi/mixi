@@ -174,20 +174,18 @@ export const HudStatusBar: FC = () => {
         gridColumn: '1 / -1',
         gridTemplateColumns: 'subgrid',
         height: 18,
-        background: 'rgba(0,0,0,0.9)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+        background: 'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.7) 25%, rgba(0,0,0,0.95) 40%, rgba(0,0,0,0.95) 60%, rgba(0,0,0,0.7) 75%, transparent 100%)',
+        borderTop: '1px solid rgba(255,255,255,0.03)',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Left — deck A context / param feedback */}
+      {/* Left — param feedback (no static text) */}
       <div className="truncate">
         <span
           ref={textRef}
           className="text-[9px] font-sans font-medium tracking-wider uppercase"
           style={{ color: 'var(--txt-muted)', letterSpacing: '0.08em' }}
-        >
-          MIXI V0.2.14 READY
-        </span>
+        />
       </div>
 
       {/* Center — VU Meter with OUT dot, compact width */}

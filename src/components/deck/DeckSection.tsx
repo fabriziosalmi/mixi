@@ -24,7 +24,7 @@ import { PerformancePads } from './PerformancePads';
 import { PitchStrip } from './PitchStrip';
 import { FxUnitPanel } from './FxUnitPanel';
 import type { DeckId } from '../../types';
-import { CAMELOT_KEY_COLORS, getContrastText } from '../../theme';
+import { CAMELOT_KEY_COLORS } from '../../theme';
 import { HOUSE_DECKS } from '../../decks';
 
 interface DeckSectionProps {
@@ -182,7 +182,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         )}
         {/* Track name — fills available space */}
         {isTrackLoaded && (
-          <span className="flex-1 truncate text-[12px] text-zinc-300 font-bold min-w-0">
+          <span className="flex-1 truncate text-[14px] text-zinc-200 font-bold min-w-0">
             {trackName || ''}
           </span>
         )}
@@ -191,16 +191,15 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         {/* Key badge — Camelot-colored */}
         {musicalKey && (() => {
           const keyColor = CAMELOT_KEY_COLORS[musicalKey] || color;
-          const { text: keyText, luminance } = getContrastText(keyColor);
           return (
             <span
               key={`key-${musicalKey}`}
               className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider mixi-pop"
               style={{
-                background: `${keyColor}22`,
-                border: `1px solid ${keyColor}44`,
-                color: keyText,
-                textShadow: luminance > 0.6 ? 'none' : `0 0 6px ${keyColor}44`,
+                background: `${keyColor}30`,
+                border: `1px solid ${keyColor}55`,
+                color: '#fff',
+                textShadow: `0 0 6px ${keyColor}66`,
               }}
             >
               {musicalKey}
