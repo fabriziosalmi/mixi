@@ -131,12 +131,12 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     const ctx = canvas.getContext('2d', { alpha: false })!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Read theme tokens once per effect cycle
-    // Colorblind palette: blue + orange + white (distinguishable in all types of color blindness)
-    const cbMode = useSettingsStore.getState().colorblindMode;
-    const COLOR_LOW = cbMode ? '#ee8833' : themeVar('wave-low', '#cc2244');
-    const COLOR_MID = cbMode ? '#ffffff' : themeVar('wave-mid', '#dd8822');
-    const COLOR_HIGH = cbMode ? '#3399ee' : themeVar('wave-high', '#3388dd');
+    // Deck-tinted waveform: low = dark, mid = medium, high = bright
+    // This preserves deck identity (Cyan A, Orange B) even in a dark club
+    const isCyan = deckId === 'A';
+    const COLOR_LOW  = isCyan ? '#004455' : '#552200';  // dark tint
+    const COLOR_MID  = isCyan ? '#0099aa' : '#cc6600';  // medium
+    const COLOR_HIGH = isCyan ? '#00ddff' : '#ff9933';  // bright
     const COLOR_BG = themeVar('wave-bg', '#0a0a0a');
     const COLOR_PLAYHEAD = PLAYHEAD_COLOR;
     const WAVE_DROP = themeVar('wave-drop', '#ff0044');
@@ -473,15 +473,22 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
       ctx.fillRect(0, halfHeight | 0, width, 1);
       ctx.globalAlpha = 1;
 
-      // ── Playhead — razor-red with neon glow (Traktor-style) ──
-      ctx.fillStyle = 'rgba(255, 34, 34, 0.06)';
-      ctx.fillRect(playheadX - 6, 0, 13, height);
-      ctx.fillStyle = 'rgba(255, 34, 34, 0.12)';
-      ctx.fillRect(playheadX - 2, 0, 5, height);
-      ctx.fillStyle = COLOR_PLAYHEAD;
+      // ── Playhead — white laser with strong glow ──────────
+      // Outer glow (wide, dim)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.fillRect(playheadX - 10, 0, 21, height);
+      // Inner glow (medium)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+      ctx.fillRect(playheadX - 4, 0, 9, height);
+      // Hot core (bright)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillRect(playheadX - 1, 0, 3, height);
+      // Laser line (pure white)
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(playheadX, 0, 1, height);
-      ctx.fillRect(playheadX - 1, 0, 3, 2);
-      ctx.fillRect(playheadX - 1, height - 2, 3, 2);
+      // Top/bottom caps (brighter, wider)
+      ctx.fillRect(playheadX - 2, 0, 5, 3);
+      ctx.fillRect(playheadX - 2, height - 3, 5, 3);
 
       // ── Slip mode ghost playhead (dim cyan) ─────────────
       if (engine.isInitialized && engine.isSlipActive(deckId)) {

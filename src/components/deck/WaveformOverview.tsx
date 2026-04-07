@@ -89,10 +89,10 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })!;
     ctx.scale(dpr, dpr);
 
-    // Read theme tokens once per effect
-    const COLOR_LOW = themeVar('wave-ov-low', '#ff004466');
-    const COLOR_MID = themeVar('wave-ov-mid', '#ffaa0066');
-    const COLOR_HIGH = themeVar('wave-ov-high', '#00ffff66');
+    // Mono overview tinted with deck color — clean, readable silhouette
+    const deckColor = deckId === 'A'
+      ? themeVar('clr-a', '#00f0ff')
+      : themeVar('clr-b', '#ff6a00');
     const COLOR_BG = themeVar('wave-bg', '#111');
 
     // Clear
@@ -102,35 +102,22 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     const halfH = height / 2;
     const pointsPerPixel = waveformData.length / width;
 
-    // For each pixel column, average the waveform points that
-    // fall within that column, then draw 3 mirrored bars.
+    // Single-color mono bar: max energy across all bands, tinted with deck color at 50%
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = deckColor;
     for (let x = 0; x < width; x++) {
       const startIdx = Math.floor(x * pointsPerPixel);
       const endIdx = Math.min(Math.floor((x + 1) * pointsPerPixel), waveformData.length);
-      // Min-Max decimation: preserve peaks instead of averaging them away
-      let low = 0, mid = 0, high = 0;
+      // Min-Max decimation: peak energy across all bands
+      let maxE = 0;
       for (let i = startIdx; i < endIdx; i++) {
-        if (waveformData[i].low > low) low = waveformData[i].low;
-        if (waveformData[i].mid > mid) mid = waveformData[i].mid;
-        if (waveformData[i].high > high) high = waveformData[i].high;
+        const e = Math.max(waveformData[i].low, waveformData[i].mid, waveformData[i].high);
+        if (e > maxE) maxE = e;
       }
-
-      const hLow = low * halfH;
-      const hMid = mid * halfH;
-      const hHigh = high * halfH;
-
-      // Low (back)
-      ctx.fillStyle = COLOR_LOW;
-      ctx.fillRect(x, halfH - hLow, 1, hLow * 2);
-
-      // Mid
-      ctx.fillStyle = COLOR_MID;
-      ctx.fillRect(x, halfH - hMid, 1, hMid * 2);
-
-      // High (front)
-      ctx.fillStyle = COLOR_HIGH;
-      ctx.fillRect(x, halfH - hHigh, 1, hHigh * 2);
+      const h = maxE * halfH;
+      ctx.fillRect(x, halfH - h, 1, h * 2);
     }
+    ctx.globalAlpha = 1;
 
     // Cache the static image so we don't redraw every frame.
     staticRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
