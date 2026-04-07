@@ -14,6 +14,7 @@
 import type { FC } from 'react';
 import { RecPanel } from '../hud/RecPanel';
 import { SkinSelector } from '../hud/SkinSelector';
+import { HudDeckInfo } from './HudDeckInfo';
 
 interface HudRightProps {
   toggleBrowser: () => void;
@@ -29,14 +30,18 @@ export const HudRight: FC<HudRightProps> = ({
   toggleBrowser, browserOpen, vfxActive, setVfxActive,
   handlePanic, toggleSettings, updateAvailable,
 }) => (
-  <div
-    className="flex items-center gap-2 justify-self-end rounded-md px-3 py-1 overflow-hidden"
-    style={{
-      background: 'rgba(0,0,0,0.5)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-    }}
-  >
+  <div className="flex items-center gap-1.5 justify-self-end h-full">
+    {/* Deck B telemetry */}
+    <HudDeckInfo deckId="B" />
+    {/* Global controls HUD */}
+    <div
+      className="flex items-center gap-2 rounded-md px-3 py-1 overflow-hidden h-full"
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+      }}
+    >
     <div className="flex items-center h-full">
       <RecPanel />
     </div>
@@ -126,6 +131,7 @@ export const HudRight: FC<HudRightProps> = ({
           <span className="absolute -top-0.5 -right-0.5 block h-2 w-2 rounded-full bg-orange-500 ring-1 ring-zinc-900" />
         )}
       </button>
+    </div>
     </div>
   </div>
 );
