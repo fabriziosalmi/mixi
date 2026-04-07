@@ -29,6 +29,7 @@ import { injectAllCustomSkins } from './utils/skinLoader';
 import { HudLeft } from './components/topbar/HudLeft';
 import { HudCenter } from './components/topbar/HudCenter';
 import { HudRight } from './components/topbar/HudRight';
+import { HudStatusBar } from './components/topbar/HudStatusBar';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
 import { SplashScreen } from './components/SplashScreen';
@@ -214,13 +215,13 @@ const App: FC = () => {
   return (
     <div
       className={`h-screen w-screen text-white overflow-hidden mixi-chassis mixi-skin-${skin} ${vfxActive ? 'mixi-vfx' : ''}`}
-      style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gridTemplateRows: 'auto 1fr' }}
+      style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gridTemplateRows: 'auto auto 1fr' }}
     >
       {/* VFX visual overlay — audio-reactive canvas */}
       <VfxCanvas active={vfxActive} />
       {/* Top bar — subgrid shares column tracks with main */}
       <header
-        className="grid items-center border-b border-zinc-800/40 px-4 h-10 mixi-topbar gap-4 transition-colors duration-200 overflow-hidden"
+        className="grid items-center border-b border-zinc-800/40 px-4 h-12 mixi-topbar gap-4 transition-colors duration-200 overflow-hidden"
         style={{
           gridColumn: '1 / -1',
           gridTemplateColumns: 'subgrid',
@@ -242,6 +243,9 @@ const App: FC = () => {
           updateAvailable={updateAvailable}
         />
       </header>
+
+      {/* Status ticker — real-time feedback, alerts, parameter values */}
+      <HudStatusBar />
 
       <main
         className="grid grid-rows-[1fr] gap-4 p-4 overflow-hidden relative"
