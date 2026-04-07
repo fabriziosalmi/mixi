@@ -4,24 +4,19 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// FX Unit Panel — Traktor-style FX1/FX2 units
+// FX Unit Panel — Traktor-style FX1/FX2 (selector + knob only)
 //
-// Two independent FX units stacked vertically. Each has:
-//   - Effect selector (cycle through 10 effects)
-//   - Dry/wet amount knob
-//   - ON/OFF toggle
-//
-// Routes to existing DeckFx via MixiEngine.setDeckFx().
-// No audio engine changes — purely a UI abstraction.
+// ON/OFF buttons are in PerformancePads (same group as Q button).
+// This panel shows: effect name selector + amount knob.
+// State shared via fxUnitState.ts pub/sub.
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { Knob } from '../controls/Knob';
+import { fxUnitState } from './fxUnitState';
 import type { DeckId } from '../../types';
 import type { FxId } from '../../audio/nodes/DeckFx';
-
-// ── Effect registry ─────────────────────────────────────────
 
 const FX_LIST: FxId[] = ['dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo', 'tape', 'noise', 'flt'];
 const FX_LABELS: Record<FxId, string> = {
@@ -29,16 +24,14 @@ const FX_LABELS: Record<FxId, string> = {
   crush: 'CRU', echo: 'ECH', tape: 'TAPE', noise: 'NSE', flt: 'FLT',
 };
 
-// ── Single FX Unit ──────────────────────────────────────────
-
 interface FxUnitProps {
-  unitId: 'FX1' | 'FX2';
+  unitKey: 'fx1' | 'fx2';
   deckId: DeckId;
   color: string;
 }
 
-const FxUnit: FC<FxUnitProps> = ({ unitId, deckId, color }) => {
-  const [selectedIdx, setSelectedIdx] = useState(unitId === 'FX1' ? 0 : 1); // FX1=DLY, FX2=REV
+const FxUnit: FC<FxUnitProps> = ({ unitKey, deckId, color }) => {
+  const [selectedIdx, setSelectedIdx] = useState(unitKey === 'fx1' ? 0 : 1);
   const [amount, setAmount] = useState(0.5);
   const [active, setActive] = useState(false);
 
@@ -48,14 +41,21 @@ const FxUnit: FC<FxUnitProps> = ({ unitId, deckId, color }) => {
   const selectedFx = FX_LIST[selectedIdx];
   const label = FX_LABELS[selectedFx];
 
-  // Toggle ON/OFF
-  const toggle = useCallback(() => {
-    setActive((prev) => {
-      const next = !prev;
-      MixiEngine.getInstance().setDeckFx(deckId, selectedFx, amountRef.current, next);
-      return next;
+  // Sync to shared state
+  useEffect(() => {
+    fxUnitState.set(deckId, unitKey, { selectedFx, amount, active });
+  }, [deckId, unitKey, selectedFx, amount, active]);
+
+  // Listen for external toggle (from PerformancePads buttons)
+  useEffect(() => {
+    return fxUnitState.subscribe(() => {
+      const snap = fxUnitState.get(deckId)[unitKey];
+      if (snap.active !== active) {
+        setActive(snap.active);
+        MixiEngine.getInstance().setDeckFx(deckId, selectedFx, amountRef.current, snap.active);
+      }
     });
-  }, [deckId, selectedFx]);
+  }, [deckId, unitKey, selectedFx, active]);
 
   // Cycle effect selector
   const cycleEffect = useCallback(() => {
@@ -64,25 +64,25 @@ const FxUnit: FC<FxUnitProps> = ({ unitId, deckId, color }) => {
       const nextIdx = (prev + 1) % FX_LIST.length;
       const newFx = FX_LIST[nextIdx];
       const engine = MixiEngine.getInstance();
-      // Deactivate old effect
       engine.setDeckFx(deckId, oldFx, 0, false);
-      // Activate new effect if unit is ON
       if (active) {
         engine.setDeckFx(deckId, newFx, amountRef.current, true);
       }
+      fxUnitState.set(deckId, unitKey, { selectedFx: newFx });
       return nextIdx;
     });
-  }, [deckId, active]);
+  }, [deckId, unitKey, active]);
 
   // Amount change
   const onAmountChange = useCallback((v: number) => {
     setAmount(v);
+    fxUnitState.set(deckId, unitKey, { amount: v });
     if (active) {
       MixiEngine.getInstance().setDeckFx(deckId, selectedFx, v, true);
     }
-  }, [deckId, selectedFx, active]);
+  }, [deckId, unitKey, selectedFx, active]);
 
-  // Cleanup: deactivate on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       MixiEngine.getInstance().setDeckFx(deckId, FX_LIST[selectedIdx], 0, false);
@@ -94,26 +94,11 @@ const FxUnit: FC<FxUnitProps> = ({ unitId, deckId, color }) => {
 
   return (
     <div className="flex flex-col items-center gap-0.5 w-full">
-      {/* Unit label + ON/OFF toggle */}
-      <div className="flex items-center justify-between w-full px-0.5">
-        <span className="text-[7px] font-bold tracking-wider"
-          style={{ color: active ? color : 'var(--txt-muted)' }}>
-          {unitId}
-        </span>
-        <button
-          type="button"
-          onClick={toggle}
-          className="text-[6px] font-bold px-1 py-px rounded active:scale-90 transition-all"
-          style={{
-            color: active ? '#000' : 'var(--txt-muted)',
-            background: active ? color : 'transparent',
-            border: `1px solid ${active ? color : 'rgba(255,255,255,0.1)'}`,
-            boxShadow: active ? `0 0 6px ${color}66` : 'none',
-          }}
-        >
-          {active ? 'ON' : 'OFF'}
-        </button>
-      </div>
+      {/* Unit label */}
+      <span className="text-[6px] font-bold tracking-widest"
+        style={{ color: active ? color : 'var(--txt-muted)' }}>
+        {unitKey.toUpperCase()}
+      </span>
 
       {/* Effect selector — click to cycle */}
       <button
@@ -143,8 +128,6 @@ const FxUnit: FC<FxUnitProps> = ({ unitId, deckId, color }) => {
   );
 };
 
-// ── FX Unit Panel (two units stacked) ───────────────────────
-
 export const FxUnitPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => (
   <div
     className="mixi-fx-strip flex flex-col items-center gap-2 shrink-0 py-1.5 px-1 rounded-md bg-zinc-900/50"
@@ -154,11 +137,8 @@ export const FxUnitPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, col
       boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.02)',
     }}
   >
-    <FxUnit unitId="FX1" deckId={deckId} color={color} />
-
-    {/* Divider */}
+    <FxUnit unitKey="fx1" deckId={deckId} color={color} />
     <div className="w-6 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-
-    <FxUnit unitId="FX2" deckId={deckId} color={color} />
+    <FxUnit unitKey="fx2" deckId={deckId} color={color} />
   </div>
 );

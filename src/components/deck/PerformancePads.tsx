@@ -30,11 +30,12 @@
 //   Hardware-inspired beveled look with Tailwind shadows.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useMemo, type FC, type MouseEvent } from 'react';
+import { useState, useCallback, useEffect, useMemo, type FC, type MouseEvent } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import type { DeckId } from '../../types';
 import { CUE_COLORS } from '../../theme';
+import { fxUnitState } from './fxUnitState';
 
 const QUANTIZE_VALUES = [
   { beats: 4,     label: '4' },
@@ -136,8 +137,8 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
           }
         </div>
 
-        {/* Quantize strip — 2 buttons stacked, same width as pitch fader */}
-        <div className="flex flex-col gap-2 shrink-0" style={{ width: 48 }}>
+        {/* Quantize + FX strip — 4 buttons stacked */}
+        <div className="flex flex-col gap-1.5 shrink-0" style={{ width: 48 }}>
           <button
             type="button"
             onClick={toggleQuantize}
@@ -165,6 +166,8 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
           >
             {qVal.label}
           </button>
+          <FxToggleButton deckId={deckId} unitKey="fx1" color={color} />
+          <FxToggleButton deckId={deckId} unitKey="fx2" color={color} />
         </div>
       </div>
     </div>
@@ -384,6 +387,44 @@ const BeatJumpPad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) =
           ? `inset 0 0 15px ${JUMP_COLOR}55, 0 0 8px ${JUMP_COLOR}33`
           : 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 0 #252525, 0 1px 0 rgba(255,255,255,0.015)',
       }}
+    >
+      {label}
+    </button>
+  );
+};
+
+// ── FX Toggle Button (FX1/FX2 ON/OFF) ──────────────────────
+
+const FxToggleButton: FC<{ deckId: DeckId; unitKey: 'fx1' | 'fx2'; color: string }> = ({ deckId, unitKey, color }) => {
+  const [active, setActive] = useState(false);
+
+  // Listen to shared state
+  useEffect(() => {
+    return fxUnitState.subscribe(() => {
+      const snap = fxUnitState.get(deckId)[unitKey];
+      setActive(snap.active);
+    });
+  });
+
+  const toggle = useCallback(() => {
+    const next = !fxUnitState.get(deckId)[unitKey].active;
+    fxUnitState.set(deckId, unitKey, { active: next });
+  }, [deckId, unitKey]);
+
+  const label = unitKey.toUpperCase();
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="flex-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+      style={{
+        background: active ? `${color}22` : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${active ? color : 'var(--brd-default)'}`,
+        color: active ? color : 'var(--txt-muted)',
+        boxShadow: active ? `0 0 8px ${color}33` : 'none',
+      }}
+      title={`${label}: ${active ? 'ON' : 'OFF'}`}
     >
       {label}
     </button>
