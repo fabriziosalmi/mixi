@@ -11,15 +11,13 @@
 // Mixi – Main Application Shell
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, useRef, type FC } from 'react';
+import { useState, useCallback, useEffect, type FC } from 'react';
 import { useMixiSync } from './hooks/useMixiSync';
 import { useMixiBridge } from './hooks/useMixiBridge';
 import { useMixiStore } from './store/mixiStore';
 import { MixiEngine } from './audio/MixiEngine';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAIEngine } from './ai/useAIEngine';
-import { AiControlPanel } from './ai/components/AiControlPanel';
-import { IntentDisplay } from './ai/components/IntentDisplay';
 import { AiDebugPanel } from './ai/components/AiDebugPanel';
 import { DeckSection } from './components/deck/DeckSection';
 import { HOUSE_DECKS } from './decks';
@@ -27,12 +25,10 @@ import { Suspense } from 'react';
 import { MixerSection } from './components/mixer/MixerSection';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { useSettingsStore } from './store/settingsStore';
-import { SkinSelector } from './components/hud/SkinSelector';
 import { injectAllCustomSkins } from './utils/skinLoader';
-import { CpuBadge, AudioOutDot } from './components/hud/SystemHud';
-import { MasterHud } from './components/hud/MasterHud';
-import { RecPanel } from './components/hud/RecPanel';
-import { MasterClock, useMidiClockActive, toggleMidiClock } from './components/hud/MasterClock';
+import { HudLeft } from './components/topbar/HudLeft';
+import { HudCenter } from './components/topbar/HudCenter';
+import { HudRight } from './components/topbar/HudRight';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
 import { SplashScreen } from './components/SplashScreen';
@@ -47,100 +43,6 @@ const CYAN = COLOR_DECK_A;
 const ORANGE = COLOR_DECK_B;
 
 // ── Mini Master VU for center HUD (thin horizontal bars) ────
-
-const MiniMasterVu: FC = () => {
-  const barLRef = useRef<HTMLDivElement>(null);
-  const barRRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let raf = 0;
-    let skip = false;
-    function tick() {
-      skip = !skip;
-      if (!skip) {
-        const engine = MixiEngine.getInstance();
-        if (engine.isInitialized && barLRef.current && barRRef.current) {
-          const level = engine.getMasterLevel();
-          const pct = Math.min(100, Math.max(0, level * 100));
-          const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
-          barLRef.current.style.width = `${pct}%`;
-          barLRef.current.style.backgroundColor = color;
-          barRRef.current.style.width = `${pct}%`;
-          barRRef.current.style.backgroundColor = color;
-        }
-      }
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  return (
-    <div className="flex flex-col gap-[1px] w-full pt-1" title="Master Level">
-      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-        <div ref={barLRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
-      </div>
-      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-        <div ref={barRRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
-      </div>
-    </div>
-  );
-};
-
-// ── MIDI Clock toggle (right of center HUD) ─────────────────
-
-const MidiClockToggle: FC = () => {
-  const active = useMidiClockActive();
-  return (
-    <button
-      type="button"
-      onClick={toggleMidiClock}
-      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
-      style={{
-        color: active ? '#000' : 'var(--txt-muted)',
-        backgroundColor: active ? 'var(--status-ok)' : 'transparent',
-        border: `1px solid ${active ? 'var(--status-ok)' : 'rgba(255,255,255,0.1)'}`,
-        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
-      }}
-      title={active ? 'MIDI Clock active — click to stop' : 'Enable MIDI Clock output'}
-    >
-      M
-    </button>
-  );
-};
-
-// ── Global Quantize toggle (topbar center group) ────────────
-
-const QuantizeToggle: FC = () => {
-  const qA = useMixiStore((s) => s.decks.A.quantize);
-  const qB = useMixiStore((s) => s.decks.B.quantize);
-  const setQuantize = useMixiStore((s) => s.setQuantize);
-  const active = qA && qB;
-  const partial = qA || qB;
-
-  const toggle = useCallback(() => {
-    const next = !active;
-    setQuantize('A', next);
-    setQuantize('B', next);
-  }, [active, setQuantize]);
-
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 transition-all active:scale-95"
-      style={{
-        color: active ? '#000' : partial ? 'var(--status-warn)' : 'var(--txt-muted)',
-        backgroundColor: active ? 'var(--status-ok)' : partial ? 'rgba(245,158,11,0.15)' : 'transparent',
-        border: `1px solid ${active ? 'var(--status-ok)' : partial ? 'var(--status-warn)' : 'rgba(255,255,255,0.1)'}`,
-        boxShadow: active ? '0 0 8px var(--status-ok)66' : 'none',
-      }}
-      title={`Quantize: ${active ? 'ON (all decks)' : partial ? 'Partial' : 'OFF'}`}
-    >
-      Q
-    </button>
-  );
-};
 
 // ── Deck slot: renders track deck or groovebox per slot mode ─
 
@@ -326,137 +228,18 @@ const App: FC = () => {
         }}
       >
         {/* ── Left: Master FX + AI + Intent ── */}
-        <div className="mixi-hud-group justify-self-start">
-          <MasterHud />
-          <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
-          <IntentDisplay engineState={aiState} />
-        </div>
+        <HudLeft aiState={aiState} toggleAI={toggleAI} />
 
         {/* ── Center: Master HUD screen (sized by mixer column via subgrid) ── */}
-        <div
-          className="mixi-master-hud flex flex-col justify-self-stretch rounded-md px-3 py-1 overflow-hidden"
-          style={{
-            background: 'rgba(0,0,0,0.5)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-            minWidth: 0,
-            maxWidth: '100%',
-          }}
-        >
-          <div className="flex items-center justify-self-stretch gap-2">
-            <QuantizeToggle />
-            <div
-              className="mixi-master-hud flex flex-col flex-1 rounded-md px-3 py-1 overflow-hidden"
-              style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-                minWidth: 0,
-              }}
-            >
-              <div className="flex items-center justify-between w-full">
-                <MasterClock />
-                <AudioOutDot />
-                <CpuBadge />
-              </div>
-              <MiniMasterVu />
-            </div>
-            <MidiClockToggle />
-          </div>
-        </div>
+        <HudCenter />
 
         {/* ── Right: REC group + action buttons ── */}
-        <div className="flex items-center gap-2 justify-self-end">
-          <div className="mixi-hud-group h-full" style={{ minWidth: 200 }}>
-            <RecPanel />
-          </div>
-          <div className="mixi-hud-group">
-          {/* Track Browser toggle */}
-          <button
-            type="button"
-            onClick={toggleBrowser}
-            className="rounded p-0.5 transition-all duration-150"
-            title="Track Browser (Tab)"
-            style={{
-              color: browserOpen ? 'var(--clr-master)' : 'var(--txt-muted)',
-              filter: browserOpen ? 'drop-shadow(0 0 4px var(--clr-master)88)' : 'none',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-            </svg>
-          </button>
-
-          {/* Skin selector */}
-          <SkinSelector />
-
-          {/* VFX toggle — Space Invader */}
-          <button
-            type="button"
-            onClick={() => setVfxActive((v) => !v)}
-            className={`rounded p-0.5 transition-all duration-300 ${vfxActive ? 'mixi-vfx-btn' : ''}`}
-            title={vfxActive ? 'VFX: ON' : 'VFX: OFF'}
-            style={{
-              color: vfxActive ? 'var(--txt-white)' : 'var(--txt-muted)',
-              filter: vfxActive ? 'drop-shadow(0 0 6px #ff00ff88)' : 'none',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="3" y="1" width="2" height="2" />
-              <rect x="11" y="1" width="2" height="2" />
-              <rect x="5" y="3" width="2" height="2" />
-              <rect x="9" y="3" width="2" height="2" />
-              <rect x="3" y="5" width="10" height="2" />
-              <rect x="1" y="7" width="2" height="2" />
-              <rect x="3" y="7" width="2" height="2" />
-              <rect x="5" y="7" width="6" height="2" />
-              <rect x="11" y="7" width="2" height="2" />
-              <rect x="13" y="7" width="2" height="2" />
-              <rect x="1" y="9" width="2" height="2" />
-              <rect x="5" y="9" width="2" height="2" />
-              <rect x="9" y="9" width="2" height="2" />
-              <rect x="13" y="9" width="2" height="2" />
-              <rect x="3" y="11" width="2" height="2" />
-              <rect x="5" y="11" width="2" height="2" />
-              <rect x="9" y="11" width="2" height="2" />
-              <rect x="11" y="11" width="2" height="2" />
-            </svg>
-          </button>
-
-          {/* Panic button — reset all FX/EQ/loops */}
-          <button
-            type="button"
-            onClick={handlePanic}
-            className="rounded p-0.5 text-zinc-600 hover:text-red-400 transition-colors duration-150 active:scale-90"
-            title="Panic Reset (Esc) — flatten EQ, kill FX, exit loops"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </button>
-
-          {/* Settings gear */}
-          <button
-            type="button"
-            onClick={toggleSettings}
-            className="mixi-gear relative rounded p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title={updateAvailable ? 'Settings — Update available!' : 'Settings'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            {updateAvailable && (
-              <span className="absolute -top-0.5 -right-0.5 block h-2 w-2 rounded-full bg-orange-500 ring-1 ring-zinc-900" />
-            )}
-          </button>
-          </div>
-        </div>
+        <HudRight
+          toggleBrowser={toggleBrowser} browserOpen={browserOpen}
+          vfxActive={vfxActive} setVfxActive={setVfxActive}
+          handlePanic={handlePanic} toggleSettings={toggleSettings}
+          updateAvailable={updateAvailable}
+        />
       </header>
 
       <main
