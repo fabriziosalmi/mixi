@@ -40,7 +40,7 @@ export default defineConfig({
         text: 'Mixing',
         items: [
           { text: 'Mixer, EQ & Effects', link: '/guide/mixer' },
-          { text: 'AI AutoMixer', link: '/guide/ai-automixer' },
+          { text: 'AI AutoMixer & MIDI', link: '/guide/ai-automixer' },
         ]
       },
       {
@@ -53,7 +53,7 @@ export default defineConfig({
       {
         text: 'Internals',
         items: [
-          { text: 'WebAudio Engine', link: '/guide/webaudio' },
+          { text: 'WebAudio & Wasm DSP', link: '/guide/webaudio' },
           { text: 'BPM Detection', link: '/BPM' },
         ]
       }
