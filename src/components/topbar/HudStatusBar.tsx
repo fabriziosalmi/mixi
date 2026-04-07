@@ -190,13 +190,15 @@ export const HudStatusBar: FC = () => {
         </span>
       </div>
 
-      {/* Center — VU Meter with OUT dot, 15px side padding, green center gradient */}
+      {/* Center — VU Meter with OUT dot, compact width */}
       <div
-        className="flex items-center h-full justify-self-stretch relative"
+        className="flex items-center h-full justify-self-center relative"
         style={{
           borderLeft: '1px solid rgba(255,255,255,0.08)',
           borderRight: '1px solid rgba(255,255,255,0.08)',
           padding: '0 15px',
+          width: '70%',
+          maxWidth: 200,
         }}
       >
         {/* Green center gradient (subtle, dark→green→dark) */}
