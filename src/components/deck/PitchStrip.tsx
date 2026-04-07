@@ -81,11 +81,12 @@ export const PitchStrip: FC<PitchStripProps> = ({
   const [softCenter, setSoftCenter] = useState(false);
   const softRef = useRef(false);
   useEffect(() => { softRef.current = softCenter; }, [softCenter]);
+  const isSynced = useMixiStore((s) => s.decks[deckId].isSynced);
   const range = wide ? RANGE_16 : RANGE_8;
   const rangeMin = 1 - range;
   const rangeMax = 1 + range;
 
-  // Clamp value to current range
+  // When synced, value may be outside fader range — show full range position
   const clamped = Math.min(rangeMax, Math.max(rangeMin, value));
 
   const handleRangeToggle = useCallback(() => {
@@ -141,6 +142,8 @@ export const PitchStrip: FC<PitchStripProps> = ({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // Block pitch fader drag when synced (rate is controlled by PLL)
+      if (isSynced) return;
       if (midiAction && (window as any).__MIXIMIDILEARN__ && useMidiStore.getState().isLearning) {
         e.preventDefault();
         e.stopPropagation();
@@ -153,7 +156,7 @@ export const PitchStrip: FC<PitchStripProps> = ({
       normAtDragStart.current = softRef.current ? softCurveInverse(n) : n;
       onPointerDown(e);
     },
-    [clamped, onPointerDown, midiAction],
+    [clamped, onPointerDown, midiAction, isSynced],
   );
 
   // ── Visual position ──
@@ -193,8 +196,8 @@ export const PitchStrip: FC<PitchStripProps> = ({
     return result;
   }, [softCenter]);
 
-  const pitchPercent = ((clamped - 1) * 100).toFixed(1);
-  const pitchLabel = `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
+  const pitchPercent = ((value - 1) * 100).toFixed(1);
+  const pitchLabel = isSynced ? 'SYNC' : `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
 
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
