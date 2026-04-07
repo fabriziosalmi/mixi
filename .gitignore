@@ -62,3 +62,6 @@ mixi-native/target/
 # Native audio addon binaries (built per-platform)
 electron/native/*.node
 test-results/
+
+# Internal iteration plans
+TOPBAR_ITER2.md
