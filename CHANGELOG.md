@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.13] - 2026-04-07
+
+### Added
+- **Triple HUD topbar architecture** — Header refactored into 3 independent components (HudLeft, HudCenter, HudRight) aligned via CSS subgrid
+- **HudStatusBar** — Full-width status bar below topbar with real-time feedback ticker, symmetric master VU meter (L/R from center), global event bus (`HudStatus.show()`)
+- **Per-deck HUD telemetry** — HudDeckInfo panels flanking center HUD showing live BPM, play state, sync status per deck
+
+### Changed
+- Topbar height increased to 48px (h-12) for better control spacing
+- All HUD panels unified with dark visualizer background (rgba(0,0,0,0.5), border, inset shadow)
+- Topbar background darkened (rgba(0,0,0,0.6))
+- Status bar font: sans-serif, uppercase, wide tracking
+- MiniMasterVu removed from HudCenter (replaced by symmetric meter in status bar)
+- MiniVu removed from MasterHud (deduplicated)
+- Grid layout: auto auto 1fr (topbar + status bar + main)
+
 ## [0.2.12] - 2026-04-07
 
 ### Added
