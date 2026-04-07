@@ -84,6 +84,48 @@ export const HudDeckInfo: FC<HudDeckInfoProps> = ({ deckId }) => {
     return () => cancelAnimationFrame(raf);
   }, [deckId, color]);
 
+  // Deck A: dot | A | BPM | phase  (label on left, near edge)
+  // Deck B: phase | BPM | B | dot  (label on right, near edge — mirrored)
+  const isB = deckId === 'B';
+
+  const dotEl = (
+    <div
+      ref={dotRef}
+      className="rounded-full shrink-0"
+      style={{
+        width: 5, height: 5,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        transition: 'background-color 0.15s',
+      }}
+    />
+  );
+
+  const labelEl = (
+    <span className="text-[10px] font-black font-mono" style={{ color }}>
+      {deckId}
+    </span>
+  );
+
+  const bpmEl = (
+    <span
+      ref={bpmRef}
+      className="text-[11px] font-mono font-bold tabular-nums"
+      style={{ color: 'var(--txt-secondary)', minWidth: 36 }}
+    >
+      ---
+    </span>
+  );
+
+  const phaseEl = (
+    <span
+      ref={phaseRef}
+      className="text-[8px] font-mono font-bold tracking-wide"
+      style={{ color: 'var(--txt-muted)', minWidth: 28 }}
+    >
+      —
+    </span>
+  );
+
   return (
     <div
       className="flex items-center gap-1.5 rounded-md px-2 py-0.5 h-full"
@@ -92,44 +134,13 @@ export const HudDeckInfo: FC<HudDeckInfoProps> = ({ deckId }) => {
         border: '1px solid rgba(255,255,255,0.06)',
         boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
         minWidth: 90,
+        flexDirection: isB ? 'row-reverse' : 'row',
       }}
     >
-      {/* Play dot */}
-      <div
-        ref={dotRef}
-        className="rounded-full shrink-0"
-        style={{
-          width: 5, height: 5,
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          transition: 'background-color 0.15s',
-        }}
-      />
-
-      {/* Deck label */}
-      <span
-        className="text-[10px] font-black font-mono"
-        style={{ color }}
-      >
-        {deckId}
-      </span>
-
-      {/* BPM */}
-      <span
-        ref={bpmRef}
-        className="text-[11px] font-mono font-bold tabular-nums"
-        style={{ color: 'var(--txt-secondary)', minWidth: 36 }}
-      >
-        ---
-      </span>
-
-      {/* Phase / sync status */}
-      <span
-        ref={phaseRef}
-        className="text-[8px] font-mono font-bold tracking-wide"
-        style={{ color: 'var(--txt-muted)', minWidth: 28 }}
-      >
-        —
-      </span>
+      {dotEl}
+      {labelEl}
+      {bpmEl}
+      {phaseEl}
     </div>
   );
 };
