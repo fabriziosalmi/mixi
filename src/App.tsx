@@ -33,6 +33,7 @@ import { HudStatusBar } from './components/topbar/HudStatusBar';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
 import { SplashScreen } from './components/SplashScreen';
+import { Onboarding } from './components/Onboarding';
 import { VfxCanvas } from './components/VfxCanvas';
 import { MidiManager } from './midi/MidiManager';
 import { generateFingerprint, createUiWatermarkCanvas } from './utils/watermark';
@@ -280,6 +281,7 @@ const App: FC = () => {
       />
 
       {/* Modals / overlays */}
+      <Onboarding />
       <SettingsModal />
       <AiDebugPanel engineState={aiState} />
     </div>

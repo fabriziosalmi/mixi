@@ -280,7 +280,15 @@ export const Knob: FC<KnobProps> = ({
   const s = SIZE * scale;
 
   return (
-    <div className="group flex flex-col items-center gap-1 select-none touch-none">
+    <div
+      className="group flex flex-col items-center gap-1 select-none touch-none"
+      role="slider"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value * 100) / 100}
+      aria-label={label || undefined}
+      tabIndex={0}
+    >
       <svg
         width={s}
         height={s}
@@ -289,6 +297,7 @@ export const Knob: FC<KnobProps> = ({
         style={{ transform: isDragging ? 'scale(1.06)' : 'scale(1)' }}
         onPointerDown={handlePointerDown}
         onDoubleClick={handleDoubleClick}
+        aria-hidden="true"
       >
         {/* Outer ring – dark metallic body */}
         <circle

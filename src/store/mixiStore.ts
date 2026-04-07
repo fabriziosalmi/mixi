@@ -23,6 +23,7 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { safeStorage } from './safeStorage';
+import { undoStack } from '../utils/undoStack';
 import type {
   DeckId,
   DeckMode,
@@ -570,13 +571,23 @@ export const useMixiStore = create<MixiStore>()(
       engine.seek(deck, time);
     },
 
-    /** Remove a hot cue from the given slot. */
+    /** Remove a hot cue from the given slot (with undo support). */
     deleteHotCue: (deck, index) =>
       set((s) => {
         const d = s.decks[deck];
+        const oldValue = d.hotCues[index];
         const newCues = [...d.hotCues];
         newCues[index] = null;
         if (d.trackName) saveHotCues(d.trackName, newCues);
+        // Push undo entry if there was a value to restore
+        if (oldValue !== null) {
+          const trackName = d.trackName;
+          undoStack.push(`Delete cue ${index + 1} on Deck ${deck}`, () => {
+            const store = useMixiStore.getState();
+            store.setHotCue(deck, index, oldValue);
+            if (trackName) saveHotCues(trackName, [...store.decks[deck].hotCues]);
+          });
+        }
         return {
           decks: { ...s.decks, [deck]: { ...d, hotCues: newCues } },
         };

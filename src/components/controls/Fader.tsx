@@ -150,7 +150,16 @@ export const Fader: FC<FaderProps> = ({
     : { width: length, height: capThk + 12 };
 
   return (
-    <div className="flex flex-col items-center gap-1 select-none touch-none">
+    <div
+      className="flex flex-col items-center gap-1 select-none touch-none"
+      role="slider"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value * 100) / 100}
+      aria-label={label || (isVertical ? 'Volume fader' : 'Crossfader')}
+      aria-orientation={isVertical ? 'vertical' : 'horizontal'}
+      tabIndex={0}
+    >
       {/* Fader container */}
       <div className="relative flex items-center justify-center" style={containerStyle}>
         {/* Recessed track groove */}

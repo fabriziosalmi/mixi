@@ -32,6 +32,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect } from 'react';
+import { undoStack } from '../utils/undoStack';
+import { notify } from '../components/topbar/HudNotifications';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { MixiEngine } from '../audio/MixiEngine';
@@ -106,6 +108,15 @@ export function useKeyboardShortcuts() {
           } else {
             if (store.decks.B.isSynced) store.unsyncDeck('B');
             else store.syncDeck('B');
+          }
+          break;
+
+        // ── Ctrl/Cmd+Z: Undo ───────────────────────────────
+        case 'KeyZ':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            const desc = undoStack.undo();
+            if (desc) notify.info(`Undo: ${desc}`);
           }
           break;
 
