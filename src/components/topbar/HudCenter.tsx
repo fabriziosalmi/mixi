@@ -11,9 +11,8 @@
 //           MiniMasterVu, MidiClockToggle.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef, type FC } from 'react';
+import { useCallback, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
-import { MixiEngine } from '../../audio/MixiEngine';
 import { MasterClock, useMidiClockActive, toggleMidiClock } from '../hud/MasterClock';
 import { CpuBadge, AudioOutDot } from '../hud/SystemHud';
 
@@ -47,47 +46,6 @@ const QuantizeToggle: FC = () => {
     >
       Q
     </button>
-  );
-};
-
-// ── MiniMasterVu (2 bars, direct DOM at 30fps) ─────────────
-
-const MiniMasterVu: FC = () => {
-  const barLRef = useRef<HTMLDivElement>(null);
-  const barRRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let raf = 0;
-    let skip = false;
-    function tick() {
-      skip = !skip;
-      if (!skip) {
-        const engine = MixiEngine.getInstance();
-        if (engine.isInitialized && barLRef.current && barRRef.current) {
-          const level = engine.getMasterLevel();
-          const pct = Math.min(100, Math.max(0, level * 100));
-          const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
-          barLRef.current.style.width = `${pct}%`;
-          barLRef.current.style.backgroundColor = color;
-          barRRef.current.style.width = `${pct}%`;
-          barRRef.current.style.backgroundColor = color;
-        }
-      }
-      raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  return (
-    <div className="flex flex-col gap-[1px] w-full pt-1" title="Master Level">
-      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-        <div ref={barLRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
-      </div>
-      <div style={{ height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}>
-        <div ref={barRRef} style={{ height: 2, width: '0%', borderRadius: 1 }} />
-      </div>
-    </div>
   );
 };
 
@@ -142,7 +100,6 @@ export const HudCenter: FC = () => (
           <AudioOutDot />
           <CpuBadge />
         </div>
-        <MiniMasterVu />
       </div>
       <MidiClockToggle />
     </div>
