@@ -28,7 +28,9 @@ import {
   type QuantizeResolution,
 } from '../../store/settingsStore';
 import { useMidiStore } from '../../store/midiStore';
+import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
+import type { CrossfaderCurve } from '../../types';
 
 // ── Tabs ─────────────────────────────────────────────────────
 
@@ -164,6 +166,19 @@ const MixerTab: FC = () => {
 
       <Divider />
 
+      <SettingRow label="Crossfader Curve" description="Blend behavior between decks">
+        <SegmentedControl<CrossfaderCurve>
+          options={[
+            { value: 'smooth', label: 'Smooth' },
+            { value: 'sharp', label: 'Sharp' },
+          ]}
+          value={useMixiStore.getState().crossfaderCurve}
+          onChange={(v) => useMixiStore.getState().setCrossfaderCurve(v)}
+        />
+      </SettingRow>
+
+      <Divider />
+
       {/* ── Sessions ─────────────────────────────────────────── */}
       <SettingRow label="Sessions" description="Save and restore mixer state">
         <SessionManager />
@@ -256,6 +271,20 @@ const AudioTab: FC = () => {
           }))}
           value={recFormat}
           onChange={setRecFormat}
+        />
+      </SettingRow>
+
+      <Divider />
+
+      <SettingRow label="Pitch Range" description="MIDI pitch fader range (also affects sync limit)">
+        <SegmentedControl<number>
+          options={[
+            { value: 0.08, label: '±8%' },
+            { value: 0.16, label: '±16%' },
+            { value: 0.50, label: '±50%' },
+          ]}
+          value={useSettingsStore.getState().pitchRange}
+          onChange={(v) => useSettingsStore.getState().setPitchRange(v)}
         />
       </SettingRow>
 
@@ -654,6 +683,26 @@ const CreditsTab: FC = () => (
           style={{ color: 'var(--clr-a)' }}
         >
           github.com/fabriziosalmi/mixi
+        </a>
+      </div>
+    </div>
+
+    <Divider />
+
+    <div className="space-y-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Resources</span>
+      <div className="flex flex-col gap-1 text-[10px]">
+        <a href="https://fabriziosalmi.github.io/mixi/guide/getting-started" target="_blank" rel="noopener noreferrer"
+          className="hover:underline" style={{ color: 'var(--clr-a)' }}>
+          📖 Documentation & Keyboard Shortcuts
+        </a>
+        <a href="https://github.com/fabriziosalmi/mixi/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer"
+          className="hover:underline" style={{ color: 'var(--clr-a)' }}>
+          🔒 Privacy Policy
+        </a>
+        <a href="https://github.com/fabriziosalmi/mixi/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer"
+          className="hover:underline" style={{ color: 'var(--clr-a)' }}>
+          📋 Changelog
         </a>
       </div>
     </div>
