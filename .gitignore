@@ -66,3 +66,4 @@ test-results/
 # Internal iteration plans
 TOPBAR_ITER2.md
 DOCS_OVERHAUL.md
+RUST_MIGRATION.md
