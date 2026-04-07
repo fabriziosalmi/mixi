@@ -917,6 +917,37 @@ export class MixiEngine {
     return level;
   }
 
+  /** Read RMS level from the left master analyser (0–1). */
+  getMasterLevelL(): number {
+    if (!this.initialized) return 0;
+    return this._readAnalyserRms(this.master.analyserL);
+  }
+
+  /** Read RMS level from the right master analyser (0–1). */
+  getMasterLevelR(): number {
+    if (!this.initialized) return 0;
+    return this._readAnalyserRms(this.master.analyserR);
+  }
+
+  private _stereoLBuf: Float32Array<ArrayBuffer> | null = null;
+  private _stereoRBuf: Float32Array<ArrayBuffer> | null = null;
+
+  private _readAnalyserRms(analyser: AnalyserNode): number {
+    const size = analyser.fftSize;
+    let buf: Float32Array<ArrayBuffer>;
+    if (analyser === this.master.analyserL) {
+      if (!this._stereoLBuf || this._stereoLBuf.length !== size) this._stereoLBuf = new Float32Array(size);
+      buf = this._stereoLBuf;
+    } else {
+      if (!this._stereoRBuf || this._stereoRBuf.length !== size) this._stereoRBuf = new Float32Array(size);
+      buf = this._stereoRBuf;
+    }
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < size; i++) { const s = buf[i]; sum += s * s; }
+    return Math.min(1, Math.sqrt(sum / size) * 1.414);
+  }
+
   /**
    * Read the current limiter gain reduction in dB (0 = no reduction,
    * negative = compressing). Used by MasterLedScreen.

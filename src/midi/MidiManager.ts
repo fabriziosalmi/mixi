@@ -218,8 +218,7 @@ export class MidiManager {
       }
       case 'DECK_PITCH': {
         if (action.deck) {
-          // TODO(v0.1.2): Use settings.pitchRange when PitchRange selector is added to Settings
-          const pitchRange = 0.08; // ±8% default (matches PitchStrip.RANGE_8)
+          const pitchRange = useSettingsStore.getState().pitchRange;
           const rate = (1 + pitchRange) - (norm * (pitchRange * 2));
           store.setDeckPlaybackRate(action.deck, rate);
         }

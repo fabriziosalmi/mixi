@@ -65,8 +65,8 @@ export const MasterVuMeter: FC = () => {
 
     // Subscribe to shared MeterService (single RAF loop for all meters)
     return MeterService.subscribe((levels) => {
-      applyLevel(segsL, levels.master, segColors, segGlows, ledOff);
-      applyLevel(segsR, levels.master, segColors, segGlows, ledOff);
+      applyLevel(segsL, levels.masterL, segColors, segGlows, ledOff);
+      applyLevel(segsR, levels.masterR, segColors, segGlows, ledOff);
     });
   }, []);
 

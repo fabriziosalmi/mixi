@@ -188,7 +188,7 @@ Uses `navigator.requestMIDIAccess({ sysex: false })`. Hot-plug/unplug handled vi
 
 ## Custom Skins (17 bundled)
 
-Acid, Aqua, Arcade Invaders, Blackfluo, Bloodmoon, Casino, Dune, E-Ink, Gold, Hologram, Industrial, Matrix, Nordic, Synthwave, Vaporwave, White, and a duplicate Freetekno.
+Acid, Aqua, Arcade Invaders, Blackfluo, Bloodmoon, Casino, Dune, E-Ink, Gold, Hologram, Industrial, Matrix, Nordic, Synthwave, Vaporwave, White, and Freetekno (duplicate of built-in — will be resolved when custom skins migrate to external repository).
 
 ## Custom Skin Format
 

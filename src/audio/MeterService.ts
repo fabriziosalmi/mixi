@@ -21,6 +21,8 @@ export interface MeterLevels {
   A: number;
   B: number;
   master: number;
+  masterL: number;
+  masterR: number;
   frame: number;
 }
 
@@ -32,7 +34,7 @@ class MeterServiceImpl {
   private running = false;
   private callbacks = new Set<MeterCallback>();
 
-  readonly levels: MeterLevels = { A: 0, B: 0, master: 0, frame: 0 };
+  readonly levels: MeterLevels = { A: 0, B: 0, master: 0, masterL: 0, masterR: 0, frame: 0 };
 
   subscribe(cb: MeterCallback): () => void {
     this.callbacks.add(cb);
@@ -67,10 +69,14 @@ class MeterServiceImpl {
       this.levels.A = engine.getLevel('A');
       this.levels.B = engine.getLevel('B');
       this.levels.master = engine.getMasterLevel();
+      this.levels.masterL = engine.getMasterLevelL();
+      this.levels.masterR = engine.getMasterLevelR();
     } else {
       this.levels.A = 0;
       this.levels.B = 0;
       this.levels.master = 0;
+      this.levels.masterL = 0;
+      this.levels.masterR = 0;
     }
     this.levels.frame++;
 

@@ -90,6 +90,8 @@ export interface SettingsState {
   colorblindMode: boolean;
   /** Recording format preference for MediaRecorder. */
   recFormat: RecFormat;
+  /** MIDI pitch fader range (0.08 = ±8%, 0.16 = ±16%, 0.50 = ±50%). */
+  pitchRange: number;
 }
 
 export type RecFormat = 'webm-opus' | 'webm-pcm' | 'ogg-opus' | 'mp4-aac';
@@ -112,6 +114,7 @@ export interface SettingsActions {
   setShowPhaseOverlay: (v: boolean) => void;
   setColorblindMode: (v: boolean) => void;
   setRecFormat: (fmt: RecFormat) => void;
+  setPitchRange: (range: number) => void;
 }
 
 export type SettingsStore = SettingsState & SettingsActions;
@@ -134,6 +137,7 @@ export const useSettingsStore = create<SettingsStore>()(
       showPhaseOverlay: true,
       colorblindMode: false,
       recFormat: 'webm-opus' as RecFormat,
+      pitchRange: 0.08,
 
       toggleDebugPanel: () => set((s) => ({ showDebugPanel: !s.showDebugPanel })),
       toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
@@ -160,6 +164,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowPhaseOverlay: (v) => set({ showPhaseOverlay: v }),
       setColorblindMode: (v) => set({ colorblindMode: v }),
       setRecFormat: (fmt) => set({ recFormat: fmt }),
+      setPitchRange: (range) => set({ pitchRange: Math.max(0.04, Math.min(0.5, range)) }),
     }),
     {
       name: 'mixi-settings',
