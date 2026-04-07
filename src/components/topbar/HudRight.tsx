@@ -16,6 +16,7 @@ import { useMixiStore } from '../../store/mixiStore';
 import { useMidiClockActive, toggleMidiClock } from '../hud/MasterClock';
 import { RecPanel } from '../hud/RecPanel';
 import { SkinSelector } from '../hud/SkinSelector';
+import { HudNotifications } from './HudNotifications';
 
 interface HudRightProps {
   toggleBrowser: () => void;
@@ -31,14 +32,19 @@ export const HudRight: FC<HudRightProps> = ({
   toggleBrowser, browserOpen, vfxActive, setVfxActive,
   handlePanic, toggleSettings, updateAvailable,
 }) => (
-  <div
-    className="flex items-center gap-2 justify-self-end rounded-md px-3 py-1 overflow-hidden h-full"
-    style={{
-      background: 'rgba(0,0,0,0.5)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-    }}
-  >
+  <div className="flex items-center gap-1.5 justify-self-stretch h-full">
+    {/* Notification area — fills space between center and controls */}
+    <HudNotifications />
+
+    {/* Controls group */}
+    <div
+      className="flex items-center gap-2 shrink-0 rounded-md px-3 py-1 overflow-hidden h-full"
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+      }}
+    >
     <QuantizeBtn />
     <MidiClockBtn />
     <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
@@ -131,6 +137,22 @@ export const HudRight: FC<HudRightProps> = ({
           <span className="absolute -top-0.5 -right-0.5 block h-2 w-2 rounded-full bg-orange-500 ring-1 ring-zinc-900" />
         )}
       </button>
+
+      {/* Help — opens docs */}
+      <a
+        href="https://fabriziosalmi.github.io/mixi/guide/getting-started"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded p-0.5 text-zinc-600 hover:text-cyan-400 transition-colors"
+        title="Help & Documentation"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      </a>
+    </div>
     </div>
   </div>
 );
