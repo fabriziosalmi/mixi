@@ -129,7 +129,7 @@ const KillBtn: FC<{ killed: boolean; onKill: () => void }> = ({ killed, onKill }
       border: `1.5px solid ${killed ? 'var(--clr-kill)' : 'var(--srf-light)'}`,
       boxShadow: killed
         ? '0 0 10px rgba(220,38,38,0.35), inset 0 0 6px rgba(220,38,38,0.15)'
-        : 'inset 0 1px 2px rgba(0,0,0,0.4), 0 0 2px rgba(255,255,255,0.03)',
+        : 'inset 0 2px 4px rgba(0,0,0,0.7), inset 0 -1px 0 rgba(255,255,255,0.04)',
       borderRadius: 5,
     }}
   >

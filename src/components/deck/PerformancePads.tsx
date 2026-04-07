@@ -117,8 +117,10 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
 
       {/* ── FX toggle + Pads + Quantize strip ──────────────── */}
       <div className="flex gap-2 w-full">
-        {/* FX ON/OFF — left column, aligned with FX panel above */}
-        <div className="flex flex-col gap-2 shrink-0" style={{ width: 48 }}>
+        {/* FX ON/OFF — left column with header label */}
+        <div className="flex flex-col gap-1 shrink-0" style={{ width: 48 }}>
+          <span className="text-[8px] font-bold tracking-widest text-center uppercase"
+            style={{ color: 'var(--txt-muted)' }}>FX</span>
           <FxToggleButton deckId={deckId} unitKey="fx1" color={color} />
           <FxToggleButton deckId={deckId} unitKey="fx2" color={color} />
         </div>
