@@ -107,7 +107,7 @@ export const HudStatusBar: FC = () => {
         gridColumn: '1 / -1',
         gridTemplateColumns: 'subgrid',
         height: 18,
-        background: 'rgba(0,0,0,0.7)',
+        background: 'rgba(0,0,0,0.85)',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         opacity: 0.3,
         transition: 'opacity 0.3s ease',
