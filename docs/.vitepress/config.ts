@@ -1,6 +1,5 @@
 import { defineConfig } from 'vitepress';
 import fs from 'fs';
-import path from 'path';
 
 // Discover all 2-letter language codes in the docs directory
 const locales: Record<string, any> = {
@@ -11,8 +10,8 @@ try {
   const dirs = fs.readdirSync(__dirname + '/..');
   for (const dir of dirs) {
     if (/^[a-z]{2}$/.test(dir)) {
-      locales[dir] = { 
-        label: dir.toUpperCase(), 
+      locales[dir] = {
+        label: dir.toUpperCase(),
         lang: dir,
         link: `/${dir}/`
       };
@@ -27,22 +26,34 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/architecture' }
+      { text: 'Guide', link: '/guide/getting-started' }
     ],
     sidebar: [
       {
-        text: 'Introduction',
+        text: 'Getting Started',
         items: [
-          { text: 'Architecture Overview', link: '/guide/architecture' },
-          { text: 'Mixer & Deck Control', link: '/guide/mixer' },
+          { text: 'Quick Start', link: '/guide/getting-started' },
+          { text: 'Architecture', link: '/guide/architecture' },
         ]
       },
       {
-        text: 'Core Systems',
+        text: 'Mixing',
         items: [
-          { text: 'AI AutoMixEngine', link: '/guide/ai-automixer' },
-          { text: 'Groovebox & MIDI', link: '/guide/groovebox' },
-          { text: 'WebAudio & Memory', link: '/guide/webaudio' }
+          { text: 'Mixer & EQ', link: '/guide/mixer' },
+          { text: 'AI AutoMixer', link: '/guide/ai-automixer' },
+        ]
+      },
+      {
+        text: 'Instruments',
+        items: [
+          { text: 'Groovebox', link: '/guide/groovebox' },
+          { text: 'WebAudio Engine', link: '/guide/webaudio' },
+        ]
+      },
+      {
+        text: 'Reference',
+        items: [
+          { text: 'BPM Detection', link: '/BPM' },
         ]
       }
     ],
