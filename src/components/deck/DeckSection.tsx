@@ -14,7 +14,6 @@
 import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
-import { Knob } from '../controls/Knob';
 import { PremiumJogWheel } from './PremiumJogWheel';
 import { NeonPlayButton, NeonSyncButton } from './NeonTransport';
 import { TrackLoader } from './TrackLoader';
@@ -23,6 +22,7 @@ import { WaveformOverview } from './WaveformOverview';
 import { TrackInfo } from './TrackInfo';
 import { PerformancePads } from './PerformancePads';
 import { PitchStrip } from './PitchStrip';
+import { FxUnitPanel } from './FxUnitPanel';
 import type { DeckId } from '../../types';
 import { CAMELOT_KEY_COLORS, getContrastText } from '../../theme';
 import { HOUSE_DECKS } from '../../decks';
@@ -271,7 +271,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
 
           {/* FX Strip + Jog wheel + Pitch strip */}
           <div className="flex items-center flex-1 min-h-0 py-2">
-            <FxStrip deckId={deckId} color={color} />
+            <FxUnitPanel deckId={deckId} color={color} />
             <div className="flex flex-col items-center justify-center flex-1">
               <PremiumJogWheel deckId={deckId} color={color} size={320} />
               {/* Transport buttons — tight under wheel */}
@@ -340,116 +340,4 @@ const BeatCounter: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) =
   );
 };
 
-// ── FX Strip (left side, mirrors PitchStrip) ───────────────
-
-const GATE_LABELS = ['1/32', '1/16', '1/8', '1/4', '1/2'];
-function snapGate(v: number): number { return Math.round(v); }
-
-const FX_IDS = ['dly', 'rev', 'pha', 'flg', 'gate', 'crush', 'echo'] as const;
-
-const FxStrip: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
-  const [fx, setFx] = useState(() => Array<number>(FX_IDS.length).fill(0));
-  const [active, setActive] = useState(() => Array<boolean>(FX_IDS.length).fill(false));
-  const fxRef = useRef(fx);
-  useEffect(() => { fxRef.current = fx; }, [fx]);
-  const activeRef = useRef(active);
-  useEffect(() => { activeRef.current = active; }, [active]);
-
-  const labels = ['DLY', 'REV', 'PHA', 'FLG', 'GATE', 'CRU', 'ECH'];
-
-  const toggleFx = useCallback((i: number) => {
-    setActive((a) => {
-      const n = [...a]; n[i] = !n[i];
-      MixiEngine.getInstance().setDeckFx(deckId, FX_IDS[i], fxRef.current[i], n[i]);
-      return n;
-    });
-  }, [deckId]);
-
-  const setFxVal = useCallback((i: number, v: number) => {
-    setFx((f) => {
-      const n = [...f]; n[i] = v;
-      MixiEngine.getInstance().setDeckFx(deckId, FX_IDS[i], v, activeRef.current[i]);
-      return n;
-    });
-  }, [deckId]);
-
-  return (
-    <div
-      className="mixi-fx-strip flex flex-col items-center gap-1 shrink-0 py-1 px-1 rounded-md bg-zinc-900/50 overflow-y-auto"
-      style={{
-        width: 48,
-        border: '1px solid rgba(255,255,255,0.04)',
-        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.02)',
-      }}
-    >
-      {FX_IDS.map((_, i) => {
-        const isGate = FX_IDS[i] === 'gate';
-        return (
-          <FxSlot
-            key={i}
-            label={labels[i]}
-            value={fx[i]}
-            onChange={(v) => setFxVal(i, isGate ? snapGate(v) : v)}
-            active={active[i]}
-            onToggle={() => toggleFx(i)}
-            color={color}
-            min={isGate ? 0 : 0}
-            max={isGate ? 4 : 1}
-            valueLabel={isGate ? GATE_LABELS[Math.round(fx[i])] : undefined}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-const FxSlot: FC<{
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  active: boolean;
-  onToggle: () => void;
-  color: string;
-  min?: number;
-  max?: number;
-  valueLabel?: string;
-}> = ({ label, value, onChange, active, onToggle, color, min = 0, max = 1, valueLabel }) => {
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <Knob
-        value={value}
-        min={min}
-        max={max}
-        onChange={onChange}
-        color={active ? color : 'var(--txt-muted)'}
-        scale={0.7}
-        defaultValue={0}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        className="mixi-btn rounded flex items-center justify-center transition-all active:scale-95"
-        style={{
-          width: 36,
-          height: 18,
-          background: active ? `${color}25` : 'rgba(255,255,255,0.04)',
-          border: active ? `1px solid ${color}66` : '1px solid rgba(255,255,255,0.06)',
-          boxShadow: active
-            ? `0 0 10px ${color}44, inset 0 0 6px ${color}22, inset 0 1px 2px rgba(0,0,0,0.3)`
-            : 'inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.02)',
-          borderRadius: 4,
-        }}
-      >
-        <span
-          className="text-[7px] font-mono font-bold tracking-wider"
-          style={{
-            color: active ? color : 'var(--txt-muted)',
-            textShadow: active ? `0 0 6px ${color}88` : 'none',
-          }}
-        >
-          {active && valueLabel ? valueLabel : label}
-        </span>
-      </button>
-    </div>
-  );
-};
+// FxStrip replaced by FxUnitPanel (imported from ./FxUnitPanel.tsx)
