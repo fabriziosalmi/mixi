@@ -196,7 +196,7 @@ export const HudStatusBar: FC = () => {
           borderRight: '1px solid rgba(255,255,255,0.08)',
           padding: '0 15px',
           width: '70%',
-          maxWidth: 250,
+          maxWidth: 270,
         }}
       >
         {/* Green center gradient (subtle, dark→green→dark) */}
