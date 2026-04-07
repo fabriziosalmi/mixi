@@ -15,7 +15,6 @@ import type { FC } from 'react';
 import { MasterHud } from '../hud/MasterHud';
 import { AiControlPanel } from '../../ai/components/AiControlPanel';
 import { IntentDisplay } from '../../ai/components/IntentDisplay';
-import { HudDeckInfo } from './HudDeckInfo';
 import type { AIEngineState } from '../../ai/AutoMixEngine';
 
 interface HudLeftProps {
@@ -24,21 +23,16 @@ interface HudLeftProps {
 }
 
 export const HudLeft: FC<HudLeftProps> = ({ aiState, toggleAI }) => (
-  <div className="flex items-center gap-1.5 justify-self-start h-full">
-    {/* Master processing HUD */}
-    <div
-      className="flex items-center gap-2 rounded-md px-3 py-1 overflow-hidden h-full"
-      style={{
-        background: 'rgba(0,0,0,0.5)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-      }}
-    >
-      <MasterHud />
-      <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
-      <IntentDisplay engineState={aiState} />
-    </div>
-    {/* Deck A telemetry */}
-    <HudDeckInfo deckId="A" />
+  <div
+    className="flex items-center gap-2 justify-self-start rounded-md px-3 py-1 overflow-hidden h-full"
+    style={{
+      background: 'rgba(0,0,0,0.5)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+    }}
+  >
+    <MasterHud />
+    <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
+    <IntentDisplay engineState={aiState} />
   </div>
 );

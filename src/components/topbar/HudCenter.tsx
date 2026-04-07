@@ -15,6 +15,7 @@ import { useCallback, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MasterClock, useMidiClockActive, toggleMidiClock } from '../hud/MasterClock';
 import { CpuBadge, AudioOutDot } from '../hud/SystemHud';
+import { HudDeckInfo } from './HudDeckInfo';
 
 // ── QuantizeToggle (master, affects both decks) ────────────
 
@@ -74,34 +75,42 @@ const MidiClockToggle: FC = () => {
 // ── Main HudCenter Component ────────────────────────────────
 
 export const HudCenter: FC = () => (
-  <div
-    className="mixi-master-hud flex flex-col justify-self-stretch rounded-md px-3 py-1 overflow-hidden"
-    style={{
-      background: 'rgba(0,0,0,0.5)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-      minWidth: 0,
-      maxWidth: '100%',
-    }}
-  >
-    <div className="flex items-center justify-self-stretch gap-2">
-      <QuantizeToggle />
-      <div
-        className="mixi-master-hud flex flex-col flex-1 rounded-md px-3 py-1 overflow-hidden"
-        style={{
-          background: 'rgba(0,0,0,0.5)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
-          minWidth: 0,
-        }}
-      >
-        <div className="flex items-center justify-between w-full">
-          <MasterClock />
-          <AudioOutDot />
-          <CpuBadge />
+  <div className="flex items-center gap-1.5 justify-self-stretch h-full">
+    {/* Deck A — aligned right (adjacent to center) */}
+    <HudDeckInfo deckId="A" />
+
+    {/* Master HUD */}
+    <div
+      className="mixi-master-hud flex flex-col flex-1 justify-self-stretch rounded-md px-3 py-1 overflow-hidden h-full"
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+        minWidth: 0,
+      }}
+    >
+      <div className="flex items-center justify-self-stretch gap-2">
+        <QuantizeToggle />
+        <div
+          className="mixi-master-hud flex flex-col flex-1 rounded-md px-3 py-1 overflow-hidden"
+          style={{
+            background: 'rgba(0,0,0,0.5)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+            minWidth: 0,
+          }}
+        >
+          <div className="flex items-center justify-between w-full">
+            <MasterClock />
+            <AudioOutDot />
+            <CpuBadge />
+          </div>
         </div>
+        <MidiClockToggle />
       </div>
-      <MidiClockToggle />
     </div>
+
+    {/* Deck B — aligned left (adjacent to center) */}
+    <HudDeckInfo deckId="B" />
   </div>
 );
