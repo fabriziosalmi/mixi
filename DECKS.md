@@ -184,7 +184,23 @@ The default deck mode. Loads audio files, provides transport controls (play, pau
 Kick drum synthesizer with 16-step sequencer. Pitch/decay/click/drive synthesis, THUMP macro, dual valve distortion (tube + punch), filter + LFO, Berghain-style RUMBLE (dark reverb + sidechain pump).
 
 ### TurboBass
-TB-303 acid synth (inspired by [js303](https://github.com/thedjinn/js303)). Saw/square + sub-oscillator, analog drift, pre-filter drive, resonant LP filter (Q 26) + filter LFO, accent click, exponential slide. Rat-style distortion, ducking spring reverb, chorus, auto-pan, BPM-synced delay. ACID macro, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer.
+Acid synth v3 (inspired by [js303](https://github.com/thedjinn/js303)), rewritten with circuit-level DSP modeling.
+
+**Filter**: 4-pole diode ladder via AudioWorklet. Mismatched first pole (0.5x capacitance), per-sample tanh saturation, 2x oversampling, TPT zero-delay feedback. VT=0.4 (derived from geometric mean of pole signal levels), k_max=3.07 (Barkhausen criterion at 97%), resonance compensation sqrt(1+k), quadratic resonance curve.
+
+**Oscillator**: Sawtooth + variable duty-cycle pulse wave (derived from Fourier series, pitch-dependent 71%-45%). Sub-oscillator (sine, -1 octave). Analog drift LFO.
+
+**Envelope**: Bipolar filter envelope (spike -> undershoot 85% -> recovery). Octave-based env mod sweep (cutoff * 2^(envMod*7)). Exponential decay mapping (20ms-2s).
+
+**Accent**: Three-way interaction — filter depth boost sqrt(1+res*3), decay snap (20ms+10%), independent VCA boost. Resonance controls accent depth.
+
+**Controls**: Gate length (10%-100%), slide time (5ms-300ms exponential RC), filter tracking (logarithmic, Devil Fish mod), TIE (legato), copy/paste pattern.
+
+**FX**: Pre-filter HP (44Hz), drive (tanh saturation), Rat-style asymmetric distortion, BPM-synced delay with HP feedback, ducking spring reverb (synthetic IR), chorus, auto-pan, BPM-synced filter LFO.
+
+**Sequencer**: 32 factory patterns (4 banks x 8), 16/32 steps, accent/slide/tie/octave per step, scale-aware randomizer, pattern mutate/shift, ghost sequence. ACID macro.
+
+**UI**: Two-row knob layout (SYNTH | CONTROL | ACID + WAVE | TONE | EFFECTS). Filter visualizer, VFD display.
 
 ---
 

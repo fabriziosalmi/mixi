@@ -41,6 +41,14 @@ Deck A/B (TurboKick mode):
     → Filter+LFO → Delay → Rumble (dark reverb + sidechain pump)
       → DeckChannel.input → EQ → Fader → MasterBus
 
+Deck A/B (TurboBass mode):
+  MainOsc (saw/pulse) + SubOsc (sine, -1oct) → PreFilterHP (44Hz)
+    → Drive (tanh) → DiodeLadder (4-pole AudioWorklet, tanh saturation)
+      ↑ FilterLFO (BPM-synced) ↑ FilterEnv (bipolar, accent-modulated)
+    → VCA (2ms attack) → Dry + Distortion (Rat asymmetric)
+    → Delay (BPM-synced, HP feedback) → Bus (reverb, chorus, limiter)
+      → DeckChannel.input → EQ → Fader → MasterBus
+
   EQ Crossover (Linkwitz-Riley):
     Trim → LP₁→LP₂(250Hz) → lowGain  → merge
     Trim → HP₁→HP₂(250Hz) → LP₃→LP₄(4kHz) → midGain → merge
@@ -128,7 +136,7 @@ python main.py --port 7779
 |--------|-------------|
 | **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. Pluggable deck modes: Track, Groovebox, TurboKick, TurboBass. |
 | **TurboKick Deck** | Kick drum synthesizer + 16-step sequencer. THUMP macro, dual valves (tube + punch), filter + LFO, Berghain-style RUMBLE. |
-| **TurboBass Deck** | TB-303 acid synth. Saw/square + sub-oscillator, analog drift, pre-filter drive, resonant LP (Q 26) + filter LFO, accent click, exponential slide. Rat-style distortion, ducking spring reverb, chorus, auto-pan, BPM-synced delay. ACID macro, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer. |
+| **TurboBass Deck** | Acid synth with 4-pole diode ladder filter (AudioWorklet, mismatched first pole, per-sample tanh saturation, 2x oversampling). Mathematically derived DSP: VT from pole signal geometry, k_max from Barkhausen criterion, resonance compensation, quadratic curve. Saw + variable duty-cycle pulse wave, sub-oscillator, analog drift, pre-filter drive/HP. Bipolar filter envelope, octave-based env mod, accent with resonance-controlled depth. TIE (legato), gate length, slide time, filter tracking (Devil Fish mod). Rat-style distortion, ducking spring reverb, chorus, BPM-synced delay. ACID macro, copy/paste, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer. Two-row knob UI. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | 10 built-in: Filter, Delay, Reverb, Phaser, Flanger, Gate, Bitcrusher, Echo, Tape Stop, Noise. BPM-synced where applicable. Dry/wet gain-compensated. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
