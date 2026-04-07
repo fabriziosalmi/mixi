@@ -61,7 +61,7 @@ export const MasterVuMeter: FC = () => {
     const segColors = Array.from({ length: SEGMENT_COUNT }, (_, i) =>
       i >= 10 ? vuRed : i >= 8 ? vuAmber : vuGreen,
     );
-    const segGlows = segColors.map((c) => `0 0 4px ${c}44`);
+    const segGlows = segColors.map((c) => `0 0 6px ${c}66`);
 
     // Subscribe to shared MeterService (single RAF loop for all meters)
     return MeterService.subscribe((levels) => {
@@ -74,21 +74,21 @@ export const MasterVuMeter: FC = () => {
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex gap-[2px]">
         {/* Column L */}
-        <div ref={colLRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 140 }}>
+        <div ref={colLRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 160 }}>
           {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
             <div
               key={i}
-              className="w-[5px] flex-1 rounded-[1px]"
+              className="w-[8px] flex-1 rounded-[2px]"
               style={{ backgroundColor: 'var(--led-off)', opacity: 0.3, boxShadow: 'none' }}
             />
           ))}
         </div>
         {/* Column R */}
-        <div ref={colRRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 140 }}>
+        <div ref={colRRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 160 }}>
           {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
             <div
               key={i}
-              className="w-[5px] flex-1 rounded-[1px]"
+              className="w-[8px] flex-1 rounded-[2px]"
               style={{ backgroundColor: 'var(--led-off)', opacity: 0.3, boxShadow: 'none' }}
             />
           ))}

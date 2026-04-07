@@ -63,11 +63,11 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
     for (let i = SEGMENT_COUNT - 1; i >= 0; i--) {
       const seg = document.createElement('div');
       seg.style.flex = '1';
-      seg.style.width = '6px';
-      seg.style.borderRadius = '1px';
+      seg.style.width = '10px';
+      seg.style.borderRadius = '2px';
       seg.style.backgroundColor = ledOff;
       seg.style.opacity = '0.5';
-      seg.style.marginBottom = '3px';
+      seg.style.marginBottom = '2px';
       container.appendChild(seg);
       segments.unshift(seg); // segments[0] = bottom, segments[11] = top
     }
@@ -119,7 +119,7 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
           const c = segColors[i];
           seg.style.backgroundColor = c;
           seg.style.opacity = '1';
-          seg.style.boxShadow = `0 0 4px ${c}44`;
+          seg.style.boxShadow = `0 0 6px ${c}66`;
         } else {
           seg.style.backgroundColor = ledOff;
           seg.style.opacity = '0.5';
@@ -136,7 +136,7 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
       <div
         ref={containerRef}
         className="flex flex-col"
-        style={{ height: 140 }}
+        style={{ height: 160 }}
       />
       <span className="text-[7px] font-bold" style={{ color: deckId === 'A' ? 'var(--clr-a)' : 'var(--clr-b)' }}>
         {deckId}
