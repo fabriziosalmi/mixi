@@ -23,7 +23,14 @@ interface HudLeftProps {
 }
 
 export const HudLeft: FC<HudLeftProps> = ({ aiState, toggleAI }) => (
-  <div className="mixi-hud-group justify-self-start">
+  <div
+    className="flex items-center gap-2 justify-self-start rounded-md px-3 py-1 overflow-hidden"
+    style={{
+      background: 'rgba(0,0,0,0.5)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+    }}
+  >
     <MasterHud />
     <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
     <IntentDisplay engineState={aiState} />

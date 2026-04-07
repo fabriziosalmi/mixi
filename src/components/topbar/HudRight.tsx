@@ -29,11 +29,19 @@ export const HudRight: FC<HudRightProps> = ({
   toggleBrowser, browserOpen, vfxActive, setVfxActive,
   handlePanic, toggleSettings, updateAvailable,
 }) => (
-  <div className="flex items-center gap-2 justify-self-end">
-    <div className="mixi-hud-group h-full" style={{ minWidth: 200 }}>
+  <div
+    className="flex items-center gap-2 justify-self-end rounded-md px-3 py-1 overflow-hidden"
+    style={{
+      background: 'rgba(0,0,0,0.5)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+    }}
+  >
+    <div className="flex items-center h-full">
       <RecPanel />
     </div>
-    <div className="mixi-hud-group">
+    <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+    <div className="flex items-center gap-1.5">
       {/* Track Browser toggle */}
       <button
         type="button"
