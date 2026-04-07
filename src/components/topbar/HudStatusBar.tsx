@@ -99,9 +99,18 @@ const SymmetricMasterVu: FC = () => {
 
   return (
     <div className="flex items-center w-full h-full gap-0" title="Master Level">
-      {/* L channel — grows RIGHT-to-LEFT (from center to left edge) */}
+      {/* L channel — grows RIGHT-to-LEFT (center → left edge) */}
       <div className="flex-1 flex justify-end" style={{ height: 4 }}>
-        <div style={{ height: '100%', borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.04)' }} className="w-full relative">
+        <div
+          className="w-full relative"
+          style={{
+            height: '100%', borderRadius: 1,
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            // Fade from black on the right (center side) over 20px
+            maskImage: 'linear-gradient(to left, transparent 0px, black 20px)',
+            WebkitMaskImage: 'linear-gradient(to left, transparent 0px, black 20px)',
+          }}
+        >
           <div
             ref={barLRef}
             style={{
@@ -111,11 +120,20 @@ const SymmetricMasterVu: FC = () => {
           />
         </div>
       </div>
-      {/* Center divider line */}
-      <div style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
-      {/* R channel — grows LEFT-to-RIGHT (from center to right edge) */}
+      {/* Center gap (space for OUT dot) */}
+      <div style={{ width: 12, flexShrink: 0 }} />
+      {/* R channel — grows LEFT-to-RIGHT (center → right edge) */}
       <div className="flex-1" style={{ height: 4 }}>
-        <div style={{ height: '100%', borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.04)' }} className="w-full relative">
+        <div
+          className="w-full relative"
+          style={{
+            height: '100%', borderRadius: 1,
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            // Fade from black on the left (center side) over 20px
+            maskImage: 'linear-gradient(to right, transparent 0px, black 20px)',
+            WebkitMaskImage: 'linear-gradient(to right, transparent 0px, black 20px)',
+          }}
+        >
           <div
             ref={barRRef}
             style={{
