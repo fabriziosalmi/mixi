@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-04-08
+
+### Added
+- **First-run onboarding** — 4-step guided tutorial (Welcome, Mixer, Performance, Shortcuts). Shows on first launch, never again.
+- **Notification HUD** — dynamic-width toast area in topbar with global `notify.info/success/warn/error()` API. Auto-dismiss 3s.
+- **Help button** (?) — links to documentation, in right control group
+- **Audio latency badge** — shows baseLatency + outputLatency in ms after CPU badge, amber when > 20ms
+- **Undo system** — global undo stack (20 entries), Ctrl/Cmd+Z shortcut, hot cue deletion undoable with notification feedback
+- **Privacy policy** (PRIVACY.md) — zero data collection, all local storage documented, GDPR-compatible
+
+### Changed
+- **Topbar reorganized** — CPU moved to HudLeft, Q+M moved to HudRight before REC, HudCenter simplified to MasterClock only
+- **Deck info mirrored** — Deck B layout reversed (phase|BPM|B|dot) for symmetric visual alignment
+- **OUT indicator** — green dot only (no text label), 1px black border, centered on VU meter in status bar
+- **VU meter bars** — CSS mask fade from black over first 20px from center, 15px side padding
+- **Status bar VU** — center section narrowed (70%, max 200px)
+
+### Fixed
+- WCAG accessibility: `role="slider"`, `aria-valuemin/max/now`, `aria-label`, `tabIndex` on ALL Knob and Fader components app-wide
+
 ## [0.2.14] - 2026-04-07
 
 ### Added
