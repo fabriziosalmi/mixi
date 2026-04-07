@@ -304,6 +304,151 @@ pub fn detect_variable_tempo(
 }
 
 // ─────────────────────────────────────────────────────────────
+// Linear Regression (PLL drift + predictive phase)
+// ─────────────────────────────────────────────────────────────
+
+/// Compute linear regression slope from a sample array.
+/// X = index (0..N), Y = values. Returns 0 if < 10 samples.
+#[wasm_bindgen]
+pub fn linear_regression_slope(samples: &[f32]) -> f32 {
+    let n = samples.len();
+    if n < 10 { return 0.0; }
+
+    let mut sum_x: f64 = 0.0;
+    let mut sum_y: f64 = 0.0;
+    let mut sum_xy: f64 = 0.0;
+    let mut sum_x2: f64 = 0.0;
+
+    for i in 0..n {
+        let x = i as f64;
+        let y = samples[i] as f64;
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_x2 += x * x;
+    }
+
+    let nf = n as f64;
+    let denom = nf * sum_x2 - sum_x * sum_x;
+    if denom.abs() < 1e-12 { return 0.0; }
+    ((nf * sum_xy - sum_x * sum_y) / denom) as f32
+}
+
+/// Predictive phase correction: linear regression on a window of deltas,
+/// extrapolate ahead, return damped pre-compensation.
+///
+/// `deltas` — sliding window of phase deltas (max ~20 elements)
+/// `prediction_horizon` — how many ticks ahead to predict (default 2)
+/// `damping` — fraction of predicted drift to counteract (default 0.5)
+///
+/// Returns pre-compensation value (negate to apply).
+#[wasm_bindgen]
+pub fn predictive_phase_correction(deltas: &[f32], prediction_horizon: f32, damping: f32) -> f32 {
+    let n = deltas.len();
+    if n < 5 { return 0.0; }
+
+    let mut sum_x: f64 = 0.0;
+    let mut sum_y: f64 = 0.0;
+    let mut sum_xy: f64 = 0.0;
+    let mut sum_x2: f64 = 0.0;
+
+    for i in 0..n {
+        let x = i as f64;
+        let y = deltas[i] as f64;
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_x2 += x * x;
+    }
+
+    let nf = n as f64;
+    let denom = nf * sum_x2 - sum_x * sum_x;
+    if denom.abs() < 1e-12 { return 0.0; }
+
+    let slope = (nf * sum_xy - sum_x * sum_y) / denom;
+    let intercept = (sum_y - slope * sum_x) / nf;
+
+    let predicted = intercept + slope * (nf + prediction_horizon as f64);
+    (-predicted * damping as f64) as f32
+}
+
+// ─────────────────────────────────────────────────────────────
+// Auto-Cue Point Detection
+// ─────────────────────────────────────────────────────────────
+
+/// RMS of a window of audio samples (start_sec to end_sec).
+fn window_rms(data: &[f32], sr: f32, start_sec: f64, end_sec: f64) -> f32 {
+    let i0 = (start_sec * sr as f64).floor().max(0.0) as usize;
+    let i1 = (end_sec * sr as f64).ceil().min(data.len() as f64) as usize;
+    if i1 <= i0 { return 0.0; }
+    let sum: f64 = data[i0..i1].iter().map(|&s| (s as f64) * (s as f64)).sum();
+    ((sum / (i1 - i0) as f64).sqrt()) as f32
+}
+
+/// Find the optimal auto-cue point (first energetic downbeat).
+///
+/// Scans the beatgrid for the first beat with energy above -40 dBFS,
+/// then snaps to the nearest 4-beat bar boundary.
+///
+/// Returns cue time in seconds (guaranteed >= 0).
+#[wasm_bindgen]
+pub fn find_auto_cue_point(
+    data: &[f32],
+    sample_rate: f32,
+    duration: f32,
+    bpm: f32,
+    first_beat_offset: f64,
+) -> f64 {
+    if bpm <= 0.0 { return first_beat_offset; }
+
+    let beat_period = 60.0 / bpm as f64;
+    let max_scan_beats = 128;
+    let silence_threshold: f32 = 0.01; // ~-40 dBFS
+    let snap_tolerance: f64 = 0.1; // 100ms
+
+    // Step 1: Find first beat with energy
+    let mut raw_cue_beat: i32 = -1;
+    let mut raw_cue_time: f64 = -1.0;
+
+    for beat_num in 0..max_scan_beats {
+        let beat_time = first_beat_offset + beat_num as f64 * beat_period;
+        if beat_time >= duration as f64 { break; }
+
+        let rms = window_rms(data, sample_rate, beat_time - 0.005, beat_time + 0.050);
+        if rms > silence_threshold {
+            raw_cue_beat = beat_num;
+            raw_cue_time = beat_time;
+            break;
+        }
+    }
+
+    if raw_cue_time < 0.0 { return first_beat_offset; }
+
+    // Step 2: Snap to nearest downbeat (bar boundary)
+    let nearest_downbeat = ((raw_cue_beat as f64 / 4.0).round() * 4.0) as i32;
+    let snapped = first_beat_offset + nearest_downbeat as f64 * beat_period;
+
+    if (raw_cue_time - snapped).abs() < snap_tolerance {
+        return snapped.max(0.0);
+    }
+
+    // Step 3: Search next 3 downbeats for energy
+    let next_down = ((raw_cue_beat as f64 / 4.0).ceil() * 4.0) as i32;
+    for attempt in 0..3 {
+        let candidate_beat = next_down + attempt * 4;
+        let candidate_time = first_beat_offset + candidate_beat as f64 * beat_period;
+        if candidate_time >= duration as f64 { break; }
+
+        let rms = window_rms(data, sample_rate, candidate_time - 0.005, candidate_time + 0.050);
+        if rms > silence_threshold {
+            return candidate_time.max(0.0);
+        }
+    }
+
+    raw_cue_time.max(0.0)
+}
+
+// ─────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────
 
@@ -355,6 +500,48 @@ mod tests {
         let rms_orig: f32 = (signal.iter().map(|s| s * s).sum::<f32>() / signal.len() as f32).sqrt();
         let rms_low: f32 = (low.iter().map(|s| s * s).sum::<f32>() / low.len() as f32).sqrt();
         assert!(rms_low < rms_orig, "Low-pass should reduce high-frequency energy");
+    }
+
+    #[test]
+    fn linear_regression_flat_zero_slope() {
+        let samples = vec![5.0f32; 20];
+        let slope = linear_regression_slope(&samples);
+        assert!(slope.abs() < 0.001, "Constant values should have zero slope");
+    }
+
+    #[test]
+    fn linear_regression_positive_slope() {
+        let samples: Vec<f32> = (0..20).map(|i| i as f32 * 2.0).collect();
+        let slope = linear_regression_slope(&samples);
+        assert!((slope - 2.0).abs() < 0.01, "Slope should be ~2.0, got {slope}");
+    }
+
+    #[test]
+    fn predictive_phase_insufficient_data() {
+        let deltas = vec![0.1, 0.2, 0.3]; // only 3 < 5 minimum
+        assert_eq!(predictive_phase_correction(&deltas, 2.0, 0.5), 0.0);
+    }
+
+    #[test]
+    fn auto_cue_finds_first_beat() {
+        let sr = 44100.0;
+        let bpm = 120.0;
+        let beat_period = 60.0 / bpm as f64;
+        let duration = 10.0;
+        let len = (sr * duration as f32) as usize;
+        let mut data = vec![0.0f32; len];
+
+        // Put a click at beat 4 (first downbeat with energy)
+        let beat4_start = (4.0 * beat_period * sr as f64) as usize;
+        for i in beat4_start..(beat4_start + 100).min(len) {
+            data[i] = 0.5;
+        }
+
+        let cue = find_auto_cue_point(&data, sr, duration as f32, bpm, 0.0);
+        assert!(cue >= 0.0, "Cue should be non-negative");
+        // Should snap to beat 4 (a downbeat)
+        let expected = 4.0 * beat_period;
+        assert!((cue - expected).abs() < 0.15, "Cue {cue} should be near beat 4 at {expected}");
     }
 
     #[test]
