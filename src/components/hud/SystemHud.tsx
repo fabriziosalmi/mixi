@@ -160,7 +160,7 @@ export const AudioOutDot: FC = () => {
       style={{
         width: 8, height: 8,
         backgroundColor: color,
-        boxShadow: isRunning ? `0 0 6px ${color}` : 'none',
+        boxShadow: 'none',
         border: '1px solid #000',
       }}
     />
