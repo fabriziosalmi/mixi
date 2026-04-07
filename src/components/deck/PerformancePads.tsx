@@ -87,40 +87,29 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
 
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      {/* ── Mode selector ───────────────────────────────────── */}
-      <div className="flex gap-1 items-center">
-        <ModeTab
-          label="HOT CUE"
-          active={mode === 'hotcue'}
-          onClick={() => setMode('hotcue')}
-          color={color}
-        />
-        <ModeTab
-          label="AUTO LOOP"
-          active={mode === 'loop'}
-          onClick={() => setMode('loop')}
-          color="var(--clr-b)"
-        />
-        <ModeTab
-          label="BEAT JUMP"
-          active={mode === 'beatjump'}
-          onClick={() => setMode('beatjump')}
-          color="var(--clr-master)"
-        />
-        <ModeTab
-          label="LOOP ROLL"
-          active={mode === 'looproll'}
-          onClick={() => setMode('looproll')}
-          color="#22d3ee"
-        />
+      {/* ── Header row: FX | mode tabs | QT ─────────────────── */}
+      <div className="flex gap-2 items-end w-full">
+        {/* FX label — aligned with FX column below */}
+        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0"
+          style={{ color: 'var(--txt-muted)', width: 48 }}>FX</span>
+
+        {/* Mode tabs */}
+        <div className="flex gap-1 items-center flex-1">
+          <ModeTab label="HOT CUE" active={mode === 'hotcue'} onClick={() => setMode('hotcue')} color={color} />
+          <ModeTab label="AUTO LOOP" active={mode === 'loop'} onClick={() => setMode('loop')} color="var(--clr-b)" />
+          <ModeTab label="BEAT JUMP" active={mode === 'beatjump'} onClick={() => setMode('beatjump')} color="var(--clr-master)" />
+          <ModeTab label="LOOP ROLL" active={mode === 'looproll'} onClick={() => setMode('looproll')} color="#22d3ee" />
+        </div>
+
+        {/* QT label — aligned with quantize column below */}
+        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0"
+          style={{ color: 'var(--txt-muted)', width: 48 }}>QT</span>
       </div>
 
       {/* ── FX toggle + Pads + Quantize strip ──────────────── */}
       <div className="flex gap-2 w-full">
-        {/* FX ON/OFF — left column with header label */}
-        <div className="flex flex-col gap-1 shrink-0" style={{ width: 48 }}>
-          <span className="text-[8px] font-bold tracking-widest text-center uppercase"
-            style={{ color: 'var(--txt-muted)' }}>FX</span>
+        {/* FX ON/OFF — left column */}
+        <div className="flex flex-col gap-2 shrink-0" style={{ width: 48 }}>
           <FxToggleButton deckId={deckId} unitKey="fx1" color={color} />
           <FxToggleButton deckId={deckId} unitKey="fx2" color={color} />
         </div>
