@@ -16,12 +16,17 @@ import { type JS303Step, type JS303Pattern, MAX_STEPS } from './types';
 
 /** Build a step from compact notation: [note, gate, accent, slide, down, up] */
 function s(note: number, gate = true, accent = false, slide = false, down = false, up = false): JS303Step {
-  return { note, gate, accent, slide, down, up };
+  return { note, gate, accent, slide, tie: false, down, up };
+}
+
+/** Tied step: gate stays open from previous, no envelope re-trigger */
+function t(note: number, slide = false): JS303Step {
+  return { note, gate: true, accent: false, slide, tie: true, down: false, up: false };
 }
 
 /** Rest (gate off) */
 function r(note = 36): JS303Step {
-  return { note, gate: false, accent: false, slide: false, down: false, up: false };
+  return { note, gate: false, accent: false, slide: false, tie: false, down: false, up: false };
 }
 
 /** Pad pattern to 32 steps (second half rests by default) */
@@ -37,10 +42,10 @@ function pad(steps: JS303Step[]): JS303Step[] {
 const A01: JS303Pattern = {
   name: 'Acid Trax',
   steps: pad([
-    s(36), r(), s(36, true, true), r(),
+    s(36), r(), s(36, true, true), t(36),
     s(39), s(43, true, false, true), s(36), r(),
     s(36), s(48, true, true), r(), s(36),
-    s(39, true, false, true), s(43), s(36, true, true), r(),
+    s(39, true, false, true), t(39, true), s(36, true, true), r(),
   ]),
 };
 

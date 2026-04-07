@@ -57,6 +57,7 @@ export class JS303Engine {
   private _currentPattern = 0;
   private _patternSlots: JS303Step[][][] = []; // [bank][pattern][steps]
   private _crossfaderLink = false;
+  private _clipboard: JS303Step[] | null = null;
 
   // Iter 5: Ghost sequence
   private _ghostTimer: ReturnType<typeof setTimeout> | null = null;
@@ -306,7 +307,7 @@ export class JS303Engine {
     for (let i = 0; i < MAX_STEPS; i++) {
       const gate = Math.random() < density;
       if (!gate) {
-        steps.push({ note: rootNote, gate: false, accent: false, slide: false, down: false, up: false });
+        steps.push({ note: rootNote, gate: false, accent: false, slide: false, tie: false, down: false, up: false });
         continue;
       }
       // Pick note from scale within 2 octaves
@@ -322,11 +323,14 @@ export class JS303Engine {
       const prevGated = i > 0 && steps[i - 1].gate;
       const slide = prevGated && Math.random() < 0.15;
 
-      // Octave shifts: occasional
-      const up = !slide && Math.random() < 0.1;
-      const down = !up && !slide && Math.random() < 0.08;
+      // Tie: 10% probability on consecutive gated non-accented steps
+      const tie = prevGated && !accent && !slide && Math.random() < 0.1;
 
-      steps.push({ note, gate, accent, slide, down, up });
+      // Octave shifts: occasional
+      const up = !slide && !tie && Math.random() < 0.1;
+      const down = !up && !slide && !tie && Math.random() < 0.08;
+
+      steps.push({ note, gate, accent, slide, tie, down, up });
     }
 
     this._steps = steps;
@@ -389,6 +393,20 @@ export class JS303Engine {
     this._steps[0] = last;
     this.touchInteraction();
   }
+
+  // ── Copy / Paste Pattern ───────────────────────────────────
+
+  copyPattern(): void {
+    this._clipboard = this._steps.map(s => ({ ...s }));
+  }
+
+  pastePattern(): void {
+    if (!this._clipboard) return;
+    this._steps = this._clipboard.map(s => ({ ...s }));
+    this.touchInteraction();
+  }
+
+  get hasClipboard(): boolean { return this._clipboard !== null; }
 
   // ── Panic Reset (Iter 5) ──────────────────────────────────
 
@@ -455,11 +473,14 @@ export class JS303Engine {
       const gate = i < this._patternLength && Math.random() < 0.65;
       const degree = scale[Math.floor(Math.random() * scale.length)];
       const octave = Math.floor(Math.random() * 2);
+      const isSlide = gate && i > 0 && steps[i - 1]?.gate && Math.random() < 0.2;
+      const isAccent = gate && Math.random() < 0.25;
       steps.push({
         note: rootNote + degree + octave * 12,
         gate,
-        accent: gate && Math.random() < 0.25,
-        slide: gate && i > 0 && steps[i - 1]?.gate && Math.random() < 0.2,
+        accent: isAccent,
+        slide: isSlide,
+        tie: gate && !isAccent && !isSlide && i > 0 && steps[i - 1]?.gate && Math.random() < 0.1,
         down: false,
         up: gate && Math.random() < 0.08,
       });
@@ -498,20 +519,38 @@ export class JS303Engine {
       const nextStep = this._steps[nextIdx];
 
       if (step.gate) {
-        // Apply transpose + octave shifts
-        const semitones = step.note + this._transpose
-          + (step.up ? 12 : 0) + (step.down ? -12 : 0);
-        const tuningOffset = (this._synthParams.tuning - 0.5) * 24;
-        const freq = 440 * Math.pow(2, (semitones - 69 + tuningOffset) / 12);
+        // TIE: if this step is tied, the previous note continues —
+        // no new noteOn, no envelope re-trigger. Gate stays open.
+        // Slide+tie: pitch glides without new attack.
+        if (step.tie) {
+          // Only apply pitch change if slide is also active
+          if (step.slide) {
+            const semitones = step.note + this._transpose
+              + (step.up ? 12 : 0) + (step.down ? -12 : 0);
+            const tuningOffset = (this._synthParams.tuning - 0.5) * 24;
+            const freq = 440 * Math.pow(2, (semitones - 69 + tuningOffset) / 12);
+            // Glide to new pitch without re-triggering envelope
+            this.synth.noteOn(freq, this.nextStepTime, false, true);
+          }
+          // Don't schedule noteOff for tied steps — gate stays open
+        } else {
+          // Normal note trigger
+          const semitones = step.note + this._transpose
+            + (step.up ? 12 : 0) + (step.down ? -12 : 0);
+          const tuningOffset = (this._synthParams.tuning - 0.5) * 24;
+          const freq = 440 * Math.pow(2, (semitones - 69 + tuningOffset) / 12);
 
-        this.synth.noteOn(freq, this.nextStepTime, step.accent, step.slide);
-        this.bus.duckReverb(true);
+          this.synth.noteOn(freq, this.nextStepTime, step.accent, step.slide);
+          this.bus.duckReverb(true);
+        }
 
-        // Note off
-        const offTime = this.nextStepTime + stepDur * 0.8;
-        if (!nextStep.slide || !nextStep.gate) {
+        // Note off — only if next step is NOT continuing the gate
+        const nextContinues = nextStep.gate && (nextStep.slide || nextStep.tie);
+        if (!nextContinues) {
+          // Gate Length: 0→10%, 0.75→80% (default), 1→100% of step
+          const gateFrac = 0.1 + this._synthParams.gateLength * 0.9;
+          const offTime = this.nextStepTime + stepDur * gateFrac;
           this.synth.noteOff(offTime, false);
-          // Schedule reverb un-duck
           setTimeout(() => this.bus.duckReverb(false),
             Math.max(0, (offTime - this.ctx.currentTime) * 1000));
         }

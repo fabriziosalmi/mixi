@@ -59,8 +59,8 @@ function drawFilterCurve(
   ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
 
   // Compute LP response curve
-  const cutoffHz = 80 * Math.pow(200, cutoff);
-  const Q = 1 + resonance * 25;
+  const cutoffHz = 20 * Math.pow(900, cutoff);
+  const Q = 1 + resonance * 20;
   ctx.beginPath();
   for (let i = 0; i < w; i++) {
     // Log frequency: 20Hz → 20kHz
@@ -179,6 +179,17 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
     setSnapshot(s => {
       const newSteps = [...s.steps];
       newSteps[idx] = { ...newSteps[idx], slide: !newSteps[idx].slide };
+      return { ...s, steps: newSteps };
+    });
+  }, [snapshot.steps]);
+
+  const toggleTie = useCallback((idx: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.updateStep(idx, { tie: !snapshot.steps[idx].tie });
+    setSnapshot(s => {
+      const newSteps = [...s.steps];
+      newSteps[idx] = { ...newSteps[idx], tie: !newSteps[idx].tie };
       return { ...s, steps: newSteps };
     });
   }, [snapshot.steps]);
@@ -368,14 +379,14 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
       </div>
 
       {/* ═══ SEQUENCER — Roland-style horizontal rows ════════ */}
-      <div className="px-2 py-1 flex-1 flex flex-col min-h-0" style={{ borderBottom: sectionBorder }}>
+      <div className="px-2 py-0.5 shrink-0 flex flex-col" style={{ borderBottom: sectionBorder }}>
         {/* Render 1 or 2 pages of 16 steps depending on stepMode */}
         {Array.from({ length: stepMode === 32 ? 2 : 1 }, (_, row) => {
           const offset = row * STEP_COUNT;
           const stepsInRow = snapshot.steps.slice(offset, offset + STEP_COUNT);
 
           return (
-            <div key={`page-${row}`} className="flex flex-col flex-1 min-h-0"
+            <div key={`page-${row}`} className="flex flex-col"
               style={{ marginBottom: row === 0 && stepMode === 32 ? 3 : 0 }}>
 
               {/* Row label for 32-step mode */}
@@ -410,8 +421,8 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
                 })}
               </div>
 
-              {/* ── GATE buttons (fill available height) ───── */}
-              <div className="flex gap-0.5 flex-1 min-h-0 pl-[22px]">
+              {/* ── GATE buttons (compact fixed height) ───── */}
+              <div className="flex gap-0.5 pl-[22px]">
                 {stepsInRow.map((step, i) => {
                   const idx = offset + i;
                   const active = snapshot.currentStep === idx;
@@ -422,7 +433,7 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
                       onContextMenu={(e) => { e.preventDefault(); setShowNoteEditor(showNoteEditor === idx ? null : idx); }}
                       className="flex-1 rounded-sm cursor-pointer transition-all duration-75 active:scale-95 relative"
                       style={{
-                        minHeight: stepMode === 32 ? 16 : 24,
+                        height: stepMode === 32 ? 18 : 24,
                         marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0,
                         opacity: dimmed ? 0.2 : 1,
                         background: step.gate
@@ -496,6 +507,16 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
                 patternLength={snapshot.patternLength}
               />
 
+              {/* ── TIE row ────────────────────────────────── */}
+              <StepParamRow
+                label="TIE" labelColor="#22d3ee"
+                steps={stepsInRow} offset={offset}
+                isActive={(s) => s.tie && s.gate}
+                activeColor="#22d3ee"
+                onToggle={(idx) => toggleTie(idx)}
+                patternLength={snapshot.patternLength}
+              />
+
               {/* ── OCTAVE UP row ──────────────────────────── */}
               <StepParamRow
                 label="UP" labelColor={ACCENT_CLR}
@@ -520,51 +541,35 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
         })}
       </div>
 
-      {/* ═══ SYNTH + FX KNOBS ════════════════════════════════ */}
-      <div className="flex items-center overflow-hidden" style={{ borderBottom: sectionBorder }}>
-        {/* Filter Visualizer */}
-        <div className="flex flex-col items-center justify-center px-2" style={{ minWidth: 80 }}>
-          <canvas ref={filterCanvasRef} width={72} height={40}
-            className="rounded"
-            style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }} />
-          <span className="text-[6px] text-zinc-600 mt-0.5">FILTER</span>
-        </div>
+      {/* ═══ SYNTH + FX — Three-Row Layout ═════════════════ */}
+      <div className="flex flex-col shrink-0" style={{ borderBottom: sectionBorder }}>
 
-        {/* Synth Knobs */}
-        <div className="flex items-center gap-1.5 px-1 py-1">
-          <MiniKnob label="CUT" value={snapshot.synth.cutoff} onChange={(v: number) => setSynth('cutoff', v)} color={color} />
-          <MiniKnob label="RES" value={snapshot.synth.resonance} onChange={(v: number) => setSynth('resonance', v)} color={color} />
-          <MiniKnob label="ENV" value={snapshot.synth.envMod} onChange={(v: number) => setSynth('envMod', v)} color={color} />
-          <MiniKnob label="DEC" value={snapshot.synth.decay} onChange={(v: number) => setSynth('decay', v)} color={color} />
-          <MiniKnob label="ACC" value={snapshot.synth.accent} onChange={(v: number) => setSynth('accent', v)} color={ACCENT_CLR} />
-          <MiniKnob label="DRV" value={snapshot.synth.drive} onChange={(v: number) => setSynth('drive', v)} color={DIST_CLR} />
-          <MiniKnob label="SUB" value={snapshot.synth.subLevel} onChange={(v: number) => setSynth('subLevel', v)} color={color} />
-        </div>
+        {/* ── Row 1: MAIN CONTROLS — CUT RES ENV DEC (big knobs) + ACID ── */}
+        <div className="flex items-center justify-center gap-1 px-2 py-1.5"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+          {/* Filter Visualizer */}
+          <div className="flex flex-col items-center justify-center px-1" style={{ minWidth: 64 }}>
+            <canvas ref={filterCanvasRef} width={56} height={32}
+              className="rounded"
+              style={{
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }} />
+            <span className="text-[5px] text-zinc-600 mt-0.5 tracking-wider">FILTER</span>
+          </div>
 
-        {/* Divider */}
-        <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          {/* Big Knobs: CUT RES ENV DEC */}
+          <div className="flex items-center gap-3 px-2">
+            <BigKnob label="CUT" value={snapshot.synth.cutoff} onChange={(v: number) => setSynth('cutoff', v)} color={color} />
+            <BigKnob label="RES" value={snapshot.synth.resonance} onChange={(v: number) => setSynth('resonance', v)} color={color} />
+            <BigKnob label="ENV" value={snapshot.synth.envMod} onChange={(v: number) => setSynth('envMod', v)} color={color} />
+            <BigKnob label="DEC" value={snapshot.synth.decay} onChange={(v: number) => setSynth('decay', v)} color={color} />
+          </div>
 
-        {/* FX Knobs */}
-        <div className="flex items-center gap-1.5 px-1 py-1">
-          <MiniKnob label="DST" value={snapshot.fx.distShape} onChange={(v: number) => setFx('distShape', v)} color={DIST_CLR} />
-          <MiniKnob label="DLY" value={snapshot.fx.delaySend} onChange={(v: number) => setFx('delaySend', v)} color={SLIDE_CLR} />
-          <MiniKnob label="FB" value={snapshot.fx.delayFeedback} onChange={(v: number) => setFx('delayFeedback', v)} color={SLIDE_CLR} />
-          <MiniKnob label="REV" value={snapshot.fx.reverbSend} onChange={(v: number) => setFx('reverbSend', v)} color="#a855f7" />
-          <MiniKnob label="CHO" value={snapshot.fx.chorusMix} onChange={(v: number) => setFx('chorusMix', v)} color="#a855f7" />
-          <MiniKnob label="PAN" value={snapshot.fx.autoPan} onChange={(v: number) => setFx('autoPan', v)} color="#a855f7" />
-          <MiniKnob label="LFO" value={snapshot.fx.filterLfoDepth} onChange={(v: number) => setFx('filterLfoDepth', v)} color={color} />
-        </div>
+          <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
-        {/* Divider */}
-        <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
-
-        {/* Macro + Controls */}
-        <div className="flex items-center gap-2 px-2 py-1">
-          {/* ACID Macro — big knob */}
-          <div className="flex flex-col items-center gap-0.5">
+          {/* ACID Macro */}
+          <div className="flex flex-col items-center gap-0.5 px-2">
             <Knob value={snapshot.acidMacro} min={0} max={1}
               onChange={(v: number) => {
                 engineRef.current!.acidMacro = v;
@@ -573,16 +578,18 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
                   synth: { ...engineRef.current!.synthParams },
                 }));
               }}
-              color={ACID} scale={0.8} />
-            <span className="text-[8px] font-bold tracking-wider"
+              color={ACID} scale={0.7} />
+            <span className="text-[7px] font-bold tracking-wider"
               style={{ color: ACID, textShadow: `0 0 4px ${ACID}44` }}>ACID</span>
           </div>
 
-          {/* Wave toggle + Tune */}
-          <div className="flex flex-col gap-1">
+          <div className="w-px self-stretch my-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          {/* Wave toggle */}
+          <div className="flex flex-col items-center gap-1 px-1">
             <button type="button"
               onClick={() => setSynth('waveform', snapshot.synth.waveform > 0.5 ? 0 : 1)}
-              className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded"
+              className="text-[9px] font-mono font-bold px-2 py-0.5 rounded"
               style={{
                 color, border: `1px solid ${color}33`,
                 background: `${color}0a`,
@@ -591,6 +598,38 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
             </button>
             <MiniKnob label="TUNE" value={snapshot.synth.tuning}
               onChange={(v: number) => setSynth('tuning', v)} color={color} bipolar />
+          </div>
+        </div>
+
+        {/* ── Row 2: Tone + Control + Effects ─────────────────── */}
+        <div className="flex items-center px-1 py-0.5">
+          {/* Tone */}
+          <div className="flex items-center gap-1 px-1">
+            <MiniKnob label="ACC" value={snapshot.synth.accent} onChange={(v: number) => setSynth('accent', v)} color={ACCENT_CLR} />
+            <MiniKnob label="DRV" value={snapshot.synth.drive} onChange={(v: number) => setSynth('drive', v)} color={DIST_CLR} />
+            <MiniKnob label="SUB" value={snapshot.synth.subLevel} onChange={(v: number) => setSynth('subLevel', v)} color={color} />
+            <MiniKnob label="DFT" value={snapshot.synth.drift} onChange={(v: number) => setSynth('drift', v)} color="#666" />
+          </div>
+
+          <div className="w-px self-stretch my-0.5" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          {/* Control */}
+          <div className="flex items-center gap-1 px-1">
+            <MiniKnob label="GATE" value={snapshot.synth.gateLength} onChange={(v: number) => setSynth('gateLength', v)} color={SLIDE_CLR} />
+            <MiniKnob label="SLDT" value={snapshot.synth.slideTime} onChange={(v: number) => setSynth('slideTime', v)} color={SLIDE_CLR} />
+            <MiniKnob label="TRK" value={snapshot.synth.filterTracking} onChange={(v: number) => setSynth('filterTracking', v)} color={ACCENT_CLR} />
+          </div>
+
+          <div className="w-px self-stretch my-0.5" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          {/* Effects */}
+          <div className="flex items-center gap-1 px-1">
+            <MiniKnob label="DST" value={snapshot.fx.distShape} onChange={(v: number) => setFx('distShape', v)} color={DIST_CLR} />
+            <MiniKnob label="DLY" value={snapshot.fx.delaySend} onChange={(v: number) => setFx('delaySend', v)} color={SLIDE_CLR} />
+            <MiniKnob label="FB" value={snapshot.fx.delayFeedback} onChange={(v: number) => setFx('delayFeedback', v)} color={SLIDE_CLR} />
+            <MiniKnob label="REV" value={snapshot.fx.reverbSend} onChange={(v: number) => setFx('reverbSend', v)} color="#a855f7" />
+            <MiniKnob label="CHO" value={snapshot.fx.chorusMix} onChange={(v: number) => setFx('chorusMix', v)} color="#a855f7" />
+            <MiniKnob label="LFO" value={snapshot.fx.filterLfoDepth} onChange={(v: number) => setFx('filterLfoDepth', v)} color={color} />
           </div>
         </div>
       </div>
@@ -719,9 +758,9 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
       </div>
 
       {/* ═══ TRANSPORT ═══════════════════════════════════════ */}
-      <div className="flex items-center justify-between px-3 py-1.5">
+      <div className="flex items-center justify-between px-2 py-1">
         <button type="button" onClick={togglePlay}
-          className="px-4 py-1.5 rounded font-bold text-[10px] tracking-widest transition-all active:scale-95"
+          className="px-3 py-1 rounded font-bold text-[9px] tracking-widest transition-all active:scale-95"
           style={{
             border: `1px solid ${snapshot.isPlaying ? color : 'rgba(255,255,255,0.1)'}`,
             color: snapshot.isPlaying ? '#fff' : 'var(--txt-muted)',
@@ -734,35 +773,47 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
           {snapshot.isPlaying ? '■ STOP' : '▶ ENGAGE'}
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <MiniKnob label="SWG" value={snapshot.swing}
             onChange={(v: number) => { engineRef.current!.swing = v; setSnapshot(s => ({ ...s, swing: v })); }}
             color="var(--txt-muted)" max={0.5} />
           <MiniKnob label="VOL" value={snapshot.masterVolume}
             onChange={(v: number) => { engineRef.current!.masterVolume = v; setSnapshot(s => ({ ...s, masterVolume: v })); }}
             color="var(--txt-muted)" />
-          <MiniKnob label="DFT" value={snapshot.synth.drift}
-            onChange={(v: number) => setSynth('drift', v)} color="#666" />
 
-          <div className="w-px h-4" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <div className="w-px h-3" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
-          {/* Action Buttons */}
           <button type="button" onClick={doRandomize}
-            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
+            className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
             style={{ color: ACID, border: `1px solid ${ACID}33` }}>RND</button>
           <button type="button" onClick={() => doMutate(0.3)}
-            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
+            className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
             style={{ color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}>MUT</button>
           <button type="button"
+            onClick={() => { engineRef.current?.copyPattern(); }}
+            className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
+            style={{ color: SLIDE_CLR, border: `1px solid ${SLIDE_CLR}33` }}>CPY</button>
+          <button type="button"
+            onClick={() => {
+              engineRef.current?.pastePattern();
+              setSnapshot(s => ({ ...s, steps: engineRef.current!.steps.map(st => ({ ...st })) }));
+            }}
+            className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
+            style={{
+              color: engineRef.current?.hasClipboard ? SLIDE_CLR : '#444',
+              border: `1px solid ${engineRef.current?.hasClipboard ? SLIDE_CLR + '33' : '#333'}`,
+            }}>PST</button>
+
+          <div className="w-px h-3" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+          <button type="button"
             onClick={() => { engineRef.current?.clearPattern(); setSnapshot(s => ({ ...s, steps: s.steps.map(st => ({ ...st, gate: false })) })); }}
-            className="text-[8px] font-bold text-zinc-500 hover:text-red-400 px-1.5 py-0.5 rounded active:scale-95"
+            className="text-[7px] font-bold text-zinc-500 hover:text-red-400 px-1 py-0.5 rounded active:scale-95"
             style={{ border: '1px solid #333' }}>CLR</button>
           <button type="button"
             onClick={() => { engineRef.current?.resetPattern(); setSnapshot(s => ({ ...s, steps: defaultSteps() })); }}
-            className="text-[8px] font-bold text-zinc-500 hover:text-white px-1.5 py-0.5 rounded active:scale-95"
+            className="text-[7px] font-bold text-zinc-500 hover:text-white px-1 py-0.5 rounded active:scale-95"
             style={{ border: '1px solid #333' }}>RST</button>
-
-          {/* PANIC */}
           <button type="button"
             onClick={() => {
               engineRef.current?.panic();
@@ -773,21 +824,15 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
                 acidMacro: 0,
               }));
             }}
-            className="text-[8px] font-bold px-1.5 py-0.5 rounded active:scale-95 transition-all"
-            style={{
-              color: DIST_CLR,
-              border: `1px solid ${DIST_CLR}44`,
-              textShadow: `0 0 4px ${DIST_CLR}44`,
-            }}>PANIC</button>
-
-          {/* Crossfader Link */}
+            className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
+            style={{ color: DIST_CLR, border: `1px solid ${DIST_CLR}33` }}>PNC</button>
           <button type="button"
             onClick={() => {
               const e = engineRef.current;
               if (e) e.crossfaderLink = !snapshot.crossfaderLink;
               setSnapshot(s => ({ ...s, crossfaderLink: !s.crossfaderLink }));
             }}
-            className="text-[8px] font-bold px-1 py-0.5 rounded"
+            className="text-[7px] font-bold px-1 py-0.5 rounded"
             style={{
               color: snapshot.crossfaderLink ? ACCENT_CLR : '#555',
               border: `1px solid ${snapshot.crossfaderLink ? ACCENT_CLR + '44' : '#333'}`,
@@ -822,7 +867,7 @@ const StepParamRow: FC<{
           onClick={() => onToggle(idx)}
           className="flex-1 cursor-pointer rounded-sm transition-all active:scale-90"
           style={{
-            height: 16,
+            height: 12,
             marginRight: i % 4 === 3 && i < STEP_COUNT - 1 ? 4 : 0,
             opacity: dimmed ? 0.15 : 1,
             background: active
@@ -854,5 +899,22 @@ const MiniKnob: FC<{
       color={color} scale={0.55}
       bipolar={bipolar} center={bipolar ? (min + max) / 2 : undefined} />
     <span className="text-[7px] font-bold tracking-wide" style={{ color: '#555' }}>{label}</span>
+  </div>
+);
+
+// ── Big Knob wrapper (for main synth controls) ─────────────
+
+const BigKnob: FC<{
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
+  min?: number;
+  max?: number;
+}> = ({ label, value, onChange, color, min = 0, max = 1 }) => (
+  <div className="flex flex-col items-center gap-0.5">
+    <Knob value={value} min={min} max={max} onChange={onChange}
+      color={color} scale={0.75} />
+    <span className="text-[8px] font-bold tracking-wider" style={{ color }}>{label}</span>
   </div>
 );

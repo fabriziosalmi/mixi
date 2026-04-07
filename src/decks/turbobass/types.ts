@@ -13,7 +13,8 @@ export const PATTERNS_PER_BANK = 8;
 export type SynthParamId =
   | 'cutoff' | 'resonance' | 'envMod' | 'decay'
   | 'accent' | 'tuning' | 'waveform'
-  | 'drive' | 'subLevel' | 'drift';
+  | 'drive' | 'subLevel' | 'drift'
+  | 'gateLength' | 'slideTime' | 'filterTracking';
 
 // ── FX Params ───────────────────────────────────────────────
 // Iter 2: added reverb, chorus, autoPan, filterLfo
@@ -31,6 +32,7 @@ export interface JS303Step {
   accent: boolean;
   slide: boolean;
   gate: boolean;
+  tie: boolean;
   down: boolean;
   up: boolean;
 }
@@ -81,6 +83,9 @@ export function defaultSynth(): Record<SynthParamId, number> {
     drive: 0,       // pre-filter saturation
     subLevel: 0.3,  // sub-oscillator mix
     drift: 0.3,     // analog drift amount
+    gateLength: 0.75, // 10%–100% of step duration (default ~80%)
+    slideTime: 0.15,  // 5ms–200ms glide constant (default ~34ms)
+    filterTracking: 0, // pitch→cutoff tracking (Devil Fish mod, 0=off)
   };
 }
 
@@ -106,6 +111,7 @@ export function defaultSteps(): JS303Step[] {
     accent: i % 4 === 2,
     slide: i % 8 === 7,
     gate: i < STEP_COUNT ? i % 2 === 0 : false,
+    tie: false,
     down: false,
     up: false,
   }));
