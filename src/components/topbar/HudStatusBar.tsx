@@ -116,17 +116,17 @@ export const HudStatusBar: FC = () => {
       <div className="truncate">
         <span
           ref={textRef}
-          className="text-[10px] font-mono tracking-wide"
-          style={{ color: 'var(--txt-muted)' }}
+          className="text-[9px] font-sans font-medium tracking-wider uppercase"
+          style={{ color: 'var(--txt-muted)', letterSpacing: '0.08em' }}
         >
-          MIXI v0.2.12 ready
+          MIXI V0.2.12 READY
         </span>
       </div>
 
       {/* Center — alerts / system messages */}
       <div className="flex justify-center truncate">
         <span
-          className="text-[10px] font-mono tracking-wide"
+          className="text-[9px] font-sans font-medium tracking-wider uppercase"
           style={{ color: 'rgba(255,255,255,0.15)' }}
         >
           ●
@@ -136,7 +136,7 @@ export const HudStatusBar: FC = () => {
       {/* Right — deck B context / notifications */}
       <div className="flex justify-end truncate">
         <span
-          className="text-[9px] font-mono tracking-wide"
+          className="text-[9px] font-sans font-medium tracking-wider uppercase"
           style={{ color: 'rgba(255,255,255,0.15)' }}
         />
       </div>
