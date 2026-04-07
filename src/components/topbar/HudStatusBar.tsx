@@ -4,22 +4,22 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// HUD Status Bar — Real-time feedback ticker
+// HUD Status Bar — Real-time feedback + symmetric master meter
 //
-// Full-width row below the topbar HUD. Shows:
-//   - Parameter changes (knob/fader touch → "CUTOFF 2.4kHz")
-//   - Alerts & notifications (limiter clip, sync lost, etc.)
-//   - System messages (pattern loaded, recording started)
+// Full-width row below the topbar HUD, 3-column subgrid:
+//   Left:   param feedback text (deck A context)
+//   Center: symmetric master VU — starts from center,
+//           L goes left, R goes right.
+//           Green at center → yellow → red at edges.
+//   Right:  notifications text (deck B context)
 //
-// Messages auto-fade after 2s. Uses a global event bus
-// (HudStatus.show()) so any component can push messages.
-// Direct DOM mutation for zero re-renders during performance.
+// Divisors isolate the center section visually.
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, type FC } from 'react';
+import { MixiEngine } from '../../audio/MixiEngine';
 
 // ── Global Status Bus ───────────────────────────────────────
-// Any component can call HudStatus.show('message', 'type')
 
 type StatusType = 'info' | 'param' | 'alert' | 'success';
 
@@ -34,35 +34,24 @@ type StatusListener = (msg: StatusMessage) => void;
 const listeners = new Set<StatusListener>();
 
 export const HudStatus = {
-  /** Show a message in the status bar. Auto-fades after 2s. */
   show(text: string, type: StatusType = 'info'): void {
     const msg: StatusMessage = { text, type, timestamp: Date.now() };
     for (const fn of listeners) fn(msg);
   },
-
-  /** Show a parameter change (most common usage) */
   param(label: string, value: string): void {
     this.show(`${label}  ${value}`, 'param');
   },
-
-  /** Show an alert */
   alert(text: string): void {
     this.show(text, 'alert');
   },
-
-  /** Show a success notification */
   success(text: string): void {
     this.show(text, 'success');
   },
-
-  /** Subscribe to status updates (internal) */
   _subscribe(fn: StatusListener): () => void {
     listeners.add(fn);
     return () => listeners.delete(fn);
   },
 };
-
-// ── Color mapping ───────────────────────────────────────────
 
 const TYPE_COLORS: Record<StatusType, string> = {
   info: 'var(--txt-muted)',
@@ -71,28 +60,88 @@ const TYPE_COLORS: Record<StatusType, string> = {
   success: 'var(--status-ok)',
 };
 
+// ── Symmetric Master VU ─────────────────────────────────────
+// L channel grows left from center, R channel grows right.
+// Color: green at center → yellow at 60% → red at 85%.
+
+const SymmetricMasterVu: FC = () => {
+  const barLRef = useRef<HTMLDivElement>(null);
+  const barRRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let raf = 0;
+    let skip = false;
+    function tick() {
+      skip = !skip;
+      if (!skip) {
+        const engine = MixiEngine.getInstance();
+        if (engine.isInitialized && barLRef.current && barRRef.current) {
+          const level = engine.getMasterLevel();
+          const pct = Math.min(100, Math.max(0, level * 100));
+          // Color based on level: green → yellow → red
+          const color = pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
+          // L bar grows left (width = pct/2 % of half)
+          barLRef.current.style.width = `${pct}%`;
+          barLRef.current.style.backgroundColor = color;
+          barLRef.current.style.boxShadow = pct > 10 ? `0 0 4px ${color}66` : 'none';
+          // R bar grows right
+          barRRef.current.style.width = `${pct}%`;
+          barRRef.current.style.backgroundColor = color;
+          barRRef.current.style.boxShadow = pct > 10 ? `0 0 4px ${color}66` : 'none';
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="flex items-center w-full h-full gap-0" title="Master Level">
+      {/* L channel — grows RIGHT-to-LEFT (from center to left edge) */}
+      <div className="flex-1 flex justify-end" style={{ height: 4 }}>
+        <div style={{ height: '100%', borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.04)' }} className="w-full relative">
+          <div
+            ref={barLRef}
+            style={{
+              position: 'absolute', right: 0, top: 0, height: '100%',
+              width: '0%', borderRadius: 1, transition: 'none',
+            }}
+          />
+        </div>
+      </div>
+      {/* Center divider line */}
+      <div style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
+      {/* R channel — grows LEFT-to-RIGHT (from center to right edge) */}
+      <div className="flex-1" style={{ height: 4 }}>
+        <div style={{ height: '100%', borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.04)' }} className="w-full relative">
+          <div
+            ref={barRRef}
+            style={{
+              position: 'absolute', left: 0, top: 0, height: '100%',
+              width: '0%', borderRadius: 1, transition: 'none',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Component ───────────────────────────────────────────────
 
 export const HudStatusBar: FC = () => {
   const textRef = useRef<HTMLSpanElement>(null);
-  const barRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
 
   useEffect(() => {
     return HudStatus._subscribe((msg) => {
       const el = textRef.current;
-      const bar = barRef.current;
-      if (!el || !bar) return;
-
-      // Clear previous fade timer
+      if (!el) return;
       clearTimeout(timerRef.current);
-
-      // Set text and color
       el.textContent = msg.text;
       el.style.color = TYPE_COLORS[msg.type];
       el.style.opacity = '1';
-
-      // Auto-dim text after 2s
       timerRef.current = setTimeout(() => {
         if (el) el.style.opacity = '0.4';
       }, 2000);
@@ -101,7 +150,6 @@ export const HudStatusBar: FC = () => {
 
   return (
     <div
-      ref={barRef}
       className="grid items-center px-4 overflow-hidden"
       style={{
         gridColumn: '1 / -1',
@@ -123,14 +171,15 @@ export const HudStatusBar: FC = () => {
         </span>
       </div>
 
-      {/* Center — alerts / system messages */}
-      <div className="flex justify-center truncate">
-        <span
-          className="text-[9px] font-sans font-medium tracking-wider uppercase"
-          style={{ color: 'rgba(255,255,255,0.15)' }}
-        >
-          ●
-        </span>
+      {/* Center — Symmetric Master VU Meter with divisors */}
+      <div
+        className="flex items-center h-full justify-self-stretch px-2"
+        style={{
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        <SymmetricMasterVu />
       </div>
 
       {/* Right — deck B context / notifications */}

@@ -14,10 +14,9 @@
 // Each knob has an SVG icon above and smart label/value below.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useState, useEffect, useRef, useMemo, type FC } from 'react';
+import { useCallback, useState, useEffect, useRef, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
-import { MeterService } from '../../audio/MeterService';
 import { Knob } from '../controls/Knob';
 import { COLOR_MASTER } from '../../theme';
 import { isGhost } from '../../ai/ghostFields';
@@ -113,7 +112,6 @@ export const MasterHud: FC = () => {
         defaultValue={1}
         iconScale={0.8}
       />
-      <MiniVu />
       <HudKnob
         value={filterKnob} min={-1} max={1}
         onChange={onFilterChange}
@@ -184,47 +182,6 @@ const HudKnob: FC<HudKnobProps> = ({
         scale={0.65} ghost={ghost}
         defaultValue={defaultValue} bipolar={bipolar}
       />
-    </div>
-  );
-};
-
-// ── Mini Master VU (2 bars, direct DOM at 30fps) ──────────
-
-const MiniVu: FC = () => {
-  const barLRef = useRef<HTMLDivElement>(null);
-  const barRRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    return MeterService.subscribe((levels) => {
-      if (barLRef.current && barRRef.current) {
-        const pct = Math.min(100, Math.max(0, levels.master * 100));
-        const color = pct > 85 ? 'var(--status-error)' : pct > 60 ? 'var(--status-warn)' : 'var(--status-ok)';
-        barLRef.current.style.width = `${pct}%`;
-        barLRef.current.style.backgroundColor = color;
-        barRRef.current.style.width = `${pct}%`;
-        barRRef.current.style.backgroundColor = color;
-      }
-    });
-  }, []);
-
-  const barStyle = useMemo(() => ({
-    height: 3,
-    width: '0%',
-    borderRadius: 1,
-    transition: 'none',
-  }), []);
-
-  const trackStyle = useMemo(() => ({
-    width: 40,
-    height: 3,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  }), []);
-
-  return (
-    <div className="flex flex-col gap-[2px] justify-center" title="Master Level">
-      <div style={trackStyle}><div ref={barLRef} style={barStyle} /></div>
-      <div style={trackStyle}><div ref={barRRef} style={barStyle} /></div>
     </div>
   );
 };
