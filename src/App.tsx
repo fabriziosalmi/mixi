@@ -224,6 +224,7 @@ const App: FC = () => {
         style={{
           gridColumn: '1 / -1',
           gridTemplateColumns: 'subgrid',
+          background: 'rgba(0,0,0,0.6)',
           ...(panicFlash ? { backgroundColor: 'rgba(220,38,38,0.15)', borderColor: 'rgba(220,38,38,0.4)' } : {}),
         }}
       >
