@@ -72,7 +72,7 @@ After loading, MIXI automatically analyzes the track:
 
 1. **Decoding audio** — Browser decodes the file to PCM
 2. **Analyzing waveform** — Generates visual waveform data (serialized to avoid concurrent OfflineAudioContext limits)
-3. **Detecting BPM & key** — Multi-band onset detection, comb filter resonator, PLL grid alignment, Goertzel chromagram for musical key
+3. **Detecting BPM & key** — 7-estimator BPM detection via [open-bpm](https://github.com/fabriziosalmi/open-bpm) (IOI, Comb, AC, Spectral FFT, Hopf, Tempogram, Low-band AC), Goertzel chromagram for musical key
 4. **Setting cue point** — Auto-seeks to the first energetic downbeat
 
 **Auto-gain**: Track trim is normalized so peaks reach 0 dBFS, clamped to range [0.5×, 2.0×].

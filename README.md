@@ -143,7 +143,7 @@ python main.py --port 7779
 | **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
 | **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
 | **Groovebox Deck** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
-| **BPM/Key Detection** | Multi-band onset detection (low/mid/high), comb filter resonator bank + IOI histogram fusion, PLL grid offset, genre-aware octave resolution. Two-speed API (fast <50ms + full). Goertzel chromagram for key (Camelot). Rust/Wasm. |
+| **BPM/Key Detection** | Powered by [open-bpm](https://github.com/fabriziosalmi/open-bpm): 7-estimator architecture (IOI + Comb + AC + Spectral FFT + Hopf + Tempogram + Low-band AC), SuperFlux onset detection, metrical fusion for octave resolution. 68.8% Acc1 on GiantSteps, 8.5:1 vs librosa. Two-speed API (fast + full). Goertzel chromagram for key (Camelot). Pure Rust/Wasm — no browser pre-processing. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter. MIDI Clock Out/In (24 ppqn) for external gear sync. |
 | **MIXI Sync** | Binary sync protocol (64-byte UDP packets, port 4303). PID phase lock, auto-discovery, master election, predictive VJ triggers. BroadcastChannel fallback for browser. |
 | **Beatmatching** | Aerospace-grade PLL phase correction, harmonic sync, predictive phase, differential phase overlay, variable beatgrid, onset correlation, groove offset, drift compensation, audio clock reconciliation. |

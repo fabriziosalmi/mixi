@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-08
+
+### Breaking
+- **BPM detection engine replaced** — mixi-core's single-estimator BPM detector (846 lines, IOI histogram) replaced by [open-bpm](https://github.com/fabriziosalmi/open-bpm) as Cargo dependency. 7-estimator architecture with SuperFlux onset detection and metrical fusion. GiantSteps Acc1: 55% → 68.8%. Same wasm-bindgen API — zero TypeScript changes required.
+
+### Added
+- open-bpm integration: IOI + Comb + Autocorrelation + Spectral FFT + Hopf Oscillator + Tempogram + Low-band AC estimators
+- Segmented consensus analysis (3 chunks at 15%, 40%, 70% of track)
+- Metrical fusion for octave resolution (2×, ÷2, 4/3, 3/4) + EDM zone heuristics
+- SuperFlux onset detection with 3-band weighted merge
+
+### Changed
+- bpm.rs: 846 → 165 lines (thin wrapper around open-bpm)
+- No browser OfflineAudioContext needed for BPM (pure Rust)
+- Detection speed: ~300ms pure Rust (was ~500ms OfflineAudioContext + ~6ms Rust)
+
+### Performance
+- BPM accuracy: 68.8% Acc1 on GiantSteps 664 tracks (+25% relative)
+- Real tracks: 86.7% accuracy on 45 multi-genre tracks
+- vs librosa: 8.5:1 head-to-head (265:31 on 296 tracks)
+
 ## [0.2.15] - 2026-04-08
 
 ### Added
