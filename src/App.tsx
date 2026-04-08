@@ -84,6 +84,11 @@ const App: FC = () => {
   const [panicFlash, setPanicFlash] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
+  // Fetch external deck plugins from mixi-decks registry
+  useEffect(() => {
+    deckRegistry.fetchFromRemote().catch(() => {});
+  }, []);
+
   // Listen for update-available notification from main process
   useEffect(() => {
     const mixi = (window as unknown as { mixi?: { onUpdateAvailable?: (cb: (v: string) => void) => void } }).mixi;

@@ -33,6 +33,7 @@ import { MobileLandscape } from './components/mobile/MobileLandscape';
 import { MobilePortrait } from './components/mobile/MobilePortrait';
 import { MobileInitGate } from './components/mobile/MobileInitGate';
 import { mobilePanic } from './components/mobile/mobilePanic';
+import { deckRegistry } from './decks/registry';
 
 // ── Shake detection constants ────────────────────────────────
 
@@ -55,6 +56,11 @@ export default function MobileApp() {
   }, []);
 
   const orientation = lockedOrientation ?? liveOrientation;
+
+  // Fetch external deck plugins from mixi-decks registry
+  useEffect(() => {
+    deckRegistry.fetchFromRemote().catch(() => {});
+  }, []);
 
   // Prevent pull-to-refresh and overscroll on mobile
   useEffect(() => {
