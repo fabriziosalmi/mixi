@@ -18,7 +18,7 @@
 
 import { Suspense, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
-import { HOUSE_DECKS } from '../../decks';
+import { deckRegistry } from '../../decks/registry';
 import type { DeckId } from '../../types';
 
 interface MobileDeckSlotProps {
@@ -33,7 +33,7 @@ export const MobileDeckSlot: FC<MobileDeckSlotProps> = ({ deckId, color }) => {
   // Track mode → handled by the layout (DeckRow / DeckCard)
   if (mode === 'track') return null;
 
-  const deck = HOUSE_DECKS.find((d) => d.mode === mode);
+  const deck = deckRegistry.findByMode(mode);
 
   // Has mobile component → lazy render
   if (deck?.mobileComponent) {

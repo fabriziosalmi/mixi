@@ -17,7 +17,7 @@
 
 import { useState, useCallback, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
-import { HOUSE_DECKS } from '../../decks';
+import { deckRegistry } from '../../decks/registry';
 import type { DeckId, DeckMode } from '../../types';
 
 interface MobileDeckPickerProps {
@@ -29,7 +29,7 @@ export const MobileDeckPicker: FC<MobileDeckPickerProps> = ({ deckId }) => {
   const mode = useMixiStore((s) => s.deckModes[deckId]);
   const setDeckMode = useMixiStore((s) => s.setDeckMode);
 
-  const currentDeck = HOUSE_DECKS.find((d) => d.mode === mode);
+  const currentDeck = deckRegistry.findByMode(mode);
   const currentLabel = mode === 'track' ? 'TRACK' : (currentDeck?.label ?? mode.toUpperCase());
   const currentColor = mode === 'track' ? '#888' : (currentDeck?.accentColor ?? '#888');
 
@@ -112,7 +112,7 @@ export const MobileDeckPicker: FC<MobileDeckPickerProps> = ({ deckId }) => {
         />
 
         {/* House decks */}
-        {HOUSE_DECKS.map((deck) => (
+        {deckRegistry.getAll().map((deck) => (
           <PickerOption
             key={deck.mode}
             label={deck.label}

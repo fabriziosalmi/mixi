@@ -152,8 +152,11 @@ export interface AiState {
 /** Crossfader curve type. */
 export type CrossfaderCurve = 'smooth' | 'sharp';
 
-/** What occupies a deck slot – a normal track player or a house deck module. */
-export type DeckMode = 'track' | 'groovebox' | 'turbokick' | 'js303';
+/** Built-in deck modes shipped with MIXI. */
+export type BuiltInDeckMode = 'track' | 'groovebox' | 'turbokick' | 'js303';
+
+/** What occupies a deck slot – a built-in mode or an external plugin mode. */
+export type DeckMode = BuiltInDeckMode | (string & {});
 
 /** Full mixer surface state – what an external controller (or AI agent) sees. */
 export interface MixerState {

@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [react(), wasm(), topLevelAwait()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __MIXI_VERSION__: JSON.stringify(pkg.version),
   },
   base: './',
   server: {

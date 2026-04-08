@@ -33,7 +33,7 @@ import {
   type FormEvent,
 } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
-import { HOUSE_DECKS } from '../../decks';
+import { deckRegistry } from '../../decks/registry';
 import { useMixiStore } from '../../store/mixiStore';
 import { log } from '../../utils/logger';
 import type { DeckId, DeckMode } from '../../types';
@@ -409,7 +409,7 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
             or load module
           </span>
           <div className="grid grid-cols-3 gap-2">
-            {HOUSE_DECKS.map((deck) => {
+            {deckRegistry.getAll().map((deck) => {
               const inUseOnOther = otherDeckMode === deck.mode;
               return (
                 <button

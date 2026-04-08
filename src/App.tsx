@@ -20,7 +20,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAIEngine } from './ai/useAIEngine';
 import { AiDebugPanel } from './ai/components/AiDebugPanel';
 import { DeckSection } from './components/deck/DeckSection';
-import { HOUSE_DECKS } from './decks';
+import { deckRegistry } from './decks/registry';
 import { Suspense } from 'react';
 import { MixerSection } from './components/mixer/MixerSection';
 import { SettingsModal } from './components/settings/SettingsModal';
@@ -53,7 +53,7 @@ const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const setDeckMode = useMixiStore((s) => s.setDeckMode);
 
   // Check house decks registry first
-  const houseDeck = HOUSE_DECKS.find((d) => d.mode === mode);
+  const houseDeck = deckRegistry.findByMode(mode);
   if (houseDeck) {
     const Comp = houseDeck.component;
     return (

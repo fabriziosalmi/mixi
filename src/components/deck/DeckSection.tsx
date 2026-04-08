@@ -26,7 +26,7 @@ import { FxUnitPanel } from './FxUnitPanel';
 import { BeatgridEditor } from './BeatgridEditor';
 import type { DeckId } from '../../types';
 import { CAMELOT_KEY_COLORS } from '../../theme';
-import { HOUSE_DECKS } from '../../decks';
+import { deckRegistry } from '../../decks/registry';
 
 interface DeckSectionProps {
   deckId: DeckId;
@@ -124,7 +124,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   }, [deckId, bpmInput]);
 
   // ── Module-aware gradient header ────────────────────────
-  const activeModule = HOUSE_DECKS.find(d => d.mode === deckMode);
+  const activeModule = deckRegistry.findByMode(deckMode);
   const moduleColor = activeModule?.accentColor;
 
   const otherDeckId: DeckId = deckId === 'A' ? 'B' : 'A';
