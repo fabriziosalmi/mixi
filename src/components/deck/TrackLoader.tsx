@@ -71,6 +71,108 @@ const MODULE_SUBS: Record<string, string> = {
   js303: 'Acid Synth',
 };
 
+// ── Module Picker (scales to 250+ decks) ─────────────────────
+
+import type { HouseDeckEntry } from '../../decks/index';
+
+const ModulePicker: FC<{
+  allDecks: HouseDeckEntry[];
+  otherDeckMode?: string;
+  otherDeckId?: string;
+  onSelect: (mode: DeckMode) => void;
+}> = ({ allDecks, otherDeckMode, otherDeckId, onSelect }) => {
+  const [search, setSearch] = useState('');
+  const filtered = search
+    ? allDecks.filter(d =>
+        d.label.toLowerCase().includes(search.toLowerCase()) ||
+        d.mode.toLowerCase().includes(search.toLowerCase()))
+    : allDecks;
+
+  return (
+    <div className="flex flex-col gap-1.5 pt-2 mt-2 border-t border-zinc-800/20">
+      <div className="flex items-center gap-2">
+        <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-[0.2em]">
+          modules
+        </span>
+        <span className="text-[8px] font-mono text-zinc-700">
+          {filtered.length}/{allDecks.length}
+        </span>
+      </div>
+      {allDecks.length > 8 && (
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search modules..."
+          className="
+            w-full px-2 py-1 rounded text-[10px] font-mono
+            bg-zinc-900 border border-zinc-800 text-zinc-300
+            placeholder:text-zinc-700 outline-none
+            focus:border-zinc-600 transition-colors
+          "
+        />
+      )}
+      <div
+        className="grid gap-1"
+        style={{
+          gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+          maxHeight: allDecks.length > 12 ? '200px' : undefined,
+          overflowY: allDecks.length > 12 ? 'auto' : undefined,
+        }}
+      >
+        {filtered.map((deck) => {
+          const inUse = otherDeckMode === deck.mode;
+          const hasIcon = !!MODULE_ICONS[deck.mode];
+          return (
+            <button
+              key={deck.mode}
+              type="button"
+              onClick={() => onSelect(deck.mode)}
+              className="
+                group flex flex-col items-center justify-center rounded
+                transition-all duration-100 active:scale-95 cursor-pointer
+              "
+              style={{
+                padding: hasIcon ? '5px 3px 3px' : '6px 3px',
+                background: '#141414',
+                border: `1px solid ${deck.accentColor}18`,
+                opacity: inUse ? 0.45 : 1,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = `${deck.accentColor}55`;
+                e.currentTarget.style.background = `${deck.accentColor}08`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = `${deck.accentColor}18`;
+                e.currentTarget.style.background = '#141414';
+              }}
+              title={MODULE_SUBS[deck.mode] || (deck as any).manifest?.description || deck.label}
+            >
+              {hasIcon && (
+                <div className="opacity-35 group-hover:opacity-80 transition-opacity" style={{ color: deck.accentColor }}>
+                  {MODULE_ICONS[deck.mode]}
+                </div>
+              )}
+              <span
+                className="text-[8px] font-mono font-bold uppercase tracking-wide leading-tight text-center truncate w-full"
+                style={{ color: deck.accentColor }}
+              >
+                {deck.label}
+              </span>
+              {MODULE_SUBS[deck.mode] && (
+                <span className="text-[6px] text-zinc-600 font-mono leading-tight truncate w-full text-center">{MODULE_SUBS[deck.mode]}</span>
+              )}
+              {inUse && (
+                <span className="text-[6px] text-zinc-600 font-mono">on {otherDeckId}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ── Config ───────────────────────────────────────────────────
 
 import { API_BASE } from '../../utils/apiBase';
@@ -402,78 +504,14 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         <p className="text-[11px] text-red-400 leading-tight">{errorMsg}</p>
       )}
 
-      {/* ── House deck module picker (MPC-style cards) ─────── */}
+      {/* ── Module picker (searchable, scrollable) ─────────── */}
       {onSwitchModule && (
-        <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-zinc-800/20">
-          <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-[0.2em]">
-            or load module
-          </span>
-          <div className="grid grid-cols-3 gap-2">
-            {deckRegistry.getAll().map((deck) => {
-              const inUseOnOther = otherDeckMode === deck.mode;
-              return (
-                <button
-                  key={deck.mode}
-                  type="button"
-                  onClick={() => onSwitchModule(deck.mode)}
-                  className="
-                    group flex flex-col items-center gap-1 rounded-lg
-                    px-2 py-3 transition-all duration-150
-                    active:scale-95 cursor-pointer
-                  "
-                  style={{
-                    background: '#1a1a1a',
-                    borderTop: '1px solid #333',
-                    borderLeft: '1px solid #2a2a2a',
-                    borderRight: '1px solid #222',
-                    borderBottom: '1px solid #111',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 4px rgba(0,0,0,0.4)',
-                    opacity: inUseOnOther ? 0.6 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      `inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 8px ${deck.accentColor}20, 0 0 1px ${deck.accentColor}44`;
-                    e.currentTarget.style.borderColor = `${deck.accentColor}33`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      'inset 0 1px 0 rgba(255,255,255,0.03), 0 2px 4px rgba(0,0,0,0.4)';
-                    e.currentTarget.style.borderColor = '';
-                    e.currentTarget.style.borderTop = '1px solid #333';
-                    e.currentTarget.style.borderLeft = '1px solid #2a2a2a';
-                    e.currentTarget.style.borderRight = '1px solid #222';
-                    e.currentTarget.style.borderBottom = '1px solid #111';
-                  }}
-                >
-                  {/* Module icon */}
-                  <div
-                    className="opacity-50 group-hover:opacity-90 transition-opacity"
-                    style={{ color: deck.accentColor }}
-                  >
-                    {MODULE_ICONS[deck.mode] ?? null}
-                  </div>
-                  {/* Label */}
-                  <span
-                    className="text-[10px] font-mono font-bold uppercase tracking-widest"
-                    style={{ color: deck.accentColor }}
-                  >
-                    {deck.label}
-                  </span>
-                  {/* Subtitle */}
-                  <span className="text-[8px] text-zinc-500 font-mono">
-                    {MODULE_SUBS[deck.mode] ?? ''}
-                  </span>
-                  {/* "In use" indicator */}
-                  {inUseOnOther && (
-                    <span className="text-[7px] text-zinc-500 font-mono mt-0.5">
-                      Active on {otherDeckId}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <ModulePicker
+          allDecks={deckRegistry.getAll()}
+          otherDeckMode={otherDeckMode}
+          otherDeckId={otherDeckId}
+          onSelect={onSwitchModule}
+        />
       )}
     </div>
   );
