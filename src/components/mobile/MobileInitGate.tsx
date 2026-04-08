@@ -138,9 +138,10 @@ export const MobileInitGate: FC<MobileInitGateProps> = ({ onInit, children }) =>
           fontWeight: 900,
           letterSpacing: 12,
           fontFamily: 'var(--font-mono)',
-          background: loading
-            ? '#444'
+          backgroundImage: loading
+            ? 'none'
             : 'linear-gradient(135deg, #00f0ff 0%, #a855f7 50%, #ff6a00 100%)',
+          backgroundColor: loading ? '#444' : undefined,
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
