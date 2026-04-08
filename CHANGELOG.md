@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-04-08
+
+### Added
+- **Beatgrid Editor** (Phase 1+3) — DOM overlay macro-drag + GRID panel with SET downbeat, micro-nudge ±1ms, halve/double BPM, reset to auto
+- **Settings**: crossfader curve (smooth/sharp), pitch range (±8/16/50%), privacy/docs/changelog links in credits
+
+### Fixed
+- **Beat offset snapped to first kick** — open-bpm returned modular phase [0, beat_period); now walks grid to find first onset with RMS > -40dBFS
+- **Sync rate clamp removed** — was ±8%, now unlimited (full BPM range like Traktor)
+- **Pitch fader locks when synced** — prevents accidental rate override; shows "SYNC" label
+- **Panic requires double-press** — first press = dim flash (armed), second within 500ms = execute
+
+### UI Review (Industrial Design Overhaul)
+- Waveform: deck-tinted palette (cyan A / orange B), mono overview silhouette, white laser playhead
+- VU meters: segments 6→10px wide, columns 140→160px tall, glow 50% brighter
+- Kill buttons: deeper inset shadow (recessed hardware look)
+- Fader groove: near-black (#080808) with 3px/6px shadows (deep metal cut)
+- Pitch/FX modules: hardware chassis (rgba(20,20,22,0.7) + border + inset shadow)
+- Nudge buttons: 34×24→38×28px with thicker arrows
+- Track title: 12→14px, brighter (zinc-200)
+- Key badges: always white text + colored glow (WCAG pass on all Camelot colors)
+- FX/QT headers: gray 2px underline aligned with pad mode tabs
+- Status bar: aggressive gradient (transparent edges → black center), no static text
+
+### Privacy
+- Complete disclosure: all 3 watermark tiers, all 11 localStorage keys, update check clarified
+
 ## [0.3.0] - 2026-04-08
 
 ### Breaking
