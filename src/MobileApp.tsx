@@ -18,15 +18,20 @@
 // across orientation changes — zero audio interruption.
 //
 // Features:
+//   - AudioContext init gate (iOS Safari requires user gesture)
+//   - useMixiSync bridge (store↔engine forwarding)
 //   - Shake-to-panic: shaking the phone resets all EQ/FX/loops
 //   - Overscroll prevention
+//   - Safe area inset handling
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef } from 'react';
-import { useOrientation } from './hooks/useOrientation';
+import { useEffect, useRef, useState } from 'react';
+import { useOrientation, type Orientation } from './hooks/useOrientation';
 import { useHaptics } from './hooks/useHaptics';
+import { useMixiSync } from './hooks/useMixiSync';
 import { MobileLandscape } from './components/mobile/MobileLandscape';
 import { MobilePortrait } from './components/mobile/MobilePortrait';
+import { MobileInitGate } from './components/mobile/MobileInitGate';
 import { mobilePanic } from './components/mobile/mobilePanic';
 
 // ── Shake detection constants ────────────────────────────────
@@ -36,8 +41,20 @@ const SHAKE_CONSECUTIVE = 3;      // samples above threshold to trigger
 const SHAKE_DEBOUNCE_MS = 2000;   // min time between panic triggers
 
 export default function MobileApp() {
-  const orientation = useOrientation();
+  const liveOrientation = useOrientation();
   const haptics = useHaptics();
+  const { initEngine } = useMixiSync();
+  const [lockedOrientation, setLockedOrientation] = useState<Orientation | null>(null);
+
+  // Expose lock toggle for child components via a global
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__mixiLockOrientation = (lock: Orientation | null) => {
+      setLockedOrientation(lock);
+    };
+    return () => { delete (window as unknown as Record<string, unknown>).__mixiLockOrientation; };
+  }, []);
+
+  const orientation = lockedOrientation ?? liveOrientation;
 
   // Prevent pull-to-refresh and overscroll on mobile
   useEffect(() => {
@@ -78,7 +95,13 @@ export default function MobileApp() {
     return () => window.removeEventListener('devicemotion', handler);
   }, [haptics]);
 
-  return orientation === 'landscape'
+  const layout = orientation === 'landscape'
     ? <MobileLandscape />
     : <MobilePortrait />;
+
+  return (
+    <MobileInitGate onInit={initEngine}>
+      {layout}
+    </MobileInitGate>
+  );
 }

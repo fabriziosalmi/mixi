@@ -39,6 +39,11 @@ const Root = isMobile
   ? lazy(() => import('./MobileApp'))
   : lazy(() => import('./DesktopRoot'));
 
+// ── PWA service worker registration (mobile only) ──────────
+if ('serviceWorker' in navigator && isMobile) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

@@ -46,13 +46,13 @@ export const MobileDeckPicker: FC<MobileDeckPickerProps> = ({ deckId }) => {
       <button
         onClick={() => setOpen(true)}
         style={{
-          height: 22,
-          padding: '0 6px',
+          height: 40,
+          padding: '0 10px',
           border: `1px solid ${currentColor}66`,
-          borderRadius: 3,
+          borderRadius: 6,
           background: `${currentColor}15`,
           color: currentColor,
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: 700,
           fontFamily: 'var(--font-mono)',
           cursor: 'pointer',

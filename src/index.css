@@ -916,3 +916,16 @@ body::after {
   filter: blur(30px);
   z-index: -1;
 }
+
+/* ── Mobile: button press states ─────────────────────────── */
+/* Applied globally to all buttons on touch devices.          */
+/* Since mobile components use inline styles, CSS :active     */
+/* is the only way to add press feedback without JS state.    */
+
+@media (pointer: coarse) {
+  button:active {
+    opacity: 0.7;
+    transform: scale(0.96);
+    transition: opacity 50ms, transform 50ms;
+  }
+}

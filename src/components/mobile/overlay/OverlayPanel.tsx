@@ -19,7 +19,7 @@ import { useCallback, useRef, useState, type FC, type ReactNode } from 'react';
 import type { DeckId } from '../../../types';
 import { COLOR_DECK_A, COLOR_DECK_B } from '../../../theme';
 
-export type OverlayTab = 'eq' | 'pads';
+export type OverlayTab = 'eq' | 'pads' | 'fx' | 'hp';
 
 interface OverlayPanelProps {
   isOpen: boolean;
@@ -34,6 +34,8 @@ interface OverlayPanelProps {
 const TABS: { id: OverlayTab; label: string }[] = [
   { id: 'eq', label: 'EQ' },
   { id: 'pads', label: 'PADS' },
+  { id: 'fx', label: 'FX' },
+  { id: 'hp', label: 'HP' },
 ];
 
 export const OverlayPanel: FC<OverlayPanelProps> = ({

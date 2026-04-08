@@ -30,15 +30,21 @@
 // All touch targets ≥ 48×48px
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useRef, useState, type FC } from 'react';
+import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
-import { COLOR_DECK_A, COLOR_DECK_B } from '../../theme';
+import { MixiEngine } from '../../audio/MixiEngine';
+import { COLOR_DECK_A, COLOR_DECK_B, CUE_COLORS } from '../../theme';
 import { useHaptics } from '../../hooks/useHaptics';
 import { MobileWaveform } from './MobileWaveform';
+import { MobileVuMeter } from './MobileVuMeter';
+import { MobileWaveformOverview } from './MobileWaveformOverview';
 import { OverlayPanel, type OverlayTab } from './overlay/OverlayPanel';
 import { OverlayEQ } from './overlay/OverlayEQ';
 import { OverlayPads } from './overlay/OverlayPads';
+import { OverlayFX } from './overlay/OverlayFX';
+import { OverlayHeadphones } from './overlay/OverlayHeadphones';
 import { MobileBrowser } from './MobileBrowser';
+import { MobileTrackLoader } from './MobileTrackLoader';
 import { mobilePanic } from './mobilePanic';
 import { MobileDeckSlot } from './MobileDeckSlot';
 import { MobileDeckPicker } from './MobileDeckPicker';
@@ -47,6 +53,29 @@ import type { DeckId } from '../../types';
 // ── Constants ────────────────────────────────────────────────
 
 const COLORS: Record<DeckId, string> = { A: COLOR_DECK_A, B: COLOR_DECK_B };
+
+// ── Time formatter ──────────────────────────────────────────
+
+function fmtTime(s: number): string {
+  if (s <= 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function useCurrentTime(deckId: DeckId): number {
+  const [time, setTime] = useState(0);
+  useEffect(() => {
+    const tick = () => {
+      const engine = MixiEngine.getInstance();
+      setTime(engine.isInitialized ? engine.getCurrentTime(deckId) : 0);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [deckId]);
+  return time;
+}
 
 // ── DeckCard ─────────────────────────────────────────────────
 
@@ -58,19 +87,27 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
   const trackName = useMixiStore((s) => s.decks[deckId].trackName);
   const isSynced = useMixiStore((s) => s.decks[deckId].isSynced);
   const volume = useMixiStore((s) => s.decks[deckId].volume);
+  const musicalKey = useMixiStore((s) => s.decks[deckId].musicalKey);
+  const duration = useMixiStore((s) => s.decks[deckId].duration);
+  const hotCues = useMixiStore((s) => s.decks[deckId].hotCues);
+  const activeLoop = useMixiStore((s) => s.decks[deckId].activeLoop);
   const setPlaying = useMixiStore((s) => s.setDeckPlaying);
   const syncDeck = useMixiStore((s) => s.syncDeck);
   const unsyncDeck = useMixiStore((s) => s.unsyncDeck);
   const setVolume = useMixiStore((s) => s.setDeckVolume);
 
+  const currentTime = useCurrentTime(deckId);
+  const cueCount = hotCues.filter((c) => c !== null).length;
+  const haptics = useHaptics();
+
   const togglePlay = useCallback(
-    () => setPlaying(deckId, !isPlaying),
-    [deckId, isPlaying, setPlaying],
+    () => { setPlaying(deckId, !isPlaying); haptics.tick(); },
+    [deckId, isPlaying, setPlaying, haptics],
   );
 
   const toggleSync = useCallback(
-    () => (isSynced ? unsyncDeck(deckId) : syncDeck(deckId)),
-    [deckId, isSynced, syncDeck, unsyncDeck],
+    () => { isSynced ? unsyncDeck(deckId) : syncDeck(deckId); haptics.snap(); },
+    [deckId, isSynced, syncDeck, unsyncDeck, haptics],
   );
 
   // ── Volume slider ──
@@ -96,14 +133,14 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         background: '#111',
         borderRadius: 8,
         border: `1px solid ${color}33`,
-        padding: 12,
+        padding: 10,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 6,
       }}
     >
-      {/* ── Header: label + track name ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* ── Header: label + track name + cue dots + loop ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span
           style={{
             fontSize: 11,
@@ -113,13 +150,13 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             flexShrink: 0,
           }}
         >
-          DECK {deckId}
+          {deckId}
         </span>
         <span
           style={{
             flex: 1,
-            fontSize: 12,
-            color: '#999',
+            fontSize: 11,
+            color: '#888',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -127,24 +164,44 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         >
           {trackName || 'No track loaded'}
         </span>
+        {/* Hot cue indicators */}
+        {cueCount > 0 && (
+          <span style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            {hotCues.slice(0, 4).map((c, i) => (
+              <span key={i} style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: c !== null ? CUE_COLORS[i % CUE_COLORS.length] : '#333',
+              }} />
+            ))}
+          </span>
+        )}
+        {activeLoop && (
+          <span style={{ fontSize: 8, color: '#22c55e', fontFamily: 'var(--font-mono)', fontWeight: 700, flexShrink: 0 }}>
+            LOOP
+          </span>
+        )}
       </div>
 
-      {/* ── Waveform ── */}
-      <MobileWaveform deckId={deckId} height={40} color={color} />
+      {/* ── Waveform overview + scrolling waveform ── */}
+      <MobileWaveformOverview deckId={deckId} color={color} />
+      <div style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : '1px solid transparent' }}>
+        <MobileWaveform deckId={deckId} height={48} color={color} />
+      </div>
+      <MobileVuMeter deckId={deckId} color={color} />
 
-      {/* ── Controls row: Play | BPM | Sync ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* ── Controls row: Play | BPM+Key | Time | Sync ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button
           onClick={togglePlay}
           style={{
-            width: 48,
-            height: 48,
+            width: 44,
+            height: 44,
             flexShrink: 0,
             border: `2px solid ${isPlaying ? color : '#444'}`,
             borderRadius: '50%',
             background: isPlaying ? `${color}22` : 'transparent',
             color: isPlaying ? color : '#888',
-            fontSize: 18,
+            fontSize: 16,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -157,31 +214,34 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
           {isPlaying ? '❚❚' : '▶'}
         </button>
 
-        <div
-          style={{
-            flex: 1,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 22,
-            fontWeight: 700,
-            color: color,
-            textAlign: 'center',
-          }}
-        >
-          {bpm > 0 ? bpm.toFixed(1) : '---.-'}
-          <span style={{ fontSize: 10, color: '#555', marginLeft: 4 }}>BPM</span>
+        {/* BPM + key */}
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color }}>
+            {bpm > 0 ? bpm.toFixed(1) : '---.-'}
+          </span>
+          {musicalKey && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#888', marginLeft: 6, fontWeight: 600 }}>
+              {musicalKey}
+            </span>
+          )}
         </div>
+
+        {/* Elapsed / duration */}
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#555', flexShrink: 0 }}>
+          {fmtTime(currentTime)}/{fmtTime(duration)}
+        </span>
 
         <button
           onClick={toggleSync}
           style={{
-            width: 56,
+            width: 48,
             height: 36,
             flexShrink: 0,
             border: `1px solid ${isSynced ? '#a855f7' : '#444'}`,
             borderRadius: 6,
             background: isSynced ? '#a855f722' : 'transparent',
             color: isSynced ? '#a855f7' : '#666',
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 700,
             fontFamily: 'var(--font-mono)',
             cursor: 'pointer',
@@ -353,6 +413,7 @@ const PortraitDeckArea: FC<{
         {mode === 'track' && (
           <>
             <PortraitToolBtn label="EQ" onClick={() => openOverlay('eq', deckId)} />
+            <PortraitToolBtn label="FX" onClick={() => openOverlay('fx', deckId)} />
             <PortraitToolBtn label="PADS" onClick={() => openOverlay('pads', deckId)} />
           </>
         )}
@@ -371,11 +432,13 @@ export const MobilePortrait: FC = () => {
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [overlayTab, setOverlayTab] = useState<OverlayTab>('eq');
   const [overlayDeck, setOverlayDeck] = useState<DeckId>('A');
+  const [loaderOpen, setLoaderOpen] = useState(false);
 
   const openOverlay = useCallback((tab: OverlayTab, deck: DeckId) => {
     setOverlayTab(tab);
     setOverlayDeck(deck);
     setOverlayOpen(true);
+    setLoaderOpen(false);
   }, []);
 
   return (
@@ -390,6 +453,8 @@ export const MobilePortrait: FC = () => {
         fontFamily: 'var(--font-ui)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
       {/* Header */}
@@ -404,7 +469,28 @@ export const MobilePortrait: FC = () => {
           flexShrink: 0,
         }}
       >
-        <div style={{ width: 48 }} />
+        <button
+          onClick={() => setLoaderOpen(!loaderOpen)}
+          style={{
+            width: 48,
+            height: 28,
+            border: `1px solid ${loaderOpen ? '#888' : '#333'}`,
+            borderRadius: 4,
+            background: loaderOpen ? '#ffffff11' : 'transparent',
+            color: loaderOpen ? '#aaa' : '#666',
+            fontSize: 18,
+            fontWeight: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+          aria-label="Add tracks"
+        >
+          +
+        </button>
         <span
           style={{
             fontSize: 14,
@@ -437,14 +523,17 @@ export const MobilePortrait: FC = () => {
         </button>
       </div>
 
-      {/* Decks + Crossfader */}
+      {/* Decks + Crossfader — scrollable on small screens */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           gap: 4,
           padding: '6px 12px',
-          flexShrink: 0,
+          flexShrink: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
         {/* Deck A */}
@@ -465,6 +554,38 @@ export const MobilePortrait: FC = () => {
         <MobileBrowser maxHeight="100%" />
       </div>
 
+      {/* Loader overlay */}
+      {loaderOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 90,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <div
+            onClick={() => setLoaderOpen(false)}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }}
+          />
+          <div
+            style={{
+              position: 'relative',
+              background: '#0d0d0d',
+              borderRadius: 12,
+              border: '1px solid #333',
+              padding: 8,
+              minWidth: 280,
+            }}
+          >
+            <MobileTrackLoader />
+          </div>
+        </div>
+      )}
+
       {/* Overlay */}
       <OverlayPanel
         isOpen={overlayOpen}
@@ -476,6 +597,8 @@ export const MobilePortrait: FC = () => {
       >
         {overlayTab === 'eq' && <OverlayEQ deckId={overlayDeck} />}
         {overlayTab === 'pads' && <OverlayPads deckId={overlayDeck} />}
+        {overlayTab === 'fx' && <OverlayFX deckId={overlayDeck} />}
+        {overlayTab === 'hp' && <OverlayHeadphones />}
       </OverlayPanel>
     </div>
   );
@@ -487,13 +610,14 @@ const PortraitToolBtn: FC<{ label: string; onClick: () => void }> = ({ label, on
   <button
     onClick={onClick}
     style={{
-      height: 22,
-      padding: '0 8px',
+      height: 40,
+      minWidth: 48,
+      padding: '0 12px',
       border: '1px solid #333',
-      borderRadius: 3,
+      borderRadius: 6,
       background: 'transparent',
       color: '#666',
-      fontSize: 9,
+      fontSize: 10,
       fontWeight: 700,
       fontFamily: 'var(--font-mono)',
       cursor: 'pointer',
