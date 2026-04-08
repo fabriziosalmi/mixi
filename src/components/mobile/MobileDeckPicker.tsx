@@ -48,9 +48,9 @@ export const MobileDeckPicker: FC<MobileDeckPickerProps> = ({ deckId }) => {
         style={{
           height: 40,
           padding: '0 10px',
-          border: `1px solid ${currentColor}66`,
+          border: 'none',
           borderRadius: 6,
-          background: `${currentColor}15`,
+          background: `${currentColor}20`,
           color: currentColor,
           fontSize: 10,
           fontWeight: 700,

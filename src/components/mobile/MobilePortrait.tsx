@@ -131,7 +131,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
     <div
       className={isPlaying ? 'm-deck-card-playing' : 'm-deck-card'}
       style={{
-        background: '#111',
+        background: 'var(--m-surface)',
         borderRadius: 8,
         border: `1px solid ${color}33`,
         padding: 8,
@@ -158,7 +158,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
           style={{
             flex: 1,
             fontSize: 10,
-            color: '#888',
+            color: 'var(--m-text-2)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -203,10 +203,10 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             width: 40,
             height: 40,
             flexShrink: 0,
-            border: `2px solid ${isPlaying ? color : '#444'}`,
+            border: 'none',
             borderRadius: '50%',
-            background: isPlaying ? `${color}22` : 'transparent',
-            color: isPlaying ? color : '#888',
+            background: isPlaying ? `${color}33` : 'var(--m-btn)',
+            color: isPlaying ? color : 'var(--m-text-2)',
             fontSize: 14,
             '--m-glow': color,
             display: 'flex',
@@ -218,7 +218,9 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
           } as React.CSSProperties}
           aria-label={`${isPlaying ? 'Pause' : 'Play'} Deck ${deckId}`}
         >
-          {isPlaying ? '❚❚' : '▶'}
+          {isPlaying
+            ? <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="1" width="3.5" height="12" rx="1" /><rect x="8.5" y="1" width="3.5" height="12" rx="1" /></svg>
+            : <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5v11l9-5.5z" /></svg>}
         </button>
 
         {/* BPM + key */}
@@ -230,7 +232,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             {bpm > 0 ? bpm.toFixed(1) : '---.-'}
           </span>
           {musicalKey && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#888', marginLeft: 6, fontWeight: 600 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--m-text-2)', marginLeft: 6, fontWeight: 600 }}>
               {musicalKey}
             </span>
           )}
@@ -248,10 +250,10 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             width: 44,
             height: 32,
             flexShrink: 0,
-            border: `1px solid ${isSynced ? '#a855f7' : '#444'}`,
-            borderRadius: 4,
-            background: isSynced ? '#a855f722' : 'transparent',
-            color: isSynced ? '#a855f7' : '#666',
+            border: 'none',
+            borderRadius: 6,
+            background: isSynced ? '#a855f733' : 'var(--m-btn)',
+            color: isSynced ? '#a855f7' : 'var(--m-text-3)',
             fontSize: 11,
             fontWeight: 700,
             fontFamily: 'var(--font-mono)',
@@ -273,12 +275,12 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         style={{
           width: '100%',
           height: 20,
-          background: '#0a0a0a',
+          background: 'var(--m-bg)',
           borderRadius: 4,
           position: 'relative',
           touchAction: 'none',
           cursor: 'pointer',
-          border: '1px solid #222',
+          border: '1px solid var(--m-border)',
         }}
         role="slider"
         aria-label={`Volume Deck ${deckId}`}
@@ -359,12 +361,12 @@ const PortraitCrossfader: FC = () => {
         style={{
           flex: 1,
           height: 28,
-          background: '#111',
+          background: 'var(--m-surface)',
           borderRadius: 6,
           position: 'relative',
           touchAction: 'none',
           cursor: 'pointer',
-          border: '1px solid #333',
+          border: '1px solid var(--m-border)',
         }}
         role="slider"
         aria-label="Crossfader"
@@ -391,15 +393,15 @@ const PortraitCrossfader: FC = () => {
             top: 2,
             width: 32,
             height: 28,
-            background: '#555',
+            background: 'var(--m-surface-3)',
             borderRadius: 4,
-            border: '1px solid #777',
+            border: '1px solid var(--m-border-2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <div style={{ width: 14, height: 2, background: '#aaa', borderRadius: 1 }} />
+          <div style={{ width: 14, height: 2, background: 'var(--m-text-2)', borderRadius: 1 }} />
         </div>
       </div>
       <span style={{ fontSize: 10, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
@@ -458,7 +460,7 @@ export const MobilePortrait: FC = () => {
       style={{
         width: '100vw',
         height: '100vh',
-        background: '#0a0a0a',
+        background: 'var(--m-bg)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -477,7 +479,7 @@ export const MobilePortrait: FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '0 10px',
-          borderBottom: '1px solid #222',
+          borderBottom: '1px solid var(--m-border)',
           flexShrink: 0,
         }}
       >
@@ -486,10 +488,10 @@ export const MobilePortrait: FC = () => {
           style={{
             width: 48,
             height: 28,
-            border: `1px solid ${loaderOpen ? '#888' : '#333'}`,
-            borderRadius: 4,
-            background: loaderOpen ? '#ffffff11' : 'transparent',
-            color: loaderOpen ? '#aaa' : '#666',
+            border: 'none',
+            borderRadius: 6,
+            background: loaderOpen ? 'var(--m-surface-3)' : 'var(--m-btn)',
+            color: loaderOpen ? 'var(--m-text)' : 'var(--m-text-3)',
             fontSize: 18,
             fontWeight: 400,
             display: 'flex',
@@ -519,9 +521,9 @@ export const MobilePortrait: FC = () => {
           style={{
             width: 48,
             height: 24,
-            border: '1px solid #ef444466',
-            borderRadius: 4,
-            background: 'transparent',
+            border: 'none',
+            borderRadius: 6,
+            background: '#ef444422',
             color: '#ef4444',
             fontSize: 9,
             fontWeight: 700,
@@ -550,9 +552,10 @@ export const MobilePortrait: FC = () => {
       >
         {/* Deck A */}
         <PortraitDeckArea deckId="A" openOverlay={openOverlay} />
-        <PortraitCrossfader />
         {/* Deck B */}
         <PortraitDeckArea deckId="B" openOverlay={openOverlay} />
+        {/* Crossfader — below both decks, closer to thumb */}
+        <PortraitCrossfader />
       </div>
 
       {/* Browser (bottom half) */}
@@ -590,7 +593,7 @@ export const MobilePortrait: FC = () => {
               backdropFilter: 'blur(16px) saturate(1.4)',
               WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderRadius: 12,
-              border: '1px solid #333',
+              border: '1px solid var(--m-border)',
               padding: 8,
               minWidth: 280,
             }}
@@ -627,10 +630,10 @@ const PortraitToolBtn: FC<{ label: string; onClick: () => void }> = ({ label, on
       height: 40,
       minWidth: 48,
       padding: '0 12px',
-      border: '1px solid #333',
+      border: 'none',
       borderRadius: 6,
-      background: 'transparent',
-      color: '#666',
+      background: 'var(--m-btn)',
+      color: 'var(--m-btn-text)',
       fontSize: 10,
       fontWeight: 700,
       fontFamily: 'var(--font-mono)',

@@ -933,10 +933,56 @@ body::after {
   z-index: -1;
 }
 
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Mobile Theme System (auto light/dark) ───────────────── */
+/* Uses prefers-color-scheme to auto-switch.                  */
+/* All mobile components read --m-* variables.                */
+/* ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Dark theme (default) ────────────────────────────────── */
+  --m-bg:        #0a0a0a;
+  --m-surface:   #141414;
+  --m-surface-2: #1c1c1c;
+  --m-surface-3: #252525;
+  --m-border:    rgba(255, 255, 255, 0.08);
+  --m-border-2:  rgba(255, 255, 255, 0.12);
+  --m-text:      #ffffff;
+  --m-text-2:    #a0a0a0;
+  --m-text-3:    #606060;
+  --m-text-dim:  #404040;
+  --m-btn:       #1e1e1e;
+  --m-btn-hover: #282828;
+  --m-btn-text:  #c0c0c0;
+  --m-overlay:   rgba(10, 10, 10, 0.72);
+  --m-overlay-border: rgba(255, 255, 255, 0.06);
+  --m-card-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --m-input-bg:  #111111;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --m-bg:        #f2f2f7;
+    --m-surface:   #ffffff;
+    --m-surface-2: #f0f0f5;
+    --m-surface-3: #e5e5ea;
+    --m-border:    rgba(0, 0, 0, 0.08);
+    --m-border-2:  rgba(0, 0, 0, 0.12);
+    --m-text:      #1c1c1e;
+    --m-text-2:    #636366;
+    --m-text-3:    #8e8e93;
+    --m-text-dim:  #aeaeb2;
+    --m-btn:       #e5e5ea;
+    --m-btn-hover: #d1d1d6;
+    --m-btn-text:  #1c1c1e;
+    --m-overlay:   rgba(242, 242, 247, 0.82);
+    --m-overlay-border: rgba(0, 0, 0, 0.06);
+    --m-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    --m-input-bg:  #e5e5ea;
+  }
+}
+
 /* ── Mobile: button press states ─────────────────────────── */
-/* Applied globally to all buttons on touch devices.          */
-/* Since mobile components use inline styles, CSS :active     */
-/* is the only way to add press feedback without JS state.    */
 
 @media (pointer: coarse) {
   button:active {
@@ -972,20 +1018,18 @@ body::after {
 /* ── Glassmorphism overlay backdrop ──────────────────────── */
 
 .m-glass {
-  background: rgba(10, 10, 10, 0.72) !important;
+  background: var(--m-overlay) !important;
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--m-overlay-border);
 }
 
 .m-glass-card {
-  background: rgba(18, 18, 18, 0.65) !important;
+  background: var(--m-overlay) !important;
   backdrop-filter: blur(12px) saturate(1.3);
   -webkit-backdrop-filter: blur(12px) saturate(1.3);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--m-overlay-border);
+  box-shadow: var(--m-card-shadow);
 }
 
 /* ── Deck card depth (portrait mode) ─────────────────────── */

@@ -87,9 +87,9 @@ export const MobileBrowser: FC<MobileBrowserProps> = ({ maxHeight = '100%' }) =>
         flexDirection: 'column',
         maxHeight,
         overflow: 'hidden',
-        background: '#0a0a0a',
+        background: 'var(--m-bg)',
         borderRadius: 6,
-        border: '1px solid #222',
+        border: '1px solid var(--m-border)',
       }}
     >
       {/* Search bar */}
@@ -102,8 +102,8 @@ export const MobileBrowser: FC<MobileBrowserProps> = ({ maxHeight = '100%' }) =>
           style={{
             width: '100%',
             height: 44,
-            background: '#151515',
-            border: '1px solid #333',
+            background: 'var(--m-input-bg)',
+            border: '1px solid var(--m-border)',
             borderRadius: 4,
             padding: '0 8px',
             color: '#ccc',
@@ -191,19 +191,23 @@ const TrackRow: FC<{
       style={{
         position: 'relative',
         overflow: 'hidden',
-        borderBottom: '1px solid #1a1a1a',
+        borderBottom: '1px solid var(--m-border)',
         minHeight: 44,
       }}
     >
       {/* Swipe hint backgrounds */}
       {swipeHint === 'A' && (
         <div style={{ position: 'absolute', inset: 0, background: `${COLOR_DECK_A}15`, display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 900, color: COLOR_DECK_A, fontFamily: 'var(--font-mono)' }}>→ A</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 900, color: COLOR_DECK_A, fontFamily: 'var(--font-mono)' }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 6h8M7 3l3 3-3 3" /></svg>A
+          </span>
         </div>
       )}
       {swipeHint === 'B' && (
         <div style={{ position: 'absolute', inset: 0, background: `${COLOR_DECK_B}15`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 900, color: COLOR_DECK_B, fontFamily: 'var(--font-mono)' }}>B ←</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 900, color: COLOR_DECK_B, fontFamily: 'var(--font-mono)' }}>
+            B<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 6H2M5 3L2 6l3 3" /></svg>
+          </span>
         </div>
       )}
 
@@ -222,7 +226,7 @@ const TrackRow: FC<{
           transition: swipeOffset === 0 ? 'transform 150ms' : 'none',
           touchAction: 'pan-y',
           position: 'relative',
-          background: '#0a0a0a',
+          background: 'var(--m-bg)',
         }}
       >
         {/* Info */}
