@@ -160,6 +160,18 @@ Acid, Aqua, Arcade Invaders, Blackfluo, Bloodmoon, Casino, Dune, E-Ink, Freetekn
 
 Each skin is a directory containing `skin.json` (metadata) and `skin.css` (CSS custom properties). To create a new skin, copy any existing one and modify the variables. No TypeScript changes required.
 
+### Mobile
+
+Dedicated touch-optimized UI, code-split so desktop never downloads mobile code. Detects phones (`minDim < 500 + touch`) and loads a purpose-built layout.
+
+- **Portrait** — Single-deck focus: hero BPM display, tall waveform, inline EQ/FX/PADS toolbar. Tap A/B to switch focus. Mini-strip shows the other deck's state. Crossfader pinned at bottom for thumb access.
+- **Landscape** — Dual-deck mixing: both decks side-by-side with waveforms, pitch faders, nudge buttons, and a horizontal crossfader.
+- **Overlays** — Slide-up glassmorphism panels (spring animation) for EQ, FX grid, performance pads, and headphone routing. Swipe down to dismiss.
+- **Haptics** — Vibration feedback: tick on pad tap, snap on crossfader center detent, confirm on cue save, panic on shake reset.
+- **Shake-to-panic** — Shake the phone to reset all EQ, FX, loops, and crossfader to defaults.
+- **Beat pulse** — Deck card borders flash in sync with the BPM for visual rhythm feedback.
+- **PWA** — Installable as a standalone app on iOS and Android. Safe area inset handling for notches.
+
 ---
 
 ## Architecture
@@ -179,6 +191,7 @@ src/
   automixer/      AutoMixer panel, beat utilities
   midi/           WebMIDI manager, controller mapping
   components/     React UI — decks, mixer, browser, HUD, settings
+    mobile/       Touch-optimized mobile UI — portrait, landscape, overlays
   store/          Zustand stores — mixer state, settings, MIDI, samples
   hooks/          React hooks — sync bridge, keyboard shortcuts, drag, beatmatching
   bridge/         MCP bridge for external agents
