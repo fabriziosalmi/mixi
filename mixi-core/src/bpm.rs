@@ -69,12 +69,17 @@ pub fn detect_bpm(
     };
 
     let result = detect_with_options(&mono, sample_rate as u32, &opts);
+    let bpm = result.bpm as f32;
 
-    BpmResult {
-        bpm: result.bpm as f32,
-        offset: result.grid_offset as f32,
-        confidence: result.confidence as f32,
-    }
+    // open-bpm returns grid_offset as modular phase [0, beat_period).
+    // Snap to the first beat position that has actual audio energy (the first kick).
+    let offset = if bpm > 0.0 {
+        snap_offset_to_first_onset(&mono, sample_rate, result.grid_offset as f32, bpm)
+    } else {
+        result.grid_offset as f32
+    };
+
+    BpmResult { bpm, offset, confidence: result.confidence as f32 }
 }
 
 /// Fast BPM detection — single segment, no chunking.
@@ -98,12 +103,15 @@ pub fn detect_bpm_fast(
     };
 
     let result = detect_with_options(&mono, sample_rate as u32, &opts);
+    let bpm = result.bpm as f32;
 
-    BpmResult {
-        bpm: result.bpm as f32,
-        offset: result.grid_offset as f32,
-        confidence: result.confidence as f32,
-    }
+    let offset = if bpm > 0.0 {
+        snap_offset_to_first_onset(&mono, sample_rate, result.grid_offset as f32, bpm)
+    } else {
+        result.grid_offset as f32
+    };
+
+    BpmResult { bpm, offset, confidence: result.confidence as f32 }
 }
 
 /// Legacy API returning [bpm, offset, confidence] as Vec<f32>.
@@ -118,6 +126,46 @@ pub fn detect_bpm_legacy(
 ) -> Vec<f32> {
     let r = detect_bpm(samples, num_channels, samples_per_channel, sample_rate, bpm_min, bpm_max);
     vec![r.bpm, r.offset, r.confidence]
+}
+
+// ── Grid offset correction ────────────────────────────────────
+
+/// open-bpm returns grid_offset as a modular phase in [0, beat_period).
+/// This function finds the first beat position (phase + n * beat_period)
+/// where the audio has significant energy (RMS > threshold in a ±25ms window).
+/// This converts the abstract phase into the actual timestamp of the first kick.
+fn snap_offset_to_first_onset(mono: &[f32], sr: f32, phase: f32, bpm: f32) -> f32 {
+    let beat_period = 60.0 / bpm;
+    let duration = mono.len() as f32 / sr;
+    let window_samples = (sr * 0.025) as usize; // ±25ms window
+    let threshold: f32 = 0.01; // ~-40dBFS
+
+    // Walk beat positions: phase, phase + beat_period, phase + 2*beat_period, ...
+    // Find the first one with actual audio energy
+    let mut pos = phase;
+    let max_beats = 64; // don't scan more than 64 beats
+    for _ in 0..max_beats {
+        if pos >= duration { break; }
+        if pos >= 0.0 {
+            let center = (pos * sr) as usize;
+            let start = center.saturating_sub(window_samples);
+            let end = (center + window_samples).min(mono.len());
+            if end > start {
+                let mut sum: f32 = 0.0;
+                for i in start..end {
+                    sum += mono[i] * mono[i];
+                }
+                let rms = (sum / (end - start) as f32).sqrt();
+                if rms > threshold {
+                    return pos; // Found the first beat with a kick
+                }
+            }
+        }
+        pos += beat_period;
+    }
+
+    // Fallback: return the raw phase if no onset found
+    phase
 }
 
 // ── Tests ─────────────────────────────────────────────────────
