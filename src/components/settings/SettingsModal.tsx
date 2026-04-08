@@ -120,8 +120,8 @@ export const SettingsModal: FC = () => {
             ))}
           </nav>
 
-          {/* Content */}
-          <div className="flex-1 p-5 overflow-y-auto space-y-1">
+          {/* Content — fixed height so modal never resizes between tabs */}
+          <div className="p-5 overflow-y-auto space-y-1" style={{ height: 420, flexShrink: 0 }}>
             {tab === 'mixer' && <MixerTab />}
             {tab === 'audio' && <AudioTab />}
             {tab === 'midi' && <MidiTab />}
