@@ -95,12 +95,23 @@ export const MobileWaveformOverview: FC<MobileWaveformOverviewProps> = ({ deckId
         ctx.fillRect(x, half - h, 1, h * 2);
       }
 
-      // Playhead position
+      // Playhead position with glow
       const currentTime = engine.isInitialized ? engine.getCurrentTime(deckId) : 0;
       const playheadX = (currentTime / duration) * width;
 
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
       ctx.fillStyle = '#fff';
       ctx.fillRect(playheadX - 0.5, 0, 1, HEIGHT);
+      ctx.restore();
+
+      // Soft glow halo
+      const phGrad = ctx.createRadialGradient(playheadX, HEIGHT / 2, 0, playheadX, HEIGHT / 2, 8);
+      phGrad.addColorStop(0, `${color}33`);
+      phGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = phGrad;
+      ctx.fillRect(playheadX - 8, 0, 16, HEIGHT);
     };
 
     rafId = requestAnimationFrame(draw);

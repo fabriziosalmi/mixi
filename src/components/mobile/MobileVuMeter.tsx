@@ -81,24 +81,36 @@ export const MobileVuMeter: FC<MobileVuMeterProps> = ({ deckId, color }) => {
         }
       }
 
-      // Level bar with color gradient
+      // Level bar with horizontal gradient (deck color → amber → red)
       const barW = clamped * width;
       if (barW > 0) {
-        if (clamped > 0.9) {
-          ctx.fillStyle = '#ef4444'; // red
-        } else if (clamped > 0.7) {
-          ctx.fillStyle = '#f59e0b'; // amber
-        } else {
-          ctx.fillStyle = `${color}88`; // deck color
-        }
+        const barGrad = ctx.createLinearGradient(0, 0, width, 0);
+        barGrad.addColorStop(0, `${color}99`);
+        barGrad.addColorStop(0.65, `${color}88`);
+        barGrad.addColorStop(0.8, '#f59e0b88');
+        barGrad.addColorStop(1.0, '#ef444499');
+        ctx.fillStyle = barGrad;
         ctx.fillRect(0, 0, barW, height);
+
+        // Subtle glow at the bar tip
+        if (clamped > 0.1) {
+          const tipGrad = ctx.createRadialGradient(barW, height / 2, 0, barW, height / 2, 6);
+          tipGrad.addColorStop(0, clamped > 0.9 ? '#ef444466' : `${color}44`);
+          tipGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = tipGrad;
+          ctx.fillRect(barW - 6, 0, 12, height);
+        }
       }
 
-      // Peak indicator
+      // Peak indicator with glow
       if (peakHold > 0.01) {
         const peakX = peakHold * width;
-        ctx.fillStyle = peakHold > 0.9 ? '#ef4444' : '#ffffff88';
+        ctx.save();
+        ctx.shadowColor = peakHold > 0.9 ? '#ef4444' : color;
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = peakHold > 0.9 ? '#ef4444' : '#ffffffbb';
         ctx.fillRect(peakX - 1, 0, 2, height);
+        ctx.restore();
       }
     };
 

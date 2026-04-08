@@ -129,6 +129,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
   return (
     <div
+      className={isPlaying ? 'm-deck-card-playing' : 'm-deck-card'}
       style={{
         background: '#111',
         borderRadius: 8,
@@ -137,7 +138,8 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-      }}
+        '--m-glow': color,
+      } as React.CSSProperties}
     >
       {/* ── Header: label + track name + cue dots + loop ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -184,7 +186,10 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
       {/* ── Waveform overview + scrolling waveform ── */}
       <MobileWaveformOverview deckId={deckId} color={color} />
-      <div style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : '1px solid transparent' }}>
+      <div
+        className={isPlaying ? 'm-waveform-glow' : undefined}
+        style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : `1px solid ${color}18`, '--m-glow': color } as React.CSSProperties}
+      >
         <MobileWaveform deckId={deckId} height={48} color={color} />
       </div>
       <MobileVuMeter deckId={deckId} color={color} />
@@ -192,6 +197,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
       {/* ── Controls row: Play | BPM+Key | Time | Sync ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button
+          className={isPlaying ? 'm-play-active' : undefined}
           onClick={togglePlay}
           style={{
             width: 44,
@@ -202,13 +208,14 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             background: isPlaying ? `${color}22` : 'transparent',
             color: isPlaying ? color : '#888',
             fontSize: 16,
+            '--m-glow': color,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
-          }}
+          } as React.CSSProperties}
           aria-label={`${isPlaying ? 'Pause' : 'Play'} Deck ${deckId}`}
         >
           {isPlaying ? '❚❚' : '▶'}
@@ -216,7 +223,10 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
         {/* BPM + key */}
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color }}>
+          <span
+            className={isPlaying ? 'm-glow-text' : undefined}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
+          >
             {bpm > 0 ? bpm.toFixed(1) : '---.-'}
           </span>
           {musicalKey && (
@@ -232,6 +242,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         </span>
 
         <button
+          className={isSynced ? 'm-synced' : undefined}
           onClick={toggleSync}
           style={{
             width: 48,
@@ -443,6 +454,7 @@ export const MobilePortrait: FC = () => {
 
   return (
     <div
+      className="m-noise"
       style={{
         width: '100vw',
         height: '100vh',
@@ -574,7 +586,9 @@ export const MobilePortrait: FC = () => {
           <div
             style={{
               position: 'relative',
-              background: '#0d0d0d',
+              background: 'rgba(10,10,10,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderRadius: 12,
               border: '1px solid #333',
               padding: 8,

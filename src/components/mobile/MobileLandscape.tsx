@@ -189,6 +189,7 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
       {/* ── Left: play + nudge column ── */}
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, flexShrink: 0, width: 52 }}>
         <button
+          className={isPlaying ? 'm-play-active' : undefined}
           onClick={togglePlay}
           style={{
             width: 48,
@@ -204,6 +205,8 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
             cursor: 'pointer',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
+            // @ts-expect-error CSS custom property for glow color
+            '--m-glow': `${color}`,
           }}
           aria-label={`${isPlaying ? 'Pause' : 'Play'} Deck ${deckId}`}
         >
@@ -244,14 +247,20 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
         {/* Waveform overview + scrolling waveform */}
         <MobileWaveformOverview deckId={deckId} color={color} />
-        <div style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : '1px solid transparent' }}>
+        <div
+          className={isPlaying ? 'm-waveform-glow' : undefined}
+          style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : `1px solid ${color}18`, '--m-glow': color } as React.CSSProperties}
+        >
           <MobileWaveform deckId={deckId} height={56} color={color} />
         </div>
         <MobileVuMeter deckId={deckId} color={color} />
 
         {/* Bottom info: BPM + key + time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 14 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color }}>
+          <span
+            className={isPlaying ? 'm-glow-text' : undefined}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
+          >
             {bpm > 0 ? bpm.toFixed(1) : '---'}
           </span>
           {musicalKey && (
@@ -273,6 +282,7 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
         <button
+          className={isSynced ? 'm-synced' : undefined}
           onClick={toggleSync}
           style={{
             width: 48,
@@ -416,6 +426,7 @@ const MobileCrossfader: FC = () => {
         />
         {/* Cap */}
         <div
+          className={Math.abs(crossfader - 0.5) < 0.03 ? 'm-xfader-center' : undefined}
           style={{
             position: 'absolute',
             left: `calc(${crossfader * 100}% - 14px)`,
@@ -504,6 +515,7 @@ export const MobileLandscape: FC = () => {
 
   return (
     <div
+      className="m-noise"
       style={{
         width: '100vw',
         height: '100vh',
@@ -659,7 +671,9 @@ export const MobileLandscape: FC = () => {
           <div
             style={{
               position: 'relative',
-              background: '#0d0d0d',
+              background: 'rgba(10,10,10,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderRadius: 12,
               border: '1px solid #ef444444',
               minWidth: 260,
@@ -690,7 +704,9 @@ export const MobileLandscape: FC = () => {
             style={{
               position: 'relative',
               height: '55vh',
-              background: '#0d0d0d',
+              background: 'rgba(10,10,10,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderTop: '2px solid #a855f744',
               borderRadius: '12px 12px 0 0',
               overflow: 'auto',
@@ -729,7 +745,9 @@ export const MobileLandscape: FC = () => {
             style={{
               position: 'relative',
               height: '60vh',
-              background: '#0d0d0d',
+              background: 'rgba(10,10,10,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderTop: '2px solid #33333366',
               borderRadius: '12px 12px 0 0',
               display: 'flex',
@@ -766,7 +784,9 @@ export const MobileLandscape: FC = () => {
             style={{
               position: 'relative',
               height: '60vh',
-              background: '#0d0d0d',
+              background: 'rgba(10,10,10,0.72)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
               borderTop: '2px solid #33333366',
               borderRadius: '12px 12px 0 0',
             }}

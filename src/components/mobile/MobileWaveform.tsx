@@ -171,14 +171,21 @@ export const MobileWaveform: FC<MobileWaveformProps> = ({
         ctx.fillRect(x, halfHeight - hHigh, BAR_WIDTH, hHigh * 2);
       }
 
-      // Playhead line
+      // Playhead halo glow
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#fff';
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(playheadX, 0, 1, height);
+      ctx.restore();
 
-      // Dim border glow
-      ctx.fillStyle = `${color}22`;
-      ctx.fillRect(playheadX - 1, 0, 3, height);
+      // Soft colored glow ring around playhead
+      const grad = ctx.createRadialGradient(playheadX, halfHeight, 0, playheadX, halfHeight, 12);
+      grad.addColorStop(0, `${color}33`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(playheadX - 12, 0, 24, height);
     };
 
     rafId = requestAnimationFrame(draw);

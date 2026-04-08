@@ -107,7 +107,9 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
         style={{
           position: 'relative',
           height: '55vh',
-          background: '#0d0d0d',
+          background: 'rgba(10, 10, 10, 0.75)',
+          backdropFilter: 'blur(16px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
           borderTop: `2px solid ${deckColor}44`,
           borderRadius: '12px 12px 0 0',
           display: 'flex',
