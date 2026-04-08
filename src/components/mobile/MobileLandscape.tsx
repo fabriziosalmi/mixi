@@ -47,6 +47,23 @@ import type { DeckId } from '../../types';
 const DECK_IDS: DeckId[] = ['A', 'B'];
 const COLORS: Record<DeckId, string> = { A: COLOR_DECK_A, B: COLOR_DECK_B };
 
+// ── Beat pulse hook ─────────────────────────────────────────
+
+function useBeatPulse(deckId: DeckId, isPlaying: boolean): boolean {
+  const [pulse, setPulse] = useState(false);
+  const bpm = useMixiStore((s) => s.decks[deckId].bpm);
+  useEffect(() => {
+    if (!isPlaying || bpm <= 0) return;
+    const interval = 60000 / bpm;
+    const id = setInterval(() => {
+      setPulse(true);
+      setTimeout(() => setPulse(false), 200);
+    }, interval);
+    return () => clearInterval(id);
+  }, [isPlaying, bpm]);
+  return pulse;
+}
+
 // ── DeckRow ──────────────────────────────────────────────────
 
 // ── NudgeBtn — press-and-hold pitch bend ────────────────────
@@ -146,6 +163,7 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
   const currentTime = useCurrentTime(deckId);
 
   const haptics = useHaptics();
+  const beatPulse = useBeatPulse(deckId, isPlaying);
 
   const togglePlay = useCallback(
     () => { setPlaying(deckId, !isPlaying); haptics.tick(); },
@@ -180,15 +198,18 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
   return (
     <div
+      className={`m-deck-accent${beatPulse ? ' m-beat-pulse' : ''}`}
       style={{
         display: 'flex',
         alignItems: 'stretch',
         gap: 6,
-        padding: '3px 8px',
+        padding: '3px 8px 3px 12px',
         flex: 1,
         borderBottom: '1px solid var(--m-border)',
         position: 'relative',
-      }}
+        '--m-glow': color,
+        '--m-glow-dim': `${color}33`,
+      } as React.CSSProperties}
     >
       {/* ── Left: play + nudge row ── */}
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 2, flexShrink: 0, width: 52 }}>
@@ -398,14 +419,14 @@ const MobileCrossfader: FC = () => {
         flexShrink: 0,
       }}
     >
-      <span style={{ fontSize: 9, color: COLOR_DECK_A, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>A</span>
+      <span style={{ fontSize: 10, color: COLOR_DECK_A, fontWeight: 800, fontFamily: 'var(--font-mono)', textShadow: `0 0 6px ${COLOR_DECK_A}33` }}>A</span>
       <div
         ref={trackRef}
         onPointerDown={handlePointer}
         onPointerMove={handlePointer}
         style={{
           flex: 1,
-          height: 24,
+          height: 28,
           background: 'var(--m-surface)',
           borderRadius: 6,
           position: 'relative',
@@ -419,38 +440,40 @@ const MobileCrossfader: FC = () => {
         aria-valuemax={100}
         aria-valuenow={Math.round(crossfader * 100)}
       >
-        {/* Center mark */}
+        {/* Center mark with glow */}
         <div
           style={{
             position: 'absolute',
-            left: '50%',
+            left: 'calc(50% - 0.5px)',
             top: 3,
             width: 1,
-            height: 18,
-            background: 'var(--m-surface-3)',
+            height: 22,
+            background: '#444',
+            boxShadow: '0 0 4px rgba(168,85,247,0.15)',
           }}
         />
-        {/* Cap */}
+        {/* Cap with grip texture */}
         <div
-          className={Math.abs(crossfader - 0.5) < 0.03 ? 'm-xfader-center' : undefined}
+          className={`m-xfader-cap${Math.abs(crossfader - 0.5) < 0.03 ? ' m-xfader-center' : ''}`}
           style={{
             position: 'absolute',
-            left: `calc(${crossfader * 100}% - 12px)`,
+            left: `calc(${crossfader * 100}% - 14px)`,
             top: 2,
-            width: 24,
+            width: 28,
             height: 24,
-            background: 'var(--m-surface-3)',
-            borderRadius: 4,
-            border: '1px solid var(--m-border-2)',
+            borderRadius: 5,
+            border: '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <div style={{ width: 12, height: 2, background: 'var(--m-text-2)', borderRadius: 1 }} />
+          <div className="m-xfader-cap-grip">
+            <span /><span /><span />
+          </div>
         </div>
       </div>
-      <span style={{ fontSize: 9, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
+      <span style={{ fontSize: 10, color: COLOR_DECK_B, fontWeight: 800, fontFamily: 'var(--font-mono)', textShadow: `0 0 6px ${COLOR_DECK_B}33` }}>B</span>
     </div>
   );
 };

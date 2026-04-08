@@ -134,9 +134,9 @@ export const MobileInitGate: FC<MobileInitGateProps> = ({ onInit, children }) =>
       {/* MIXI logo with shimmer */}
       <span
         style={{
-          fontSize: 42,
+          fontSize: 38,
           fontWeight: 900,
-          letterSpacing: 16,
+          letterSpacing: 12,
           fontFamily: 'var(--font-mono)',
           background: loading
             ? '#444'
@@ -151,17 +151,31 @@ export const MobileInitGate: FC<MobileInitGateProps> = ({ onInit, children }) =>
         MIXI
       </span>
 
+      {/* Subtitle */}
+      <span
+        style={{
+          fontSize: 9,
+          color: '#333',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: 6,
+          marginTop: -16,
+        }}
+      >
+        DETERMINISTIC AUDIO
+      </span>
+
       {/* Tap prompt */}
       <span
         style={{
-          fontSize: 13,
-          color: loading ? '#444' : '#666',
-          fontFamily: 'var(--font-ui)',
-          letterSpacing: 4,
+          fontSize: 12,
+          color: loading ? '#444' : '#555',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: 5,
+          marginTop: 16,
           transition: 'color 200ms',
         }}
       >
-        {loading ? 'STARTING…' : 'TAP TO START'}
+        {loading ? 'STARTING...' : 'TAP TO START'}
       </span>
 
       {/* Loading spinner */}

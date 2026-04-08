@@ -90,6 +90,7 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
     >
       {/* Backdrop */}
       <div
+        className="m-overlay-backdrop-enter"
         onClick={onClose}
         style={{
           position: 'absolute',
@@ -100,6 +101,7 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
 
       {/* Panel */}
       <div
+        className={dragOffset === 0 ? 'm-overlay-enter' : undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -115,7 +117,7 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          transform: `translateY(${dragOffset}px)`,
+          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
           transition: dragging ? 'none' : 'transform 200ms ease-out',
           touchAction: 'none',
         }}

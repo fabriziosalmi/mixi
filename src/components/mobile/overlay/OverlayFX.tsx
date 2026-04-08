@@ -17,7 +17,7 @@
 //   - Per-deck FX on/off grid (tap to toggle, hold to adjust amount)
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, type FC } from 'react';
+import { useCallback, useState, type FC } from 'react';
 import { useMixiStore } from '../../../store/mixiStore';
 import { MixiEngine } from '../../../audio/MixiEngine';
 import { Knob } from '../../controls/Knob';
@@ -50,29 +50,35 @@ export const OverlayFX: FC<OverlayFXProps> = ({ deckId }) => {
   const setMasterDistortion = useMixiStore((s) => s.setMasterDistortion);
   const setMasterPunch = useMixiStore((s) => s.setMasterPunch);
   const haptics = useHaptics();
+  const [activeFx, setActiveFx] = useState<Set<string>>(new Set());
 
   const toggleFx = useCallback((fxId: string) => {
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return;
-    // Toggle: if amount > 0 → off, else → on at 0.5
-    // We need to track state — for simplicity, always set to 0.5 on activate
-    // The engine handles the rest
     haptics.tick();
-    engine.setDeckFx(deckId, fxId, 0.5, true);
-  }, [deckId, haptics]);
+    const isActive = activeFx.has(fxId);
+    if (isActive) {
+      engine.setDeckFx(deckId, fxId, 0, false);
+      setActiveFx((prev) => { const next = new Set(prev); next.delete(fxId); return next; });
+    } else {
+      engine.setDeckFx(deckId, fxId, 0.5, true);
+      setActiveFx((prev) => new Set(prev).add(fxId));
+    }
+  }, [deckId, haptics, activeFx]);
 
   const resetFx = useCallback((fxId: string) => {
     const engine = MixiEngine.getInstance();
     if (!engine.isInitialized) return;
     haptics.snap();
     engine.setDeckFx(deckId, fxId, 0, false);
+    setActiveFx((prev) => { const next = new Set(prev); next.delete(fxId); return next; });
   }, [deckId, haptics]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Master FX knobs */}
       <div>
-        <div style={{ fontSize: 9, color: '#555', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: 2 }}>
+        <div style={{ fontSize: 9, color: '#555', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: 3 }}>
           MASTER
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-around', gap: 8 }}>
@@ -110,35 +116,42 @@ export const OverlayFX: FC<OverlayFXProps> = ({ deckId }) => {
 
       {/* Per-deck FX grid */}
       <div>
-        <div style={{ fontSize: 9, color: '#555', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: 2 }}>
+        <div style={{ fontSize: 9, color: '#555', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: 3 }}>
           DECK {deckId} FX
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-          {FX_LIST.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => toggleFx(id)}
-              onDoubleClick={() => resetFx(id)}
-              style={{
-                height: 48,
-                border: `1px solid ${color}44`,
-                borderRadius: 6,
-                background: '#151515',
-                color: color,
-                fontSize: 10,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                cursor: 'pointer',
-                touchAction: 'manipulation',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          {FX_LIST.map(({ id, label }) => {
+            const isActive = activeFx.has(id);
+            return (
+              <button
+                key={id}
+                className={isActive ? 'm-fx-active' : undefined}
+                onClick={() => toggleFx(id)}
+                onDoubleClick={() => resetFx(id)}
+                style={{
+                  height: 48,
+                  border: `1px solid ${isActive ? color : `${color}33`}`,
+                  borderRadius: 8,
+                  background: isActive ? `${color}18` : '#151515',
+                  color: isActive ? color : `${color}88`,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'all 150ms ease',
+                  '--m-glow': color,
+                  '--m-glow-bg': `${color}11`,
+                } as React.CSSProperties}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <div style={{ fontSize: 8, color: '#444', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
-          TAP = ON &nbsp; DOUBLE-TAP = OFF
+        <div style={{ fontSize: 8, color: '#444', fontFamily: 'var(--font-mono)', marginTop: 6, letterSpacing: 1 }}>
+          TAP = TOGGLE &nbsp; DOUBLE-TAP = RESET
         </div>
       </div>
     </div>
