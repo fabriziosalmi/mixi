@@ -44,6 +44,16 @@ if ('serviceWorker' in navigator && isMobile) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
+// ── Expose stores for E2E tests (dev/test only) ───────────
+if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+  import('./store/mixiStore').then(m => {
+    (window as any).__MIXI_STORE__ = m.useMixiStore;
+  });
+  import('./store/settingsStore').then(m => {
+    (window as any).__SETTINGS_STORE__ = m.useSettingsStore;
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
