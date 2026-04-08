@@ -50,7 +50,7 @@ describe('PhaseLock PID Controller', () => {
     pl.start();
     // Large error: master at 0.0, local at 0.15
     pl.onHeartbeat(0.0, 128, 0.15, 128, 0.8, 0);
-    expect(Math.abs(pl.correction)).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(pl.correction)).toBeLessThanOrEqual(0.05);
   });
 
   it('locks when error falls below 0.2%', () => {

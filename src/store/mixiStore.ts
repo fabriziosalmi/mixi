@@ -42,6 +42,7 @@ import type {
 import { HOT_CUE_COUNT } from '../types';
 import { clamp } from '../audio/utils/mathUtils';
 import { MixiEngine } from '../audio/MixiEngine';
+import { findBestRatio } from '../audio/harmonicSync';
 import { phaseLockLoop } from '../audio/PhaseLockLoop';
 import { saveHotCues, loadHotCues } from './hotCueStorage';
 import { useSettingsStore } from './settingsStore';
@@ -432,70 +433,90 @@ export const useMixiStore = create<MixiStore>()(
         const thisDeck = s.decks[deck];
         const otherDeckId = otherDeck(deck);
         const other = s.decks[otherDeckId];
-        if (thisDeck.originalBpm <= 0 || other.bpm <= 0) {
-          console.warn(`[mixi-sync] Cannot sync deck ${deck}: ` +
-            `thisBpm=${thisDeck.originalBpm.toFixed(1)}, otherBpm=${other.bpm.toFixed(1)}` +
-            (thisDeck.originalBpm <= 0 ? ' — BPM detection may have failed (try a different BPM range preset)' : ''));
-          // Notify user visually (fire-and-forget dynamic import)
+
+        // FIX BUG #4: Use originalBpm for BOTH decks (consistent semantics).
+        // originalBpm = native BPM before pitch shift, bpm = after pitch shift.
+        // We want to sync to the OTHER deck's current playing tempo (bpm),
+        // and adjust THIS deck's original speed.
+        if (thisDeck.originalBpm <= 0 || other.originalBpm <= 0) {
+          const failDeck = thisDeck.originalBpm <= 0 ? deck : otherDeckId;
+          console.warn(`[mixi-sync] Cannot sync: Deck ${failDeck} BPM not detected`);
           import('../components/topbar/HudNotifications').then(m =>
-            m.notify.warn(`Cannot sync: ${thisDeck.originalBpm <= 0 ? 'Deck ' + deck + ' BPM not detected' : 'Deck ' + otherDeckId + ' BPM not detected'}`)
+            m.notify.warn(`Cannot sync: Deck ${failDeck} BPM not detected — try a different BPM range preset`)
           ).catch(() => {});
           return s;
         }
 
-        // ── 1. Tempo match (no rate clamp — full range like Traktor) ──
-        const newRate = other.bpm / thisDeck.originalBpm;
+        // ── 1. Tempo match with harmonic sync ────────────────
+        // Use harmonic ratio (1:1, 2:1, 3:4, etc.) so DnB 170 can
+        // sync to House 128 without slingshot speed changes.
+        const masterBpm = other.bpm > 0 ? other.bpm : other.originalBpm;
+        const ratio = findBestRatio(masterBpm, thisDeck.originalBpm);
+        const targetBpm = masterBpm / ratio;
+        const newRate = targetBpm / thisDeck.originalBpm;
         const effectiveBpm = Math.round(thisDeck.originalBpm * newRate * 10) / 10;
 
-        // ── 2. Phase align ───────────────────────────────────
-        // Calculate where the master beat grid is right now,
-        // then seek the synced deck to match that phase.
         const engine = MixiEngine.getInstance();
-        if (engine.isInitialized && other.isPlaying) {
+
+        // ── 2. Apply rate FIRST (before seek) ────────────────
+        // FIX race condition: set the new rate so seek starts playback
+        // at the correct speed, preventing a brief burst at the old rate.
+        if (engine.isInitialized) {
+          engine.setPlaybackRate(deck, newRate);
+        }
+
+        // ── 3. Phase align ───────────────────────────────────
+        // FIX BUG #2: Phase align EVEN when master is paused.
+        // Use transport.offset as frozen beat position when not playing.
+        if (engine.isInitialized) {
           const masterTime = engine.getCurrentTime(otherDeckId);
-          const masterBeatPeriod = 60 / other.bpm;
-          // Master's fractional position within current beat (0–1)
-          const masterFrac = (((masterTime - other.firstBeatOffset) / masterBeatPeriod) % 1 + 1) % 1;
+          const masterBeatPeriod = 60 / masterBpm;
+          if (masterBeatPeriod > 0 && isFinite(masterBeatPeriod)) {
+            // Master's fractional position within current beat (0–1)
+            const masterFrac = (((masterTime - other.firstBeatOffset) / masterBeatPeriod) % 1 + 1) % 1;
 
-          // This deck's current time and beat period at new rate
-          const thisTime = engine.getCurrentTime(deck);
-          const thisBeatPeriod = 60 / effectiveBpm;
-          const thisFrac = (((thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod) % 1 + 1) % 1;
+            // This deck's current time and beat period at new rate
+            const thisTime = engine.getCurrentTime(deck);
+            const thisBeatPeriod = 60 / effectiveBpm;
+            const thisFrac = (((thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod) % 1 + 1) % 1;
 
-          // Phase delta: how far this deck is from matching master
-          let phaseDelta = masterFrac - thisFrac;
-          if (phaseDelta > 0.5) phaseDelta -= 1;
-          if (phaseDelta < -0.5) phaseDelta += 1;
+            // Phase delta: how far this deck is from matching master
+            let phaseDelta = masterFrac - thisFrac;
+            if (phaseDelta > 0.5) phaseDelta -= 1;
+            if (phaseDelta < -0.5) phaseDelta += 1;
 
-          // Convert to seconds and seek
-          let seekOffset = phaseDelta * thisBeatPeriod;
+            // Convert to seconds and seek
+            let seekOffset = phaseDelta * thisBeatPeriod;
 
-          // ── 3. Phrase / bar align (structural sync) ──────────
-          const mode = thisDeck.syncMode;
-          if (mode === 'bar' || mode === 'phrase') {
-            const groupSize = mode === 'phrase' ? 16 : 4;
-            // Compute beat-in-group for both decks
-            const masterBeat = (masterTime - other.firstBeatOffset) / masterBeatPeriod;
-            const thisBeat = (thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod;
-            const masterPos = ((masterBeat % groupSize) + groupSize) % groupSize;
-            const thisPos = ((thisBeat % groupSize) + groupSize) % groupSize;
+            // ── 4. Phrase / bar align (structural sync) ────────
+            const mode = thisDeck.syncMode;
+            if (mode === 'bar' || mode === 'phrase') {
+              const groupSize = mode === 'phrase' ? 16 : 4;
+              const masterBeat = (masterTime - other.firstBeatOffset) / masterBeatPeriod;
+              const thisBeat = (thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod;
+              const masterPos = ((masterBeat % groupSize) + groupSize) % groupSize;
+              const thisPos = ((thisBeat % groupSize) + groupSize) % groupSize;
 
-            let phraseOffset = Math.round(masterPos - thisPos);
-            if (phraseOffset > groupSize / 2) phraseOffset -= groupSize;
-            if (phraseOffset < -groupSize / 2) phraseOffset += groupSize;
+              let phraseOffset = Math.round(masterPos - thisPos);
+              if (phraseOffset > groupSize / 2) phraseOffset -= groupSize;
+              if (phraseOffset < -groupSize / 2) phraseOffset += groupSize;
 
-            seekOffset += phraseOffset * thisBeatPeriod;
-          }
+              seekOffset += phraseOffset * thisBeatPeriod;
+            }
 
-          if (Math.abs(seekOffset) > 0.005) { // Only if > 5ms off
-            const targetTime = thisTime + seekOffset;
-            engine.seek(deck, Math.max(0, targetTime));
+            if (Math.abs(seekOffset) > 0.005) { // Only if > 5ms off
+              const targetTime = thisTime + seekOffset;
+              engine.seek(deck, Math.max(0, targetTime));
+            }
           }
         }
 
-        // Start PLL for continuous phase correction
+        // Start PLL for continuous phase correction.
+        // Freeze briefly after seek to avoid PLL fighting the discontinuity.
         phaseLockLoop.reset(deck);
         phaseLockLoop.start();
+        phaseLockLoop.freeze(deck);
+        setTimeout(() => phaseLockLoop.unfreeze(deck), 200);
 
         return {
           decks: {

@@ -36,17 +36,17 @@ import { phasePredictor } from './predictivePhase';
 
 // ── PI constants (tuned for DJ use) ─────────────────────────
 
-/** Proportional gain: fast but gentle reaction. */
-const Kp = 0.02;
+/** Proportional gain: responsive but smooth. */
+const Kp = 0.04;
 
-/** Integral gain: eliminates steady-state error in ~2s. */
-const Ki = 0.001;
+/** Integral gain: eliminates steady-state error in ~1.5s. */
+const Ki = 0.002;
 
 /** Ignore phase errors below this fraction of a beat (inaudible). */
-const DEADZONE = 0.005;
+const DEADZONE = 0.003;
 
-/** Max correction: ±0.1% rate change — imperceptible. */
-const MAX_CORRECTION = 0.001;
+/** Max correction: ±0.3% rate change — inaudible, 3× faster lock. */
+const MAX_CORRECTION = 0.003;
 
 /** Anti-windup: integral never exceeds this value. */
 const INTEGRAL_MAX = 0.05;
