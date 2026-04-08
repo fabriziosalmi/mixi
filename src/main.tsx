@@ -21,10 +21,17 @@
 // in the desktop bundle.
 // ─────────────────────────────────────────────────────────────
 
-import { StrictMode, lazy, Suspense } from 'react';
+import React, { StrictMode, lazy, Suspense } from 'react';
+import ReactDOM from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
+
+// ── Expose React for external deck plugins (ESM imports) ────
+// External decks loaded via dynamic import() can't resolve bare
+// "react" specifiers. They reference window.__MIXI_REACT__ instead.
+(window as any).__MIXI_REACT__ = React;
+(window as any).__MIXI_REACT_DOM__ = ReactDOM;
 
 // ── Device detection: synchronous, pre-mount, one-time ──────
 // Uses the short side of the viewport (invariant to orientation)
