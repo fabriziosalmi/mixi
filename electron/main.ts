@@ -52,9 +52,11 @@ app.commandLine.appendSwitch('audio-buffer-size', '128');
 app.commandLine.appendSwitch('disable-audio-output-resampler');
 
 // GPU acceleration for canvas/WebGL (waveforms, VU meters)
+// Note: ignore-gpu-blocklist removed — it can cause crashes on
+// Windows systems with old/buggy GPU drivers (AMD iGPU, old Nvidia).
+// Chromium's default blocklist is there for a reason.
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 // WebAssembly SIMD (our DSP engine uses simd128)
 app.commandLine.appendSwitch('enable-features',

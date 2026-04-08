@@ -99,6 +99,26 @@ jobs:
         env:
           RUSTFLAGS: '-C target-feature=+simd128'
 
+      - name: Build mixi-native (N-API audio addon)
+        run: |
+          cd mixi-native
+          cargo build --release
+          mkdir -p ../electron/native
+        shell: bash
+
+      - name: Copy native addon (macOS)
+        if: runner.os == 'macOS'
+        run: cp mixi-native/target/release/libmixi_native.dylib electron/native/mixi_native.darwin-arm64.node
+
+      - name: Copy native addon (Windows)
+        if: runner.os == 'Windows'
+        run: copy mixi-native\target\release\mixi_native.dll electron\native\mixi_native.win32-x64.node
+        shell: cmd
+
+      - name: Copy native addon (Linux)
+        if: runner.os == 'Linux'
+        run: cp mixi-native/target/release/libmixi_native.so electron/native/mixi_native.linux-x64.node
+
       - name: Download mixi-engine binary
         uses: actions/download-artifact@v4
         with:
@@ -116,11 +136,10 @@ jobs:
           SKIP_WASM_BUILD: "1"
         run: ${{ matrix.dist-cmd }}
 
-      - name: Clean release artifacts
+      - name: Clean release artifacts (keep installers, remove metadata)
         shell: bash
         run: |
-          rm -f release/*.blockmap release/*.yml
-          rm -f release/Mixi.Setup.*.exe
+          rm -f release/*.blockmap release/*.yml release/*.yaml
 
       - uses: actions/upload-artifact@v4
         with:

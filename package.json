@@ -83,12 +83,17 @@
       "dist/**/*",
       "electron/dist/**/*",
       "electron/package.json",
+      "electron/native/**/*",
       "skins/**/*"
+    ],
+    "asarUnpack": [
+      "electron/native/**/*.node"
     ],
     "extraResources": [
       {
         "from": "api/dist/mixi-engine${env.EXEC_EXT}",
-        "to": "mixi-engine${env.EXEC_EXT}"
+        "to": "mixi-engine${env.EXEC_EXT}",
+        "filter": ["**/*"]
       }
     ],
     "mac": {
