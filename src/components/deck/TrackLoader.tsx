@@ -115,9 +115,10 @@ const ModulePicker: FC<{
       <div
         className="grid gap-1"
         style={{
-          gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-          maxHeight: allDecks.length > 12 ? '200px' : undefined,
-          overflowY: allDecks.length > 12 ? 'auto' : undefined,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+          maxHeight: '340px',
+          overflowY: 'auto',
+          flex: 1,
         }}
       >
         {filtered.map((deck) => {
@@ -383,10 +384,10 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
   // ── Render ─────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-3 w-full max-w-sm px-6">
+    <div className="flex flex-col gap-2 w-full max-w-lg px-4">
       {/* ── Deck Identity Bar ─────────────────────────────── */}
       <div
-        className="flex items-center gap-2 -mx-6 -mt-2 px-4 py-2 mb-1"
+        className="flex items-center gap-2 -mx-4 -mt-1 px-3 py-1.5"
         style={{
           background: `linear-gradient(90deg, ${color}08, transparent)`,
           borderBottom: `1px solid ${color}18`,
@@ -412,7 +413,7 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
         onClick={() => !isLoading && fileInputRef.current?.click()}
         className={`
           flex items-center justify-center rounded-lg border border-dashed
-          px-4 py-14 text-center text-xs cursor-pointer
+          px-4 py-6 text-center text-xs cursor-pointer
           transition-all duration-200
           ${isLoading ? 'pointer-events-none opacity-50' : ''}
         `}
@@ -432,7 +433,7 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
           <div className="flex flex-col items-center gap-3">
             {/* Vinyl disc — breathing idle animation */}
             <svg
-              width="48" height="48" viewBox="0 0 48 48"
+              width="32" height="32" viewBox="0 0 48 48"
               fill="none" stroke="currentColor" strokeWidth="1"
               className="mixi-breathe-vinyl"
               style={{ color: `${color}66` }}
