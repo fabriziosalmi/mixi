@@ -77,7 +77,7 @@ export const SettingsModal: FC = () => {
       onClick={() => close(false)}
     >
       <div
-        className="w-[600px] max-h-[78vh] rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden"
+        className="w-[660px] max-h-[78vh] rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--srf-base)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -761,7 +761,7 @@ function SegmentedControl<T extends string | number>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap rounded-md overflow-hidden" style={{ border: '1px solid var(--brd-default)', maxWidth: 340 }}>
+    <div className="flex flex-wrap rounded-md overflow-hidden" style={{ border: '1px solid var(--brd-default)', maxWidth: 400 }}>
       {options.map((opt, i) => {
         const active = value === opt.value;
         return (
