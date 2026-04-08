@@ -175,9 +175,11 @@ function estimateBpm(onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT
       const weight = strength * hopWeight;
 
       // Vote for raw BPM and harmonic multiples
+      // Keep harmonic weight low (0.3) to avoid reinforcing wrong octave
+      // when kick+hat patterns create IOIs at both beat and half-beat
       voteBin(rawBpm, weight);
-      voteBin(rawBpm * 2, weight * 0.7);
-      voteBin(rawBpm / 2, weight * 0.7);
+      voteBin(rawBpm * 2, weight * 0.3);
+      voteBin(rawBpm / 2, weight * 0.3);
     }
   }
 
@@ -234,39 +236,132 @@ function estimateBpm(onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT
 /**
  * Octave resolution: decide if BPM should be doubled or halved.
  *
- * Strategy: compute grid alignment score for the candidate BPM
- * and its double/half. Pick the one with better alignment AND
- * that falls in a preferred range for electronic music.
+ * Strategy:
+ *   1. Grid alignment score (how many onsets land on beat positions)
+ *   2. Strong/weak beat analysis: at the correct BPM, downbeats should
+ *      be stronger than upbeats (kick on 1,2,3,4 / hat on &). If all
+ *      beats have equal strength → BPM is likely the double.
+ *   3. DJ range preference: 80–185 BPM is strongly preferred.
  *
- * Electronic music conventions:
- *   - House / Techno: 120-150
- *   - Hard techno: 145-165
- *   - DnB / Jungle: 165-180
- *   - Rarely below 100 or above 185 for DJ music
+ * This solves the classic kick+hat octave doubling problem where 120 BPM
+ * tracks are wrongly detected as 240.
  */
 function resolveOctave(bpm: number, onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT_BPM_MAX): number {
-  // Generate candidates: bpm, bpm×2, bpm÷2
   const candidates: number[] = [bpm];
   if (bpm * 2 <= bpmMax) candidates.push(bpm * 2);
   if (bpm / 2 >= bpmMin) candidates.push(bpm / 2);
 
+  // If only the original candidate, nothing to resolve
+  if (candidates.length === 1) return bpm;
+
   let bestBpm = bpm;
-  let bestScore = -1;
+  let bestScore = -Infinity;
 
   for (const candidate of candidates) {
-    const score = gridAlignmentScore(candidate, onsets);
+    const alignment = gridAlignmentScore(candidate, onsets);
+    const swRatio = strongWeakRatio(candidate, onsets);
 
-    // Prefer BPM in "DJ range" (100-185) with a small bonus
-    const inDjRange = candidate >= 100 && candidate <= 185;
-    const adjustedScore = score * (inDjRange ? 1.15 : 1.0);
+    // SW bonus: gentle multiplier (1.0–1.3)
+    const swBonus = 1 + Math.min(Math.max(swRatio - 1, 0), 1.0) * 0.3;
 
-    if (adjustedScore > bestScore) {
-      bestScore = adjustedScore;
+    // ── Histogram prior bonus ──
+    // The IOI histogram already picked `bpm` as the strongest peak.
+    // Give it a prior bonus — another candidate must be SIGNIFICANTLY
+    // better in alignment to override the statistical evidence.
+    const priorBonus = (candidate === bpm) ? 1.35 : 1.0;
+
+    // ── DJ range preference ──
+    let rangeFactor = 1.0;
+    if (candidate >= 80 && candidate <= 185) {
+      rangeFactor = 1.3;
+    } else if (candidate >= 70 && candidate < 80) {
+      rangeFactor = 1.1;
+    } else if (candidate > 185 && candidate <= 200) {
+      rangeFactor = 1.0;
+    } else {
+      rangeFactor = 0.5; // <70 or >200: almost certainly wrong octave
+    }
+
+    const score = alignment * swBonus * rangeFactor * priorBonus;
+
+    if (score > bestScore) {
+      bestScore = score;
       bestBpm = candidate;
     }
   }
 
   return bestBpm;
+}
+
+/**
+ * Measure the strength ratio between downbeats and upbeats.
+ *
+ * At the correct BPM:
+ *   - Downbeats (beat 0, 2, 4...) have kicks → HIGH strength
+ *   - Upbeats (beat 1, 3, 5...) have hihats/nothing → LOW strength
+ *   - Ratio > 1.0
+ *
+ * At 2× the correct BPM:
+ *   - Every onset is a "beat" → all have similar strength
+ *   - Ratio ≈ 1.0
+ *
+ * Returns downbeatStrength / upbeatStrength (or 1.0 if insufficient data).
+ */
+function strongWeakRatio(bpm: number, onsets: Onset[]): number {
+  if (onsets.length < 6) return 1.0;
+
+  const beatPeriod = 60 / bpm;
+  const tolerance = beatPeriod * 0.15;
+  const searchCount = Math.min(onsets.length, 80);
+
+  // Find the best grid phase (use first few onsets as candidates)
+  let bestPhase = onsets[0].time;
+  let bestPhaseScore = 0;
+  for (let c = 0; c < Math.min(8, searchCount); c++) {
+    let score = 0;
+    for (let j = 0; j < searchCount; j++) {
+      const delta = onsets[j].time - onsets[c].time;
+      const beatFrac = (delta / beatPeriod) % 1;
+      const dist = Math.min(beatFrac, 1 - beatFrac) * beatPeriod;
+      if (dist < tolerance) score += onsets[j].strength;
+    }
+    if (score > bestPhaseScore) {
+      bestPhaseScore = score;
+      bestPhase = onsets[c].time;
+    }
+  }
+
+  // Classify onsets as landing on even beats (downbeat) or odd beats (upbeat)
+  let downbeatSum = 0;
+  let downbeatCount = 0;
+  let upbeatSum = 0;
+  let upbeatCount = 0;
+
+  for (let j = 0; j < searchCount; j++) {
+    const delta = onsets[j].time - bestPhase;
+    if (delta < -tolerance) continue;
+
+    const beatPos = delta / beatPeriod;
+    const nearestBeat = Math.round(beatPos);
+    const dist = Math.abs(beatPos - nearestBeat) * beatPeriod;
+
+    if (dist < tolerance) {
+      if (nearestBeat % 2 === 0) {
+        downbeatSum += onsets[j].strength;
+        downbeatCount++;
+      } else {
+        upbeatSum += onsets[j].strength;
+        upbeatCount++;
+      }
+    }
+  }
+
+  if (downbeatCount < 2 || upbeatCount < 2) return 1.0;
+
+  const downAvg = downbeatSum / downbeatCount;
+  const upAvg = upbeatSum / upbeatCount;
+
+  return upAvg > 0.001 ? downAvg / upAvg : 2.0;
 }
 
 /**

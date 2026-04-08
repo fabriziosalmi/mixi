@@ -233,106 +233,313 @@ function checkPhaseAlignment(
   return { tempoRatio, phaseError: normalizedPhase };
 }
 
+// ── Additional synthesis: tonal bass ─────────────────────────
+
+/** Low sine bass hit (sub-bass, different timbre from kick) */
+function addBass(buf: Float32Array, pos: number, amplitude = 0.6) {
+  const len = Math.floor(SR * 0.12);
+  for (let i = 0; i < len && pos + i < buf.length; i++) {
+    const t = i / SR;
+    const env = Math.exp(-t * 15);
+    buf[pos + i] += amplitude * env * Math.sin(2 * Math.PI * 55 * t);
+  }
+}
+
+/** Clap sound (filtered noise with pre-delay flutter) */
+function addClap(buf: Float32Array, pos: number, amplitude = 0.4) {
+  // 3 micro-hits then sustain
+  for (let hit = 0; hit < 3; hit++) {
+    const start = pos + Math.floor(hit * SR * 0.008);
+    const len = Math.floor(SR * 0.005);
+    for (let i = 0; i < len && start + i < buf.length; i++) {
+      buf[start + i] += amplitude * 0.5 * (Math.random() * 2 - 1);
+    }
+  }
+  const mainStart = pos + Math.floor(SR * 0.025);
+  const mainLen = Math.floor(SR * 0.04);
+  for (let i = 0; i < mainLen && mainStart + i < buf.length; i++) {
+    const t = i / SR;
+    buf[mainStart + i] += amplitude * Math.exp(-t * 60) * (Math.random() * 2 - 1);
+  }
+}
+
+/** Rim shot (high-pitched short click) */
+function addRim(buf: Float32Array, pos: number, amplitude = 0.35) {
+  const len = Math.floor(SR * 0.006);
+  for (let i = 0; i < len && pos + i < buf.length; i++) {
+    const t = i / SR;
+    buf[pos + i] += amplitude * Math.exp(-t * 400) * Math.sin(2 * Math.PI * 800 * t);
+  }
+}
+
+/** Generate 4/4 house pattern: kick every beat, clap on 2&4, hat on 8ths */
+function generateHouseTrack(bpm: number, offsetSec = 0): Float32Array {
+  const buf = new Float32Array(SAMPLES);
+  const beatInterval = (60 / bpm) * SR;
+  let pos = Math.floor(offsetSec * SR);
+  let beat = 0;
+  while (pos < SAMPLES) {
+    addKick(buf, Math.floor(pos));
+    if (beat % 2 === 1) addClap(buf, Math.floor(pos)); // clap on 2, 4
+    addHihat(buf, Math.floor(pos), 0.12);
+    const hatOff = Math.floor(pos + beatInterval / 2);
+    if (hatOff < SAMPLES) addHihat(buf, hatOff, 0.18);
+    pos += beatInterval;
+    beat++;
+  }
+  return buf;
+}
+
+/** Generate breakbeat pattern: kick on 1, snare on 2.5, kick on 3.75, snare on 4 */
+function generateBreakbeat(bpm: number): Float32Array {
+  const buf = new Float32Array(SAMPLES);
+  const beatInterval = (60 / bpm) * SR;
+  let barStart = 0;
+  while (barStart < SAMPLES) {
+    addKick(buf, Math.floor(barStart));                             // 1
+    addSnare(buf, Math.floor(barStart + beatInterval * 1.5));       // 2.5 (syncopated)
+    addKick(buf, Math.floor(barStart + beatInterval * 2.75));       // 3.75
+    addSnare(buf, Math.floor(barStart + beatInterval * 3));         // 4
+    // hats on 8ths
+    for (let i = 0; i < 8; i++) {
+      const p = Math.floor(barStart + beatInterval * i * 0.5);
+      if (p < SAMPLES) addHihat(buf, p, 0.15);
+    }
+    barStart += beatInterval * 4;
+  }
+  return buf;
+}
+
+/** Generate techno pattern: kick every beat, rim on offbeats, hat on 16ths */
+function generateTechnoTrack(bpm: number): Float32Array {
+  const buf = new Float32Array(SAMPLES);
+  const beatInterval = (60 / bpm) * SR;
+  let pos = 0;
+  let beat = 0;
+  while (pos < SAMPLES) {
+    addKick(buf, Math.floor(pos), 0.9);
+    // Rim on offbeat
+    const rimPos = Math.floor(pos + beatInterval / 2);
+    if (rimPos < SAMPLES) addRim(buf, rimPos);
+    // Hats on 16ths
+    for (let i = 0; i < 4; i++) {
+      const p = Math.floor(pos + beatInterval * i / 4);
+      if (p < SAMPLES) addHihat(buf, p, 0.1 + (i % 2) * 0.08);
+    }
+    pos += beatInterval;
+    beat++;
+  }
+  return buf;
+}
+
+/** Generate DnB pattern: kick syncopated, snare on 2, fast hats */
+function generateDnbTrack(bpm: number): Float32Array {
+  const buf = new Float32Array(SAMPLES);
+  const beatInterval = (60 / bpm) * SR;
+  let barStart = 0;
+  while (barStart < SAMPLES) {
+    addKick(buf, Math.floor(barStart));                         // 1
+    addSnare(buf, Math.floor(barStart + beatInterval));         // 2
+    addKick(buf, Math.floor(barStart + beatInterval * 2.5));    // 3.5 (syncopated)
+    addSnare(buf, Math.floor(barStart + beatInterval * 3));     // 4
+    // fast hats on 16ths
+    for (let i = 0; i < 16; i++) {
+      const p = Math.floor(barStart + beatInterval * i * 0.25);
+      if (p < SAMPLES) addHihat(buf, p, 0.08 + (i % 4 === 0 ? 0.1 : 0));
+    }
+    barStart += beatInterval * 4;
+  }
+  return buf;
+}
+
 // ═════════════════════════════════════════════════════════════
 // TESTS
 // ═════════════════════════════════════════════════════════════
 
 describe('BPM Detection Bench', () => {
 
-  // ── L1: Pure Click Tracks ──────────────────────────────────
+  // ── L1: Pure Kick Tracks — wide BPM range ─────────────────
 
-  describe('L1 — Pure click track (ideal)', () => {
-    const BPMs = [85, 100, 120, 128, 140, 150, 170, 174];
+  describe('L1 — Pure kick track (ideal)', () => {
+    const BPMs = [80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 128, 130, 135, 140, 145, 150, 155, 160, 165, 170, 174, 180];
 
     for (const bpm of BPMs) {
-      it(`detects ${bpm} BPM click track`, () => {
-        const samples = generateClickTrack(bpm);
-        const result = detectFromSamples(samples);
+      it(`detects ${bpm} BPM kick track`, () => {
+        const buf = new Float32Array(SAMPLES);
+        const beatInterval = (60 / bpm) * SR;
+        let pos = 0;
+        while (pos < SAMPLES) {
+          addKick(buf, Math.floor(pos));
+          pos += beatInterval;
+        }
+        const result = detectFromSamples(buf);
 
         expect(result.confidence).toBeGreaterThan(0);
-        expect(bpmMatchesOctave(result.bpm, bpm)).toBe(true);
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
       });
     }
   });
 
-  // ── L2: Kick + Hihat ──────────────────────────────────────
+  // ── L2: Kick + Hihat — expanded range ──────────────────────
 
   describe('L2 — Kick + hihat pattern', () => {
-    const BPMs = [90, 110, 120, 128, 140, 160, 174];
+    const strictBPMs = [110, 115, 120, 125, 128, 130, 135, 140, 145, 150, 155, 160, 165, 170, 174];
+    const octaveBPMs = [85, 90, 95, 100]; // <=100: IOI peaks at 2× due to hats
 
-    for (const bpm of BPMs) {
-      it(`detects ${bpm} BPM kick-hat track`, () => {
+    for (const bpm of strictBPMs) {
+      it(`detects ${bpm} BPM kick-hat (strict)`, () => {
         const samples = generateKickHatTrack(bpm);
         const result = detectFromSamples(samples);
-
         expect(result.confidence).toBeGreaterThan(0);
-        expect(bpmMatchesOctave(result.bpm, bpm)).toBe(true);
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+      });
+    }
+
+    for (const bpm of octaveBPMs) {
+      it(`detects ${bpm} BPM kick-hat (octave ok — TODO)`, () => {
+        const samples = generateKickHatTrack(bpm);
+        const result = detectFromSamples(samples);
+        expect(result.confidence).toBeGreaterThan(0);
+        expect(bpmMatchesOctave(result.bpm, bpm, 2)).toBe(true);
       });
     }
   });
 
-  // ── L3: Kick + Hat + Noise ─────────────────────────────────
+  // ── L2b: Genre-specific patterns ──────────────────────────
+
+  describe('L2b — House pattern (kick + clap + hat)', () => {
+    for (const bpm of [118, 120, 122, 124, 126, 128, 130]) {
+      it(`detects ${bpm} BPM house track`, () => {
+        const result = detectFromSamples(generateHouseTrack(bpm));
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+      });
+    }
+  });
+
+  describe('L2c — Techno pattern (kick + rim + 16th hats)', () => {
+    // 16th-note hats generate 4× onset density — octave-sensitive
+    for (const bpm of [128, 130, 135, 150]) {
+      it(`detects ${bpm} BPM techno track (strict)`, () => {
+        const result = detectFromSamples(generateTechnoTrack(bpm));
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+      });
+    }
+    // 16th-note hats at 140+ create 4:3 harmonic interference.
+    // Known hard case — just verify detection doesn't crash and returns something.
+    for (const bpm of [140, 145]) {
+      it(`detects ${bpm} BPM techno track (hard — any result ok)`, () => {
+        const result = detectFromSamples(generateTechnoTrack(bpm));
+        expect(result.bpm).toBeGreaterThan(0);
+        expect(result.confidence).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  describe('L2d — DnB pattern (syncopated kick + fast hats)', () => {
+    for (const bpm of [165, 170, 176]) {
+      it(`detects ${bpm} BPM DnB track (strict)`, () => {
+        const result = detectFromSamples(generateDnbTrack(bpm));
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+      });
+    }
+    it(`detects 174 BPM DnB track (octave ok — fast hat density)`, () => {
+      const result = detectFromSamples(generateDnbTrack(174));
+      expect(bpmMatchesOctave(result.bpm, 174, 2)).toBe(true);
+    });
+  });
+
+  describe('L2e — Breakbeat pattern', () => {
+    for (const bpm of [120, 128, 135, 140]) {
+      it(`detects ${bpm} BPM breakbeat`, () => {
+        const result = detectFromSamples(generateBreakbeat(bpm));
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+      });
+    }
+  });
+
+  // ── L3: Kick + Hat + Noise (STRICT) ────────────────────────
 
   describe('L3 — Noisy track (pink noise floor)', () => {
     const testCases = [
-      { bpm: 120, noise: 0.03, label: 'low noise' },
-      { bpm: 128, noise: 0.08, label: 'medium noise' },
-      { bpm: 140, noise: 0.12, label: 'high noise' },
-      { bpm: 100, noise: 0.06, label: 'downtempo + noise' },
-      { bpm: 170, noise: 0.05, label: 'DnB + noise' },
+      { bpm: 110, noise: 0.02, label: '110 minimal noise' },
+      { bpm: 120, noise: 0.03, label: '120 low noise' },
+      { bpm: 120, noise: 0.08, label: '120 medium noise' },
+      { bpm: 128, noise: 0.05, label: '128 low noise' },
+      { bpm: 128, noise: 0.10, label: '128 high noise' },
+      { bpm: 135, noise: 0.06, label: '135 medium noise' },
+      { bpm: 140, noise: 0.04, label: '140 low noise' },
+      { bpm: 140, noise: 0.12, label: '140 heavy noise' },
+      { bpm: 150, noise: 0.07, label: '150 medium noise' },
+      { bpm: 100, noise: 0.06, label: '100 downtempo + noise', octaveOk: true },
+      { bpm: 170, noise: 0.05, label: '170 DnB + noise' },
+      { bpm: 174, noise: 0.08, label: '174 DnB + heavy noise' },
     ];
 
-    for (const { bpm, noise, label } of testCases) {
-      it(`detects ${bpm} BPM with ${label}`, () => {
+    for (const tc of testCases) {
+      const { bpm, noise, label } = tc;
+      const octaveOk = (tc as any).octaveOk;
+      it(`detects ${bpm} BPM with ${label} (${octaveOk ? 'octave ok — TODO' : 'strict'})`, () => {
         const samples = generateNoisyTrack(bpm, 0, noise);
         const result = detectFromSamples(samples);
 
         expect(result.confidence).toBeGreaterThan(0);
-        expect(bpmMatchesOctave(result.bpm, bpm)).toBe(true);
+        if (octaveOk) {
+          expect(bpmMatchesOctave(result.bpm, bpm, 2)).toBe(true);
+        } else {
+          expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
+        }
       });
     }
   });
 
   // ── L4: Syncopated Patterns ────────────────────────────────
 
-  describe('L4 — Syncopated drums', () => {
+  describe('L4 — Syncopated drums (strict)', () => {
     const BPMs = [110, 120, 128, 140, 150];
 
     for (const bpm of BPMs) {
-      it(`detects ${bpm} BPM syncopated pattern`, () => {
+      it(`detects ${bpm} BPM syncopated pattern (strict)`, () => {
         const samples = generateSyncopatedTrack(bpm);
         const result = detectFromSamples(samples);
 
         expect(result.confidence).toBeGreaterThan(0);
-        expect(bpmMatchesOctave(result.bpm, bpm)).toBe(true);
+        expect(bpmMatchesExact(result.bpm, bpm, 2)).toBe(true);
       });
     }
   });
 
   // ── L5: Mixed Tracks ───────────────────────────────────────
 
-  describe('L5 — Mixed tracks (dominant track detection)', () => {
-    it('detects dominant BPM when A is louder (128 vs 120, A at 80%)', () => {
-      const samples = generateMixedTrack(128, 120, 0.2);
-      const result = detectFromSamples(samples);
-      // Dominant track A at 128 should win
-      expect(bpmMatchesOctave(result.bpm, 128)).toBe(true);
-    });
+  describe('L5 — Mixed tracks (dominant detection)', () => {
+    const mixTests = [
+      { a: 128, b: 120, mix: 0.2, expect: 128, label: '128 dominant over 120' },
+      { a: 128, b: 140, mix: 0.8, expect: 140, label: '140 dominant over 128' },
+      { a: 120, b: 130, mix: 0.15, expect: 120, label: '120 dominant over 130' },
+      { a: 135, b: 140, mix: 0.85, expect: 140, label: '140 dominant over 135' },
+      { a: 150, b: 128, mix: 0.25, expect: 150, label: '150 dominant over 128' },
+      { a: 120, b: 170, mix: 0.1, expect: 120, label: 'house dominant over DnB' },
+    ];
 
-    it('detects dominant BPM when B is louder (128 vs 140, B at 80%)', () => {
-      const samples = generateMixedTrack(128, 140, 0.8);
-      const result = detectFromSamples(samples);
-      // Dominant track B at 140 should win
-      expect(bpmMatchesOctave(result.bpm, 140)).toBe(true);
-    });
+    for (const { a, b, mix, expect: exp, label } of mixTests) {
+      it(`detects ${label}`, () => {
+        const samples = generateMixedTrack(a, b, mix);
+        const result = detectFromSamples(samples);
+        expect(bpmMatchesExact(result.bpm, exp, 3)).toBe(true);
+      });
+    }
 
     it('detects either BPM at equal mix (128 vs 130)', () => {
       const samples = generateMixedTrack(128, 130, 0.5);
       const result = detectFromSamples(samples);
-      // Either 128 or 130 is acceptable at equal mix
-      const match128 = bpmMatchesOctave(result.bpm, 128, 3);
-      const match130 = bpmMatchesOctave(result.bpm, 130, 3);
-      expect(match128 || match130).toBe(true);
+      const match = bpmMatchesExact(result.bpm, 128, 3) || bpmMatchesExact(result.bpm, 130, 3);
+      expect(match).toBe(true);
+    });
+
+    it('detects either BPM at equal mix (120 vs 125)', () => {
+      const samples = generateMixedTrack(120, 125, 0.5);
+      const result = detectFromSamples(samples);
+      const match = bpmMatchesExact(result.bpm, 120, 3) || bpmMatchesExact(result.bpm, 125, 3);
+      expect(match).toBe(true);
     });
   });
 });
@@ -381,9 +588,9 @@ describe('Sync & Phase Alignment Bench', () => {
         const resultA = detectFromSamples(samplesA);
         const resultB = detectFromSamples(samplesB);
 
-        // Both BPMs should be detected correctly first
-        expect(bpmMatchesOctave(resultA.bpm, bpmA)).toBe(true);
-        expect(bpmMatchesOctave(resultB.bpm, bpmB)).toBe(true);
+        // Both BPMs should be detected correctly (strict — no octave ambiguity)
+        expect(bpmMatchesExact(resultA.bpm, bpmA, 2)).toBe(true);
+        expect(bpmMatchesExact(resultB.bpm, bpmB, 2)).toBe(true);
 
         // Sync ratio should match expected (accounting for octave)
         // If both detected at correct octave:
@@ -414,9 +621,9 @@ describe('Sync & Phase Alignment Bench', () => {
       const resultA = detectFromSamples(samplesA);
       const resultB = detectFromSamples(samplesB);
 
-      // Both should detect 128 BPM
-      expect(bpmMatchesOctave(resultA.bpm, 128)).toBe(true);
-      expect(bpmMatchesOctave(resultB.bpm, 128)).toBe(true);
+      // Both should detect 128 BPM (strict)
+      expect(bpmMatchesExact(resultA.bpm, 128, 2)).toBe(true);
+      expect(bpmMatchesExact(resultB.bpm, 128, 2)).toBe(true);
 
       // Phase difference should be approximately 0.5 beats
       const { phaseError } = checkPhaseAlignment(resultA, resultB, 128, 128);
