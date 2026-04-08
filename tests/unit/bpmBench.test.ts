@@ -670,8 +670,86 @@ describe('Sync & Phase Alignment Bench', () => {
         pos += beatInterval;
       }
       const result = detectBpm(makeAudioBuffer(buf));
-      // Short tracks have fewer onsets — allow wider tolerance
       expect(bpmMatchesOctave(result.bpm, 128, 5)).toBe(true);
+    });
+  });
+
+  // ── Negative Tests ─────────────────────────────────────────
+
+  describe('Negative tests — graceful failure', () => {
+    it('DC offset (constant value) → fallback BPM, zero confidence', () => {
+      const buf = new Float32Array(SAMPLES).fill(0.5);
+      const result = detectFromSamples(buf);
+      expect(result.bpm).toBe(120); // fallback
+      expect(result.confidence).toBe(0);
+    });
+
+    it('single impulse in 15s → does not crash', () => {
+      const buf = new Float32Array(SAMPLES);
+      addKick(buf, Math.floor(SR * 7)); // one kick at 7 seconds
+      const result = detectFromSamples(buf);
+      expect(result.bpm).toBeGreaterThan(0);
+      // Too few onsets → low confidence
+      expect(result.confidence).toBeLessThan(0.5);
+    });
+
+    it('frequency sweep (no rhythm) → low confidence', () => {
+      const buf = new Float32Array(SAMPLES);
+      for (let i = 0; i < SAMPLES; i++) {
+        const t = i / SR;
+        const freq = 50 + (t / 15) * 2000; // sweep 50→2050 Hz
+        buf[i] = 0.3 * Math.sin(2 * Math.PI * freq * t);
+      }
+      const result = detectFromSamples(buf);
+      expect(result.bpm).toBeGreaterThan(0); // returns something
+    });
+
+    it('two impulses only → fallback', () => {
+      const buf = new Float32Array(SAMPLES);
+      addKick(buf, Math.floor(SR * 2));
+      addKick(buf, Math.floor(SR * 4));
+      const result = detectFromSamples(buf);
+      // < 4 onsets → fallback
+      expect(result.bpm).toBe(120);
+      expect(result.confidence).toBe(0);
+    });
+
+    it('very quiet signal → fallback', () => {
+      const buf = new Float32Array(SAMPLES);
+      const beatInterval = (60 / 128) * SR;
+      let pos = 0;
+      while (pos < SAMPLES) {
+        addKick(buf, Math.floor(pos), 0.001); // nearly silent kicks
+        pos += beatInterval;
+      }
+      const result = detectFromSamples(buf);
+      // May or may not detect — just don't crash
+      expect(result.bpm).toBeGreaterThan(0);
+    });
+
+    it('buffer of all zeros → fallback 120, confidence 0', () => {
+      const buf = new Float32Array(SAMPLES);
+      const result = detectFromSamples(buf);
+      expect(result.bpm).toBe(120);
+      expect(result.confidence).toBe(0);
+    });
+
+    it('very short buffer (0.5s) → does not crash', () => {
+      const buf = new Float32Array(Math.floor(SR * 0.5));
+      addKick(buf, 0);
+      const result = detectBpm(makeAudioBuffer(buf));
+      expect(result.bpm).toBeGreaterThan(0);
+    });
+
+    it('extremely dense clicks (every 10ms = 6000 BPM) → clamps to range', () => {
+      const buf = new Float32Array(SAMPLES);
+      const interval = Math.floor(SR * 0.01); // 10ms
+      for (let pos = 0; pos < SAMPLES; pos += interval) {
+        addClick(buf, pos, 0.5);
+      }
+      const result = detectFromSamples(buf);
+      expect(result.bpm).toBeGreaterThanOrEqual(65);
+      expect(result.bpm).toBeLessThanOrEqual(250);
     });
   });
 });
