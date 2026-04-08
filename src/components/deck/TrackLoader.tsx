@@ -178,7 +178,8 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
       e.preventDefault();
       setIsDragOver(false);
       const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('audio/')) {
+      const isMedia = file && (file.type.startsWith('audio/') || file.type.startsWith('video/') || /\.(mp3|wav|flac|aiff|aac|ogg|m4a|opus|wma|webm|mp4)$/i.test(file.name));
+      if (isMedia) {
         handleFile(file);
       } else {
         setState('error');
@@ -356,7 +357,7 @@ export const TrackLoader: FC<TrackLoaderProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="audio/*"
+        accept="audio/*,video/*,.mp3,.wav,.flac,.aac,.ogg,.m4a,.opus,.aiff,.wma,.webm,.mp4"
         className="hidden"
         onChange={onFileChange}
         aria-label={`Load audio file for Deck ${deckId}`}

@@ -105,9 +105,14 @@ export const MobileTrackLoader: FC<MobileTrackLoaderProps> = ({
     const file = files[0];
     if (!file) return;
 
-    if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|flac|aiff|aac|ogg|m4a|opus)$/i)) {
+    // Accept audio files and video files (iOS often stores music as video).
+    // The Web Audio API will decode whatever format the browser supports.
+    const isAudio = file.type.startsWith('audio/');
+    const isVideo = file.type.startsWith('video/');
+    const hasAudioExt = /\.(mp3|wav|flac|aiff|aac|ogg|m4a|opus|wma|webm|mp4|m4v)$/i.test(file.name);
+    if (!isAudio && !isVideo && !hasAudioExt) {
       setState('error');
-      setErrorMsg('Not an audio file. Supported: MP3, WAV, FLAC, AAC, OGG.');
+      setErrorMsg('Unsupported file. Try MP3, WAV, FLAC, AAC, OGG, or M4A.');
       return;
     }
 
@@ -304,7 +309,7 @@ export const MobileTrackLoader: FC<MobileTrackLoaderProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="audio/*"
+        accept="audio/*,video/*,.mp3,.wav,.flac,.aac,.ogg,.m4a,.opus,.aiff,.wma,.webm,.mp4"
         multiple
         onChange={onFileChange}
         style={{ display: 'none' }}
