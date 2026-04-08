@@ -224,7 +224,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (391), Playwright (7 E2E), cargo test (196 Rust) — 594 total |
+| Tests | Vitest (555), Playwright (7 E2E), cargo test (196 Rust) — 758 total |
 | Docs | VitePress, 24 languages |
 
 ---
@@ -243,7 +243,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
-| `npm test` | Run unit tests (Vitest, 239 tests) |
+| `npm test` | Run unit tests (Vitest, 555 tests) |
 | `npm run test:watch` | Watch mode for tests |
 | `npm run test:coverage` | Test coverage report |
 | `npm run test:e2e` | Playwright E2E tests (7 tests: smoke + sync) |
