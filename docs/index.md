@@ -108,22 +108,21 @@ onMounted(() => {
 
     function reveal(text, cb) {
       let r = 0
-      sub.style.fontFamily = 'var(--font-mono, monospace)'
       const iv = setInterval(() => {
         r++
         const html = text.split('').map((c, i) => {
-          if (c === ' ') return '&nbsp;'
+          if (c === ' ') return '<span style="display:inline-block;width:0.35em">&nbsp;</span>'
           const settle = Math.floor((i / text.length) * SROUNDS * 0.6) + SROUNDS * 0.35
           const ok = r >= settle
-          const clr = ok ? 'rgba(235,235,245,0.7)' : 'rgba(235,235,245,0.18)'
+          const clr = ok ? 'rgba(235,235,245,0.55)' : 'rgba(235,235,245,0.1)'
           const ch = ok ? c : sg()
-          return `<span style="color:${clr};transition:color 120ms">${ch}</span>`
+          const sh = (ok && r - settle < 2) ? 'text-shadow:0 0 8px rgba(0,212,255,0.3)' : ''
+          return `<span style="color:${clr};transition:color 80ms;${sh}">${ch}</span>`
         }).join('')
         sub.innerHTML = html
         if (r >= SROUNDS) {
           clearInterval(iv)
-          sub.innerHTML = text
-          sub.style.fontFamily = ''
+          sub.textContent = text
           if (cb) cb()
         }
       }, SMS)
@@ -131,21 +130,19 @@ onMounted(() => {
 
     function dissolve(text, cb) {
       let r = 0
-      sub.style.fontFamily = 'var(--font-mono, monospace)'
       const iv = setInterval(() => {
         r++
         const html = text.split('').map((c, i) => {
-          if (c === ' ') return '&nbsp;'
+          if (c === ' ') return '<span style="display:inline-block;width:0.35em">&nbsp;</span>'
           const dissolveAt = Math.floor((i / text.length) * SROUNDS * 0.6) + SROUNDS * 0.3
           const gone = r >= dissolveAt
-          const clr = gone ? 'rgba(235,235,245,0.1)' : 'rgba(235,235,245,0.7)'
+          const clr = gone ? 'rgba(235,235,245,0.05)' : 'rgba(235,235,245,0.55)'
           const ch = gone ? sg() : c
-          return `<span style="color:${clr};transition:color 120ms">${ch}</span>`
+          return `<span style="color:${clr};transition:color 80ms">${ch}</span>`
         }).join('')
         sub.innerHTML = html
         if (r >= SROUNDS) {
           clearInterval(iv)
-          sub.style.fontFamily = ''
           if (cb) cb()
         }
       }, SMS)
@@ -176,32 +173,40 @@ onMounted(() => {
     if (!el) return
     el.classList.add('crumbling')
 
-    const bld = (chars) => chars.map((c, i) => {
+    const bld = (chars, prevOk) => chars.map((c, i) => {
       if (c.ch === ' ') return '<span class="cr-ch">&nbsp;</span>'
       const ok = c.ok
+      const justLanded = ok && prevOk && !prevOk[i]
       const clr = i <= 1
-        ? (ok ? '#00f0ff' : 'rgba(0,240,255,0.3)')
+        ? (ok ? '#00f0ff' : 'rgba(0,240,255,0.2)')
         : i <= 3
-          ? (ok ? '#ff6a00' : 'rgba(255,106,0,0.3)')
-          : (ok ? 'rgba(235,235,245,0.55)' : 'rgba(235,235,245,0.15)')
+          ? (ok ? '#ff6a00' : 'rgba(255,106,0,0.2)')
+          : (ok ? 'rgba(235,235,245,0.55)' : 'rgba(235,235,245,0.08)')
       const sh = ok
-        ? (i <= 1 ? '0 0 20px rgba(0,240,255,0.5)' : i <= 3 ? '0 0 20px rgba(255,106,0,0.5)' : 'none')
+        ? (i <= 1
+            ? (justLanded ? '0 0 30px #00f0ff, 0 0 60px rgba(0,240,255,0.3)' : '0 0 16px rgba(0,240,255,0.4)')
+            : i <= 3
+              ? (justLanded ? '0 0 30px #ff6a00, 0 0 60px rgba(255,106,0,0.3)' : '0 0 16px rgba(255,106,0,0.4)')
+              : 'none')
         : 'none'
-      return `<span class="cr-ch" style="color:${clr};text-shadow:${sh}">${c.ch}</span>`
+      const scale = justLanded ? 'transform:scale(1.15)' : ''
+      return `<span class="cr-ch" style="color:${clr};text-shadow:${sh};${scale}">${c.ch}</span>`
     }).join('')
 
     let chars = TGT.split('').map(c => ({ ch: c === ' ' ? ' ' : rg(), ok: c === ' ' }))
-    el.innerHTML = bld(chars)
+    let prevOk = null
+    el.innerHTML = bld(chars, prevOk)
 
     let r = 0
     const iv = setInterval(() => {
       r++
+      prevOk = chars.map(c => c.ok)
       chars = TGT.split('').map((c, i) => {
         if (c === ' ') return { ch: ' ', ok: true }
         const settle = Math.floor((i / TGT.length) * ROUNDS * 0.55) + ROUNDS * 0.4
         return r >= settle ? { ch: c, ok: true } : { ch: rg(), ok: false }
       })
-      el.innerHTML = bld(chars)
+      el.innerHTML = bld(chars, prevOk)
       if (r >= ROUNDS) {
         clearInterval(iv)
         el.innerHTML = 'MIXI DAW'
@@ -395,7 +400,7 @@ onMounted(() => {
 }
 
 /* ── Hero MIXI DAW title — force center layout ── */
-.VPHero .container { max-width: 960px !important; margin: 0 auto !important; }
+.VPHero .container { max-width: 1100px !important; margin: 0 auto !important; }
 .VPHero .main {
   display: flex !important;
   flex-direction: column !important;
@@ -410,13 +415,30 @@ onMounted(() => {
   margin-left: auto !important;
   margin-right: auto !important;
 }
+
+/* ── Title: massive, cinematic ── */
 .VPHero .main .name {
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em !important;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif !important;
+  font-size: clamp(3.5rem, 10vw, 6rem) !important;
   width: 100% !important;
   text-align: center !important;
   display: block !important;
+  line-height: 1 !important;
+  position: relative;
+}
+
+/* Ambient glow behind the title */
+.VPHero .main .name::after {
+  content: '';
+  position: absolute;
+  inset: -20px -40px;
+  background: radial-gradient(ellipse 60% 50% at 30% 50%, rgba(0,240,255,0.06) 0%, transparent 70%),
+              radial-gradient(ellipse 60% 50% at 70% 50%, rgba(255,106,0,0.05) 0%, transparent 70%);
+  filter: blur(30px);
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* During JS crumble: disable gradient, let span colors show */
@@ -426,9 +448,10 @@ onMounted(() => {
 }
 .VPHero .main .name .cr-ch {
   display: inline-block;
-  min-width: 0.6em;
+  min-width: 0.55em;
   text-align: center;
-  transition: color 0.08s, text-shadow 0.15s;
+  transition: color 0.06s, text-shadow 0.2s ease-out, transform 0.15s ease-out;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Paint MI cyan + XI orange + DAW dim on .name.clip */
@@ -439,24 +462,43 @@ onMounted(() => {
   -webkit-text-fill-color: transparent !important;
 }
 
-/* ── Subtitle: single line, smaller, centered ── */
+/* ── Subtitle: elegant, wide, premium ── */
 .VPHero .main .text {
-  font-weight: 300;
-  letter-spacing: 0.5px;
-  color: rgba(235, 235, 245, 0.7);
-  font-size: 1.6rem !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  color: rgba(235, 235, 245, 0.55) !important;
+  font-size: clamp(0.9rem, 2.5vw, 1.35rem) !important;
   white-space: nowrap !important;
   text-align: center !important;
   width: 100% !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif !important;
+  margin-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  position: relative;
+}
+
+/* Thin accent line under subtitle */
+.VPHero .main .text::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(90deg, #00f0ff, #ff6a00);
+  opacity: 0.4;
 }
 
 /* ── Rainbow sweep: one-shot reflection on subtitle ── */
 @keyframes rainbowSweep {
-  0%   { background-position: -120% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.7); }
+  0%   { background-position: -120% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.55); }
   5%   { -webkit-text-fill-color: transparent; }
   25%  { background-position: 220% center; -webkit-text-fill-color: transparent; }
-  35%  { background-position: 220% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.7); }
-  100% { background-position: 220% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.7); }
+  35%  { background-position: 220% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.55); }
+  100% { background-position: 220% center; -webkit-text-fill-color: rgba(235, 235, 245, 0.55); }
 }
 .VPHero .main .text.rainbow-sweep {
   background: linear-gradient(
@@ -470,14 +512,15 @@ onMounted(() => {
   background-position: -120% center;
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-fill-color: rgba(235, 235, 245, 0.7);
+  -webkit-text-fill-color: rgba(235, 235, 245, 0.55);
   animation: rainbowSweep 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .VPHero .main .tagline {
   font-size: 1.05rem;
   line-height: 1.7;
-  color: rgba(235, 235, 245, 0.45);
-  max-width: 520px;
+  color: rgba(235, 235, 245, 0.4);
+  max-width: 560px;
+  margin-top: 1.5rem !important;
 }
 /* Hide hero image slot — we use custom showcase */
 .VPHero .image-container { display: none !important; }
@@ -880,13 +923,22 @@ onMounted(() => {
    ═══════════════════════════════════════ */
 @media (max-width: 640px) {
 
-  /* ── Hero: allow subtitle to wrap ── */
+  /* ── Hero title + subtitle responsive ── */
+  .VPHero .main .name {
+    letter-spacing: 0.06em !important;
+  }
+  .VPHero .main .name::after {
+    display: none;
+  }
   .VPHero .main .text {
     white-space: normal !important;
-    font-size: 1.2rem !important;
-    line-height: 1.5 !important;
+    font-size: 0.85rem !important;
+    line-height: 1.6 !important;
+    letter-spacing: 0.12em !important;
   }
-
+  .VPHero .main .text::after {
+    width: 40px;
+  }
   .VPHero .main .tagline {
     font-size: 0.9rem;
     padding: 0 0.5rem;
