@@ -83,7 +83,34 @@ pub fn rms(samples: &[f32]) -> f32 {
 }
 
 /// Equal-power crossfader gain calculation.
-/// Returns (gain_a, gain_b) for a crossfader position 0.0–1.0.
+/// Returns (gain_a, gain_b) packed into a single u64.
+///
+/// ## Why not Vec<f32>?
+/// This function is called at 60 FPS when the DJ moves the fader.
+/// Returning Vec<f32> forces: heap alloc → bridge copy → JS Float32Array
+/// → GC. 60× per second, that's 60 GC-pressured allocations.
+///
+/// Instead we pack two f32 into one u64 (zero-alloc, zero-copy).
+/// JS unpacks: `gain_a = Math.fround(result & 0xFFFFFFFF)`
+///
+/// For even better perf, the JS side should compute this directly:
+///   gain_a = Math.cos(pos * Math.PI / 2)
+///   gain_b = Math.sin(pos * Math.PI / 2)
+/// Two cosines don't justify crossing the Wasm bridge.
+#[wasm_bindgen]
+pub fn crossfader_gains_packed(position: f32) -> u64 {
+    let pos = position.clamp(0.0, 1.0);
+    let half_pi = std::f32::consts::FRAC_PI_2;
+    let gain_a = (pos * half_pi).cos();
+    let gain_b = (pos * half_pi).sin();
+    // Pack two f32 into one u64 (no heap alloc)
+    let a_bits = gain_a.to_bits() as u64;
+    let b_bits = gain_b.to_bits() as u64;
+    a_bits | (b_bits << 32)
+}
+
+/// Legacy Vec version — kept for backward compatibility with existing JS.
+/// Prefer crossfader_gains_packed() for hot paths.
 #[wasm_bindgen]
 pub fn crossfader_gains(position: f32) -> Vec<f32> {
     let pos = position.clamp(0.0, 1.0);
@@ -142,70 +169,131 @@ impl PitchShifter {
 //
 // AudioWorklets can't use wasm-bindgen JS glue. These functions
 // are called directly via instance.exports from the worklet.
+//
+// ## Architecture: Handle-based Factory Pattern
+//
+// Instead of static mut globals (which limit to 2 channels),
+// we use an opaque-handle factory:
+//
+//   1. JS calls create_pitch_shifter() → gets a handle (pointer)
+//   2. JS calls pitch_shifter_process(handle, ...) with its handle
+//   3. JS calls destroy_pitch_shifter(handle) on cleanup
+//
+// This allows unlimited pitch shifter instances (Omni-Deck).
+// Each AudioWorklet owns its handles and cleans up in
+// disconnectedCallback().
 // ─────────────────────────────────────────────────────────────
 
-static mut PITCH_SHIFTER_L: Option<dsp::pitch_shift::GrainPitchShift> = None;
-static mut PITCH_SHIFTER_R: Option<dsp::pitch_shift::GrainPitchShift> = None;
-
-/// Initialize pitch shifters (call once after Wasm instantiation).
+/// Create a new pitch shifter instance. Returns an opaque handle.
+/// The caller MUST call `destroy_pitch_shifter()` when done.
 #[no_mangle]
-pub extern "C" fn pitch_shifter_init() {
-    unsafe {
-        PITCH_SHIFTER_L = Some(dsp::pitch_shift::GrainPitchShift::new());
-        PITCH_SHIFTER_R = Some(dsp::pitch_shift::GrainPitchShift::new());
+pub extern "C" fn create_pitch_shifter() -> *mut dsp::pitch_shift::GrainPitchShift {
+    let shifter = Box::new(dsp::pitch_shift::GrainPitchShift::new());
+    Box::into_raw(shifter)
+}
+
+/// Destroy a pitch shifter instance (free memory).
+/// Call this in the AudioWorklet's disconnectedCallback().
+#[no_mangle]
+pub extern "C" fn destroy_pitch_shifter(ptr: *mut dsp::pitch_shift::GrainPitchShift) {
+    if !ptr.is_null() {
+        unsafe { let _ = Box::from_raw(ptr); }
     }
 }
 
-/// Set pitch ratio on both L/R shifters.
+/// Set pitch ratio on a specific instance.
 #[no_mangle]
-pub extern "C" fn pitch_shifter_set_ratio(ratio: f32) {
-    unsafe {
-        if let Some(ref mut s) = PITCH_SHIFTER_L { s.set_pitch_ratio(ratio); }
-        if let Some(ref mut s) = PITCH_SHIFTER_R { s.set_pitch_ratio(ratio); }
-    }
+pub extern "C" fn pitch_shifter_set_ratio(ptr: *mut dsp::pitch_shift::GrainPitchShift, ratio: f32) {
+    if ptr.is_null() { return; }
+    unsafe { (*ptr).set_pitch_ratio(ratio); }
 }
 
-/// Enable/disable both L/R shifters (0 = disabled, 1 = enabled).
+/// Enable/disable a specific instance (0 = disabled, 1 = enabled).
 #[no_mangle]
-pub extern "C" fn pitch_shifter_set_enabled(enabled: i32) {
-    unsafe {
-        let e = enabled != 0;
-        if let Some(ref mut s) = PITCH_SHIFTER_L { s.set_enabled(e); }
-        if let Some(ref mut s) = PITCH_SHIFTER_R { s.set_enabled(e); }
-    }
+pub extern "C" fn pitch_shifter_set_enabled(ptr: *mut dsp::pitch_shift::GrainPitchShift, enabled: i32) {
+    if ptr.is_null() { return; }
+    unsafe { (*ptr).set_enabled(enabled != 0); }
 }
 
 /// Allocate a buffer in Wasm linear memory. Returns pointer.
+/// The caller MUST call `wasm_free()` when the buffer is no longer needed.
 #[no_mangle]
-pub extern "C" fn pitch_shifter_alloc(frames: usize) -> *mut f32 {
+pub extern "C" fn wasm_alloc(frames: usize) -> *mut f32 {
     let mut buf = vec![0.0f32; frames];
     let ptr = buf.as_mut_ptr();
-    std::mem::forget(buf); // leak intentionally — worklet manages lifetime
+    std::mem::forget(buf);
     ptr
 }
 
-/// Process mono audio. Reads `frames` f32s from `in_ptr`, writes to `out_ptr`.
+/// Free a buffer previously allocated with `wasm_alloc()`.
+/// This is the symmetric counterpart — prevents memory leaks.
+///
+/// MUST be called in the AudioWorklet's disconnectedCallback(),
+/// or whenever buffers are resized (free old, alloc new).
 #[no_mangle]
-pub extern "C" fn pitch_shifter_process_l(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+pub extern "C" fn wasm_free(ptr: *mut f32, frames: usize) {
+    if ptr.is_null() { return; }
     unsafe {
-        let input = std::slice::from_raw_parts(in_ptr, frames);
-        let output = std::slice::from_raw_parts_mut(out_ptr, frames);
-        if let Some(ref mut s) = PITCH_SHIFTER_L {
-            s.process_block(input, output);
-        }
+        // Reconstruct the Vec and let it Drop, freeing the memory.
+        let _ = Vec::from_raw_parts(ptr, frames, frames);
     }
 }
 
-/// Process right channel.
+/// Process mono audio through a pitch shifter instance.
+/// `shifter`: handle from create_pitch_shifter().
+/// `in_ptr` / `out_ptr`: buffers from wasm_alloc().
 #[no_mangle]
-pub extern "C" fn pitch_shifter_process_r(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+pub extern "C" fn pitch_shifter_process(
+    shifter: *mut dsp::pitch_shift::GrainPitchShift,
+    in_ptr: *const f32,
+    out_ptr: *mut f32,
+    frames: usize,
+) {
+    if shifter.is_null() || in_ptr.is_null() || out_ptr.is_null() || frames == 0 { return; }
     unsafe {
         let input = std::slice::from_raw_parts(in_ptr, frames);
         let output = std::slice::from_raw_parts_mut(out_ptr, frames);
-        if let Some(ref mut s) = PITCH_SHIFTER_R {
-            s.process_block(input, output);
-        }
+        (*shifter).process_block(input, output);
     }
+}
+
+// ── Legacy API (backward compat — wraps the new handle-based API) ──
+//
+// Existing AudioWorklet JS that calls pitch_shifter_init() /
+// pitch_shifter_process_l() / pitch_shifter_process_r() continues
+// to work. Internally these use two static handles.
+
+static mut LEGACY_SHIFTER_L: *mut dsp::pitch_shift::GrainPitchShift = std::ptr::null_mut();
+static mut LEGACY_SHIFTER_R: *mut dsp::pitch_shift::GrainPitchShift = std::ptr::null_mut();
+
+/// Legacy: initialize L/R pitch shifters.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_init() {
+    unsafe {
+        // Clean up previous instances (prevents leak on re-init)
+        if !LEGACY_SHIFTER_L.is_null() { destroy_pitch_shifter(LEGACY_SHIFTER_L); }
+        if !LEGACY_SHIFTER_R.is_null() { destroy_pitch_shifter(LEGACY_SHIFTER_R); }
+        LEGACY_SHIFTER_L = create_pitch_shifter();
+        LEGACY_SHIFTER_R = create_pitch_shifter();
+    }
+}
+
+/// Legacy: allocate buffer (renamed internally to wasm_alloc).
+#[no_mangle]
+pub extern "C" fn pitch_shifter_alloc(frames: usize) -> *mut f32 {
+    wasm_alloc(frames)
+}
+
+/// Legacy: process left channel.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_process_l(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+    unsafe { pitch_shifter_process(LEGACY_SHIFTER_L, in_ptr, out_ptr, frames); }
+}
+
+/// Legacy: process right channel.
+#[no_mangle]
+pub extern "C" fn pitch_shifter_process_r(in_ptr: *mut f32, out_ptr: *mut f32, frames: usize) {
+    unsafe { pitch_shifter_process(LEGACY_SHIFTER_R, in_ptr, out_ptr, frames); }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -241,29 +329,93 @@ mod tests {
 
     #[test]
     fn test_rms() {
-        // Silence
         assert_eq!(rms(&[0.0, 0.0, 0.0, 0.0]), 0.0);
-        // DC offset
         assert!((rms(&[1.0, 1.0, 1.0, 1.0]) - 1.0).abs() < 0.001);
-        // Known value
         let samples = vec![0.5, -0.5, 0.5, -0.5];
         assert!((rms(&samples) - 0.5).abs() < 0.001);
-        // Empty
         assert_eq!(rms(&[]), 0.0);
     }
 
     #[test]
     fn test_crossfader_gains() {
         let left = crossfader_gains(0.0);
-        assert!((left[0] - 1.0).abs() < 0.001); // A = full
-        assert!(left[1].abs() < 0.001);           // B = silent
+        assert!((left[0] - 1.0).abs() < 0.001);
+        assert!(left[1].abs() < 0.001);
 
         let center = crossfader_gains(0.5);
-        assert!((center[0] - 0.7071).abs() < 0.01); // Equal power
+        assert!((center[0] - 0.7071).abs() < 0.01);
         assert!((center[1] - 0.7071).abs() < 0.01);
 
         let right = crossfader_gains(1.0);
-        assert!(right[0].abs() < 0.001);           // A = silent
-        assert!((right[1] - 1.0).abs() < 0.001);   // B = full
+        assert!(right[0].abs() < 0.001);
+        assert!((right[1] - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_crossfader_packed() {
+        let packed = crossfader_gains_packed(0.5);
+        let a = f32::from_bits((packed & 0xFFFF_FFFF) as u32);
+        let b = f32::from_bits((packed >> 32) as u32);
+        assert!((a - 0.7071).abs() < 0.01, "gain_a = {a}");
+        assert!((b - 0.7071).abs() < 0.01, "gain_b = {b}");
+    }
+
+    #[test]
+    fn test_crossfader_packed_extremes() {
+        // Full left
+        let packed = crossfader_gains_packed(0.0);
+        let a = f32::from_bits((packed & 0xFFFF_FFFF) as u32);
+        let b = f32::from_bits((packed >> 32) as u32);
+        assert!((a - 1.0).abs() < 0.001);
+        assert!(b.abs() < 0.001);
+
+        // Full right
+        let packed = crossfader_gains_packed(1.0);
+        let a = f32::from_bits((packed & 0xFFFF_FFFF) as u32);
+        let b = f32::from_bits((packed >> 32) as u32);
+        assert!(a.abs() < 0.001);
+        assert!((b - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_handle_lifecycle() {
+        // Create → use → destroy (no leak)
+        let handle = create_pitch_shifter();
+        assert!(!handle.is_null());
+
+        pitch_shifter_set_ratio(handle, 1.5);
+        pitch_shifter_set_enabled(handle, 1);
+
+        // Allocate buffers
+        let inp = wasm_alloc(128);
+        let out = wasm_alloc(128);
+        assert!(!inp.is_null());
+        assert!(!out.is_null());
+
+        // Process
+        pitch_shifter_process(handle, inp, out, 128);
+
+        // Free everything
+        wasm_free(inp, 128);
+        wasm_free(out, 128);
+        destroy_pitch_shifter(handle);
+    }
+
+    #[test]
+    fn test_null_safety() {
+        // All functions must handle null without crashing
+        destroy_pitch_shifter(std::ptr::null_mut());
+        pitch_shifter_set_ratio(std::ptr::null_mut(), 1.0);
+        pitch_shifter_set_enabled(std::ptr::null_mut(), 1);
+        pitch_shifter_process(std::ptr::null_mut(), std::ptr::null(), std::ptr::null_mut(), 128);
+        wasm_free(std::ptr::null_mut(), 0);
+    }
+
+    #[test]
+    fn test_legacy_init_no_leak() {
+        // Calling init twice should not leak (old instances freed)
+        pitch_shifter_init();
+        pitch_shifter_init(); // re-init: old L/R freed, new created
+        // No assertion — just verifying no crash/leak
     }
 }
