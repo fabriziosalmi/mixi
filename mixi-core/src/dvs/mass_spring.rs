@@ -58,6 +58,10 @@ pub struct MassSpringDamper {
     scratch_release_ticks: u32,
     /// Ticks of stability needed to exit scratch mode.
     scratch_release_threshold: u32,
+    /// Vinyl brake detection: consecutive ticks of decelerating speed.
+    brake_ticks: u32,
+    /// Is vinyl brake active (gradual deceleration → motor stop effect)?
+    braking: bool,
 }
 
 /// Output from the mass-spring filter.
@@ -69,6 +73,8 @@ pub struct MassSpringOutput {
     pub is_scratching: bool,
     /// Spinback detected (extreme reverse for > 200ms).
     pub is_spinback: bool,
+    /// Vinyl brake detected (gradual deceleration).
+    pub is_braking: bool,
 }
 
 impl MassSpringDamper {
@@ -90,6 +96,8 @@ impl MassSpringDamper {
             spinback: false,
             scratch_release_ticks: 0,
             scratch_release_threshold: 20, // ~460ms of stability to exit scratch
+            brake_ticks: 0,
+            braking: false,
         }
     }
 
@@ -134,7 +142,41 @@ impl MassSpringDamper {
         } else {
             // Normal mode: mass-spring filter
             // output = output * inertia + input * traction
-            self.output_speed = self.output_speed * self.inertia + vinyl_speed * self.traction;
+            //
+            // Adaptive traction: when vinyl is near-stopped (|speed| < 0.1)
+            // but output is still moving (delta > 0.05), increase traction
+            // to avoid the 2-second exponential tail on stop.
+            // This preserves wow/flutter rejection during normal play
+            // while allowing responsive stop/start.
+            let effective_traction = if vinyl_speed.abs() < 0.1 && delta > 0.05 {
+                // DJ stopped the disc — converge faster (10x traction)
+                (self.traction * 10.0).min(0.5)
+            } else {
+                self.traction
+            };
+            self.output_speed = self.output_speed * (1.0 - effective_traction) + vinyl_speed * effective_traction;
+        }
+
+        // ── Vinyl brake detection ────────────────────────────
+        // Detects gradual deceleration (DJ hitting stop button or lifting hand).
+        // Distinct from scratch (sudden) and spinback (reverse).
+        // When braking, follow more closely to avoid lag on the ramp-down.
+        let decel = self.prev_speed - self.output_speed;
+        if decel > 0.002 && self.output_speed > 0.0 && self.output_speed < self.prev_speed {
+            self.brake_ticks += 1;
+            if self.brake_ticks > 5 { // ~115ms of consistent deceleration
+                self.braking = true;
+            }
+        } else if self.output_speed.abs() < 0.02 || self.output_speed >= self.prev_speed {
+            self.brake_ticks = 0;
+            self.braking = false;
+        }
+
+        // ── Low-speed dead zone (anti-jitter) ───────────────
+        // At very low speeds (< 2%), PLL noise can cause oscillation.
+        // Snap to exactly 0.0 to prevent audible artifacts.
+        if self.output_speed.abs() < 0.02 && vinyl_speed.abs() < 0.02 {
+            self.output_speed = 0.0;
         }
 
         // ── Spinback detection ───────────────────────────────
@@ -155,6 +197,7 @@ impl MassSpringDamper {
             speed: self.output_speed as f32,
             is_scratching: self.scratching,
             is_spinback: self.spinback,
+            is_braking: self.braking,
         }
     }
 
@@ -181,6 +224,13 @@ impl MassSpringDamper {
         self.negative_ticks = 0;
         self.spinback = false;
         self.scratch_release_ticks = 0;
+        self.brake_ticks = 0;
+        self.braking = false;
+    }
+
+    /// Is vinyl brake active?
+    pub fn is_braking(&self) -> bool {
+        self.braking
     }
 }
 

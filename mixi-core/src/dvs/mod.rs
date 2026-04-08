@@ -217,12 +217,20 @@ impl DvsDecoder {
         let avg_pll_speed = sum_speed / n;
         let avg_lock = (sum_lock / n).clamp(0.0, 1.0);
 
-        // 5. Mass-spring filter ONCE per block (tuned for block-rate ~344 Hz)
-        let ms_output = self.mass_spring.process(avg_pll_speed);
-
         // Signal present if RMS > threshold (~-40 dBFS)
         let block_rms = (sum_rms / n).sqrt();
         self.signal_present = block_rms > 0.01;
+
+        // 5. Mass-spring filter ONCE per block (tuned for block-rate ~344 Hz)
+        // When signal disappears (disc stopped/lifted), feed 0 to mass-spring
+        // instead of PLL coast value. This prevents the 2-second exponential
+        // tail that occurred when PLL coasted at last known frequency.
+        let speed_for_filter = if self.signal_present {
+            avg_pll_speed
+        } else {
+            0.0
+        };
+        let ms_output = self.mass_spring.process(speed_for_filter);
 
         // Convert position from cycles to seconds
         let position_sec = self.position_cycles / self.format.carrier_freq();

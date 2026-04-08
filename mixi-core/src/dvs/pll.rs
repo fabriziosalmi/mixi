@@ -159,9 +159,13 @@ impl PllDecoder {
         // PI controller
         self.integral += error * self.ki;
 
-        // Clamp integral to prevent windup (±50% of center freq)
+        // Clamp integral to prevent windup (±50% of center freq).
+        // Also drain integral toward zero when lock is poor — this prevents
+        // the PLL from accumulating bias during needle drops or signal loss,
+        // which would cause a slow drift after re-lock.
         let max_integral = self.center_freq * 0.5;
-        self.integral = self.integral.clamp(-max_integral, max_integral);
+        let drain = if self.lock < 0.3 { 0.98 } else { 1.0 }; // 2%/sample drain when unlocked
+        self.integral = (self.integral * drain).clamp(-max_integral, max_integral);
 
         // Update frequency estimate (PI controller output in Hz).
         // kp * sample_rate converts per-sample phase error to Hz correction.
