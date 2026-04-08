@@ -20,7 +20,7 @@ features:
     details: "Fullständigt frikopplad step-sequencer-buss, CSS-variabelstyrd skinning och öppet plugingränssnitt för communityinstrument. Forka, skinna, utöka."
 ---
 
-<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><img src="/screenshot.png" alt="MixiDAW Gränssnitt" /><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Livegränssnitt — Dubbelt deck + Integrerad Groovebox</span></div></div>
+<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="MixiDAW Gränssnitt" /></picture><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Livegränssnitt — Dubbelt deck + Integrerad Groovebox</span></div></div>
 
 <div class="stats-row">
   <div class="stat-item"><span class="stat-number">44.1</span><span class="stat-label">kHz Samplingsfrekvens</span></div><div class="stat-divider"></div>

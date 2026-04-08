@@ -20,7 +20,7 @@ features:
     details: "Plne oddelená zbernica step-sekvenceru, skinning riadený CSS premennými a otvorené rozhranie pluginov pre komunitné nástroje."
 ---
 
-<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><img src="/screenshot.png" alt="Rozhranie MixiDAW" /><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Živé rozhranie — Dvojitý deck + Integrovaný groovebox</span></div></div>
+<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="Rozhranie MixiDAW" /></picture><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Živé rozhranie — Dvojitý deck + Integrovaný groovebox</span></div></div>
 
 <div class="stats-row">
   <div class="stat-item"><span class="stat-number">44.1</span><span class="stat-label">kHz Vzork. frekvencia</span></div><div class="stat-divider"></div>

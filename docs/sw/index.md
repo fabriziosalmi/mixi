@@ -20,7 +20,7 @@ features:
     details: "Basi la step-sekwensa lililojitenga kabisa, ubadilishaji mandhari kwa vigezo vya CSS na kiolesura wazi cha programu-jalizi kwa vyombo vya jamii."
 ---
 
-<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><img src="/screenshot.png" alt="Kiolesura cha MixiDAW" /><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Kiolesura Hai — Deki Mbili + Groovebox Iliyounganishwa</span></div></div>
+<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="Kiolesura cha MixiDAW" /></picture><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Kiolesura Hai — Deki Mbili + Groovebox Iliyounganishwa</span></div></div>
 
 <div class="stats-row">
   <div class="stat-item"><span class="stat-number">44.1</span><span class="stat-label">kHz Kiwango cha Sampuli</span></div><div class="stat-divider"></div>

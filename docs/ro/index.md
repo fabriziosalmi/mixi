@@ -20,7 +20,7 @@ features:
     details: "Magistrală step-sequencer complet decuplată, skinning prin variabile CSS și interfață deschisă pentru plugin-uri comunitare."
 ---
 
-<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><img src="/screenshot.png" alt="Interfața MixiDAW" /><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Interfață Live — Deck Dublu + Groovebox Integrat</span></div></div>
+<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="Interfața MixiDAW" /></picture><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>Interfață Live — Deck Dublu + Groovebox Integrat</span></div></div>
 
 <div class="stats-row">
   <div class="stat-item"><span class="stat-number">44.1</span><span class="stat-label">kHz Rată de Eșant.</span></div><div class="stat-divider"></div>

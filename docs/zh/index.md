@@ -25,7 +25,7 @@ features:
 <div class="hero-showcase">
   <div class="showcase-glow"></div>
   <div class="showcase-frame">
-    <img src="/screenshot.png" alt="MixiDAW 界面" />
+    <picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="MixiDAW 界面" /></picture>
     <div class="showcase-reflection"></div>
   </div>
   <div class="showcase-caption">

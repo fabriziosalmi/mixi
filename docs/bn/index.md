@@ -20,7 +20,7 @@ features:
     details: "সম্পূর্ণ ডিকাপলড স্টেপ-সিক্যুয়েন্সার বাস, CSS ভ্যারিয়েবল-চালিত স্কিনিং এবং কমিউনিটি ইন্সট্রুমেন্টের জন্য ওপেন প্লাগইন ইন্টারফেস।"
 ---
 
-<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><img src="/screenshot.png" alt="MixiDAW ইন্টারফেস" /><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>লাইভ ইন্টারফেস — ডুয়াল ডেক + ইন্টিগ্রেটেড গ্রুভবক্স</span></div></div>
+<div class="hero-showcase"><div class="showcase-glow"></div><div class="showcase-frame"><picture><source srcset="/screenshot.webp" type="image/webp" /><img src="/screenshot.png" loading="eager" width="1920" height="1080" alt="MixiDAW ইন্টারফেস" /></picture><div class="showcase-reflection"></div></div><div class="showcase-caption"><span class="caption-dot"></span><span>লাইভ ইন্টারফেস — ডুয়াল ডেক + ইন্টিগ্রেটেড গ্রুভবক্স</span></div></div>
 
 <div class="stats-row">
   <div class="stat-item"><span class="stat-number">44.1</span><span class="stat-label">kHz স্যাম্পল রেট</span></div><div class="stat-divider"></div>

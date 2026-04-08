@@ -34,6 +34,143 @@ onMounted(() => {
   const ROUNDS = 20
   const MS = 45
 
+  // ── D·A·W subtitle cycle pool ──
+  const DAW_POOL = [
+    'Deterministic Audio Workstation',
+    'Dynamic Audio Workflow',
+    'Direct Audio Waves',
+    'Digital Art Web',
+    'Deploy Audio Wasm',
+    'Decentralized Audio Window',
+    'Deep Acoustic Worlds',
+    'Discover Audio Wonders',
+    'Design Abstract Waveforms',
+    'Develop Advanced Workstations',
+    'Drive Audio Web',
+    'Draft Audio Works',
+    'Decode Audio Wavelength',
+    'Deliver Absolute Wonderfulness',
+    'Distribute Audio Wealth',
+    'Devise Audio Worlds',
+    'Dual Arbiter Workflow',
+    'Dream Audio Worlds',
+    'Direct Audio Workspace',
+    'Dynamic Acoustic Workstation',
+    'Digital Audio Wizards',
+    'Decentralized Art Web',
+    'Deep Audio Wisdom',
+    'Discover Abstract Waves',
+    'Design Audio Web',
+    'Develop Audio Workflows',
+    'Drive Acoustic Waves',
+    'Draft Advanced Waveforms',
+    'Decode Advanced Waves',
+    'Distribute Art Web',
+    'Devise Abstract Worlds',
+    'Dual Autonomous Workstation',
+    'Definitive Audio Web',
+    'Dream Art Worlds',
+    'Direct Audio Wasm',
+    'Dynamic Art Workflow',
+    'Digital Acoustic Waves',
+    'Deterministic Arbiter Workflow',
+    'Dynamic Automation Wasm',
+    'Direct Automation Workflow',
+    'Digital Audio Warp',
+    'Deep Automation Worlds',
+    'Deploy Automation Workflows',
+    'Discover Automated Wonders',
+    'Design Automation Waveforms',
+    'Drive Automated Web',
+    'Deliver Automated Workflow',
+    'Dual Automation Workstation',
+    'Definitive Automation Web',
+    'Dream Automation Worlds',
+    'Design Awesome Waveforms',
+  ]
+
+  // Shuffle pool once at page load
+  for (let i = DAW_POOL.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [DAW_POOL[i], DAW_POOL[j]] = [DAW_POOL[j], DAW_POOL[i]]
+  }
+
+  // ── Subtitle scramble cycle ──
+  function startSubtitleCycle() {
+    const sub = document.querySelector('.VPHero .main .text')
+    if (!sub) return
+    const SG = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    const sg = () => SG[Math.floor(Math.random() * SG.length)]
+    const SROUNDS = 14
+    const SMS = 40
+    const HOLD = 4000
+    let idx = 0
+
+    function reveal(text, cb) {
+      let r = 0
+      sub.style.fontFamily = 'var(--font-mono, monospace)'
+      const iv = setInterval(() => {
+        r++
+        const html = text.split('').map((c, i) => {
+          if (c === ' ') return '&nbsp;'
+          const settle = Math.floor((i / text.length) * SROUNDS * 0.6) + SROUNDS * 0.35
+          const ok = r >= settle
+          const clr = ok ? 'rgba(235,235,245,0.7)' : 'rgba(235,235,245,0.18)'
+          const ch = ok ? c : sg()
+          return `<span style="color:${clr};transition:color 120ms">${ch}</span>`
+        }).join('')
+        sub.innerHTML = html
+        if (r >= SROUNDS) {
+          clearInterval(iv)
+          sub.innerHTML = text
+          sub.style.fontFamily = ''
+          if (cb) cb()
+        }
+      }, SMS)
+    }
+
+    function dissolve(text, cb) {
+      let r = 0
+      sub.style.fontFamily = 'var(--font-mono, monospace)'
+      const iv = setInterval(() => {
+        r++
+        const html = text.split('').map((c, i) => {
+          if (c === ' ') return '&nbsp;'
+          const dissolveAt = Math.floor((i / text.length) * SROUNDS * 0.6) + SROUNDS * 0.3
+          const gone = r >= dissolveAt
+          const clr = gone ? 'rgba(235,235,245,0.1)' : 'rgba(235,235,245,0.7)'
+          const ch = gone ? sg() : c
+          return `<span style="color:${clr};transition:color 120ms">${ch}</span>`
+        }).join('')
+        sub.innerHTML = html
+        if (r >= SROUNDS) {
+          clearInterval(iv)
+          sub.style.fontFamily = ''
+          if (cb) cb()
+        }
+      }, SMS)
+    }
+
+    function cycle() {
+      const phrase = DAW_POOL[idx % DAW_POOL.length]
+      idx++
+      reveal(phrase, () => {
+        setTimeout(() => {
+          dissolve(phrase, () => {
+            setTimeout(cycle, 300)
+          })
+        }, HOLD)
+      })
+    }
+
+    // Start with rainbow sweep on first phrase, then cycle
+    sub.classList.add('rainbow-sweep')
+    setTimeout(() => {
+      sub.classList.remove('rainbow-sweep')
+      cycle()
+    }, 5000)
+  }
+
   setTimeout(() => {
     const el = document.querySelector('.VPHero .main .name')
     if (!el) return
@@ -69,11 +206,8 @@ onMounted(() => {
         clearInterval(iv)
         el.innerHTML = 'MIXI DAW'
         el.classList.remove('crumbling')
-        // ── rainbow sweep on subtitle 1s after crumble ends ──
-        setTimeout(() => {
-          const sub = document.querySelector('.VPHero .main .text')
-          if (sub) sub.classList.add('rainbow-sweep')
-        }, 1000)
+        // ── Start subtitle D·A·W cycle after title settles ──
+        setTimeout(startSubtitleCycle, 1000)
       }
     }, MS)
   }, DELAY)
