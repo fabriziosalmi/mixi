@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/fabriziosalmi/mixi/discussions
+    about: Ask questions, share mixes, or discuss ideas
+  - name: Documentation
+    url: https://www.mixidaw.com/guide/getting-started
+    about: Read the docs before opening an issue

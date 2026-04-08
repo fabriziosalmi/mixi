@@ -1,0 +1,77 @@
+name: Bug Report
+description: Report a bug in MIXI
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Please fill in the details below so we can reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+      placeholder: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the issue.
+      placeholder: |
+        1. Open MIXI in browser
+        2. Load a track on Deck A
+        3. Press Play, then Sync on Deck B
+        4. Observe that...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Browser (Chrome)
+        - Browser (Firefox)
+        - Browser (Safari)
+        - Browser (Edge)
+        - Electron (macOS)
+        - Electron (Windows)
+        - Electron (Linux)
+        - Docker
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: MIXI version
+      placeholder: "0.3.4"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - BPM detection
+        - Beatmatching / Sync
+        - Audio playback
+        - EQ / Effects
+        - Waveform display
+        - MIDI
+        - Recording
+        - Groovebox / TurboKick / TurboBass
+        - UI / Mobile
+        - Skins
+        - AutoMixer (AI)
+        - Performance
+        - Other
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Console errors, screenshots, audio files, or anything else that might help.
