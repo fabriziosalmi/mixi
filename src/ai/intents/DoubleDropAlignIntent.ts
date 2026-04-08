@@ -15,24 +15,20 @@
 //
 // When two drops collide, the energy multiplies — the crowd
 // feels two kicks, two bass lines, and two synth riffs all
-// explode simultaneously.  It's the most powerful moment
-// a DJ can create.
+// explode simultaneously.
+//
+// v2 changes:
+//   - Tightened clamp from ±8% to ±2% (0.98–1.02)
+//   - Added return-to-1.0 when drops are aligned
+//   - Added max accumulated deviation guard
 //
 // Algorithm:
-//   1. Read the drop positions from both tracks (detected
-//      offline by DropDetector).
-//   2. Calculate the beat difference between the incoming
-//      track's current position and its first drop.
-//   3. Calculate how many beats remain on the master until
-//      its next drop (or its mix-out point).
-//   4. If the drops are misaligned, apply a micro playbackRate
-//      adjustment on the incoming deck to make them converge.
+//   1. Read the drop positions from both tracks.
+//   2. Calculate misalignment in beats.
+//   3. Apply micro playbackRate nudge (max ±0.5%) to converge.
+//   4. When aligned, restore rate to 1.0 (or sync rate).
 //
-// The adjustment is invisible: at 170 BPM, shifting by 0.5%
-// for 20 seconds moves the drop by ~1 beat.
-//
-// Score: 0.6 — structural but not urgent.  Only fires during
-//        the preparation phase (before the blend starts).
+// Score: 0.6 — structural but not urgent.
 // ─────────────────────────────────────────────────────────────
 
 import type { BaseIntent } from './BaseIntent';
@@ -43,7 +39,10 @@ import { log } from '../../utils/logger';
 /** Maximum playbackRate nudge for alignment (±0.5%). */
 const MAX_NUDGE = 0.005;
 
-/** Minimum beats of lead time needed to align (too late otherwise). */
+/** Maximum total deviation from 1.0 (±2% = barely audible). */
+const MAX_DEVIATION = 0.02;
+
+/** Minimum beats of lead time needed to align. */
 const MIN_LEAD_BEATS = 32;
 
 /** Tolerance: drops within this many beats count as "aligned". */
@@ -57,32 +56,22 @@ export const DoubleDropAlignIntent: BaseIntent = {
   exclusive: true,
 
   evaluate(bb: Blackboard): number {
-    // Both decks must be playing.
     if (!bb.bothPlaying) return 0;
-
-    // Need drop data for both tracks.
     if (bb.masterDropBeat === null || bb.incomingDropBeat === null) return 0;
     if (bb.beatsToIncomingDrop === null) return 0;
-
-    // Only useful if we have enough runway to nudge.
     if (bb.beatsToIncomingDrop < MIN_LEAD_BEATS) return 0;
 
-    // Calculate how far apart the two drops are in time.
-    // We want: masterDropBeat - masterCurrentBeat ≈ incomingDropBeat - incomingCurrentBeat
     const masterBeatsToItsDrop = bb.masterDropBeat - bb.masterCurrentBeat;
-    const incomingBeatsToItsDrop = bb.beatsToIncomingDrop;
-
-    // If master drop is already past, use beats to outro instead.
     const masterTarget = masterBeatsToItsDrop > 0
-      ? masterBeatsToItsDrop
-      : bb.beatsToOutroMaster;
+      ? masterBeatsToItsDrop : bb.beatsToOutroMaster;
+    const misalignment = Math.abs(masterTarget - bb.beatsToIncomingDrop);
 
-    const misalignment = Math.abs(masterTarget - incomingBeatsToItsDrop);
+    if (misalignment < ALIGNED_THRESHOLD) {
+      // Aligned! If rate is still nudged, score to restore it.
+      const deviation = Math.abs(bb.incomingState.playbackRate - 1.0);
+      return deviation > 0.001 ? 0.2 : 0;
+    }
 
-    // Already aligned? Nothing to do.
-    if (misalignment < ALIGNED_THRESHOLD) return 0;
-
-    // Score scales with misalignment (more offset = more urgent).
     return Math.min(0.6, 0.2 + misalignment * 0.01);
   },
 
@@ -91,30 +80,35 @@ export const DoubleDropAlignIntent: BaseIntent = {
 
     const masterBeatsToItsDrop = bb.masterDropBeat - bb.masterCurrentBeat;
     const masterTarget = masterBeatsToItsDrop > 0
-      ? masterBeatsToItsDrop
-      : bb.beatsToOutroMaster;
-    const incomingBeatsToItsDrop = bb.beatsToIncomingDrop;
+      ? masterBeatsToItsDrop : bb.beatsToOutroMaster;
+    const misalignment = Math.abs(masterTarget - bb.beatsToIncomingDrop);
 
-    // incoming needs to ARRIVE at its drop at the same time as master.
-    // If incoming is "too far" from its drop → speed up.
-    // If incoming is "too close" → slow down.
-    const diff = incomingBeatsToItsDrop - masterTarget;
+    // ── Aligned: restore rate to 1.0 gradually ──────────────
+    if (misalignment < ALIGNED_THRESHOLD) {
+      const currentRate = bb.incomingState.playbackRate;
+      if (Math.abs(currentRate - 1.0) > 0.001) {
+        // Ease back to 1.0 (50% per tick to avoid sudden jump).
+        const restored = currentRate + (1.0 - currentRate) * 0.5;
+        store.setDeckPlaybackRate(bb.incomingDeck, restored);
+      }
+      return;
+    }
 
-    // Proportional nudge: bigger diff = bigger nudge, clamped.
+    // ── Nudge to converge ────────────────────────────────────
+    const diff = bb.beatsToIncomingDrop - masterTarget;
     const nudge = Math.max(-MAX_NUDGE, Math.min(MAX_NUDGE, diff * 0.001));
     const newRate = bb.incomingState.playbackRate + nudge;
 
-    store.setDeckPlaybackRate(
-      bb.incomingDeck,
-      Math.max(0.92, Math.min(1.08, newRate)),
-    );
+    // Clamp to ±2% max deviation from 1.0 (barely audible).
+    const clampedRate = Math.max(1.0 - MAX_DEVIATION, Math.min(1.0 + MAX_DEVIATION, newRate));
+    store.setDeckPlaybackRate(bb.incomingDeck, clampedRate);
 
-    // Log periodically (every ~2s).
+    // Log periodically (~2s).
     if (bb.tick - lastLogTick > 40) {
       lastLogTick = bb.tick;
       log.info(
         'AI',
-        `Double Drop Align: ${bb.incomingDeck} drop in ${incomingBeatsToItsDrop.toFixed(0)} beats, ` +
+        `Double Drop Align: ${bb.incomingDeck} drop in ${bb.beatsToIncomingDrop.toFixed(0)} beats, ` +
         `master drop in ${masterTarget.toFixed(0)} — nudge ${(nudge * 100).toFixed(3)}%`,
       );
     }

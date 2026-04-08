@@ -155,6 +155,11 @@ let _tickCounter = 0;
 // Keyed by deck ID so role-swaps don't corrupt the count.
 const _bassKilledTicks: Record<DeckId, number> = { A: 0, B: 0 };
 
+// ── Role stability: prevent master/incoming flip during blends ──
+// Once a master is chosen while both are playing, lock the role
+// until only one deck is playing (blend ends).
+let _lockedMaster: DeckId | null = null;
+
 /**
  * Compute a fresh Blackboard snapshot from the current
  * Zustand store state and MixiEngine transport positions.
@@ -177,11 +182,23 @@ export function computeBlackboard(): Blackboard {
   let masterDeck: DeckId;
   if (aDeck.isPlaying && !bDeck.isPlaying) {
     masterDeck = 'A';
+    _lockedMaster = null; // Clear lock when only one deck plays.
   } else if (bDeck.isPlaying && !aDeck.isPlaying) {
     masterDeck = 'B';
+    _lockedMaster = null;
+  } else if (aDeck.isPlaying && bDeck.isPlaying) {
+    // Both playing — use locked role to prevent mid-blend flips.
+    if (_lockedMaster !== null) {
+      masterDeck = _lockedMaster;
+    } else {
+      // First tick of the blend: lock to the louder deck.
+      masterDeck = aDeck.volume >= bDeck.volume ? 'A' : 'B';
+      _lockedMaster = masterDeck;
+    }
   } else {
-    // Both playing (or neither): the louder one is master.
-    masterDeck = aDeck.volume >= bDeck.volume ? 'A' : 'B';
+    // Neither playing.
+    masterDeck = 'A';
+    _lockedMaster = null;
   }
   const incomingDeck: DeckId = masterDeck === 'A' ? 'B' : 'A';
 
@@ -311,7 +328,9 @@ export function computeBlackboard(): Blackboard {
   // ── Frequency clash detection ──────────────────────────────
 
   const bothPlaying = ms.isPlaying && is.isPlaying;
-  const bassClash = bothPlaying && ms.eq.low > -10 && is.eq.low > -10;
+  // Bass clash: both decks have significant bass (> -6 dB each).
+  // -10 was too aggressive — two tracks at -9 dB aren't clashing.
+  const bassClash = bothPlaying && ms.eq.low > -6 && is.eq.low > -6;
   const midClash = bothPlaying && ms.eq.mid > -6 && is.eq.mid > -6;
 
   // ── Rhythmic position ──────────────────────────────────────

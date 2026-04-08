@@ -10,8 +10,13 @@
 // ─────────────────────────────────────────────────────────────
 // Dynamics – Filter Wobble
 //
-// Rapid oscillation of the Color FX knob (+0.2 to -0.2) every
-// half-beat, creating rhythmic instability during a build-up.
+// Smooth sinusoidal oscillation of the Color FX knob (±0.2)
+// every half-beat, creating rhythmic instability during a
+// build-up.
+//
+// v2: Replaced hard binary switch (+0.2/-0.2) with a smooth
+//     sine wave. At 20 Hz tick rate, each half-beat gets ~3
+//     samples — a sine wave is audibly smoother than a square.
 //
 // The wobble makes the crowd uneasy — their brains crave
 // the resolution that comes when the filter resets to 0
@@ -27,6 +32,9 @@ import type { BaseIntent } from './BaseIntent';
 import type { Blackboard } from '../Blackboard';
 import type { MixiStore } from '../../store/mixiStore';
 
+/** Max wobble amplitude (±0.2 on color FX). */
+const WOBBLE_DEPTH = 0.2;
+
 export const FilterWobbleIntent: BaseIntent = {
   name: 'dynamics.filter_wobble',
   domain: 'dynamics',
@@ -41,10 +49,10 @@ export const FilterWobbleIntent: BaseIntent = {
   },
 
   execute(bb: Blackboard, store: MixiStore): void {
-    // Oscillate based on fractional beat position.
-    // Beat fraction 0–0.5 = positive, 0.5–1.0 = negative.
-    const beatFrac = (bb.masterCurrentBeat % 0.5) / 0.5; // 0→1 every half-beat
-    const fxValue = beatFrac < 0.5 ? 0.2 : -0.2;
+    // Smooth sine oscillation at 2× beat frequency (half-beat wobble).
+    // One full sine cycle per half-beat.
+    const phase = (bb.masterCurrentBeat % 0.5) / 0.5; // 0→1 every half-beat
+    const fxValue = Math.sin(phase * 2 * Math.PI) * WOBBLE_DEPTH;
     store.setDeckColorFx(bb.masterDeck, fxValue);
   },
 };

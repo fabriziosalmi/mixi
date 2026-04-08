@@ -49,8 +49,12 @@ export const LoopRollBuildupIntent: BaseIntent = {
     const btp = bb.masterBeatsToPhrase;
 
     if (btp <= 0.5) {
-      // Drop! Exit the loop.
-      if (bb.masterHasLoop) store.exitLoop(bb.masterDeck);
+      // Drop! Exit the loop — BUT not if we're near the end of
+      // the track (< 8 beats). SafetyLoopIntent needs to keep
+      // its emergency loop active. Let SafetyLoop manage it.
+      if (bb.masterHasLoop && bb.beatsToEndMaster > 8) {
+        store.exitLoop(bb.masterDeck);
+      }
       return;
     }
 

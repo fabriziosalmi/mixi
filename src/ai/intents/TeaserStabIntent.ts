@@ -11,14 +11,14 @@
 // Rhythm – Teaser Stab
 //
 // Gives the crowd a quick "taste" of the incoming track by
-// flashing its volume to 1.0 for a quarter-beat, then back
+// flashing its volume to 0.5 for a quarter-beat, then back
 // to 0.  Repeated every 4 beats during the lead-in phase.
 //
-// This builds anticipation: the crowd hears a fleeting hi-hat
-// or synth stab and wants more.
-//
-// Trigger: Incoming is playing at volume 0, incoming bass killed,
-//          we're in the early blend phase (32–16 beats to outro).
+// v2 changes:
+//   - Reduced flash volume from 1.0 to 0.5 (less jarring)
+//   - Added bass-killed guard at execute time (not just evaluate)
+//   - Fixed math: beatPeriod * 1000 / 4 for quarter-beat duration
+//   - Captured deck ID in closure (survives role swap)
 //
 // Score: 0.45 — cosmetic, overridden by anything structural.
 // ─────────────────────────────────────────────────────────────
@@ -26,6 +26,10 @@
 import type { BaseIntent } from './BaseIntent';
 import type { Blackboard } from '../Blackboard';
 import type { MixiStore } from '../../store/mixiStore';
+
+/** Flash volume for the stab. 0.5 = -6 dB, enough to hear but
+ *  not enough to create a full bass dump if bass isn't killed. */
+const STAB_VOLUME = 0.5;
 
 export const TeaserStabIntent: BaseIntent = {
   name: 'rhythm.teaser_stab',
@@ -48,12 +52,22 @@ export const TeaserStabIntent: BaseIntent = {
   execute: (() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
     return (bb: Blackboard, store: MixiStore): void => {
-      if (pending) clearTimeout(pending);
-      store.setDeckVolume(bb.incomingDeck, 1.0);
+      if (pending) return; // Don't stack stabs.
+
+      // Double-check bass is still killed at execute time.
+      if (!bb.incomingBassKilled) return;
+
+      // Capture the deck ID (not a reference to bb which may change).
+      const deckId = bb.incomingDeck;
+
+      store.setDeckVolume(deckId, STAB_VOLUME);
+
+      // Quarter-beat duration in ms = beatPeriod(s) * 1000 / 4.
+      const quarterBeatMs = (bb.masterBeatPeriod * 1000) / 4;
       pending = setTimeout(() => {
-        store.setDeckVolume(bb.incomingDeck, 0);
+        store.setDeckVolume(deckId, 0);
         pending = null;
-      }, bb.masterBeatPeriod * 250);
+      }, quarterBeatMs);
     };
   })(),
 };

@@ -35,8 +35,9 @@ import type { MixiStore } from '../../store/mixiStore';
 /** Ticks before we consider bass "forgotten" (~1.6 s). */
 const AMNESIA_THRESHOLD_TICKS = 32;
 
-/** dB to add per tick during recovery (+2 dB × 20 Hz = 40 dB/s). */
-const RECOVERY_STEP_DB = 2;
+/** dB to add per tick during recovery (+1 dB × 20 Hz = 20 dB/s).
+ *  From -26 dB to 0 takes 26 ticks = 1.3s (~2 beats at 128 BPM). */
+const RECOVERY_STEP_DB = 1;
 
 /** Target EQ level to restore to (0 dB = flat). */
 const TARGET_DB = 0;
@@ -57,7 +58,11 @@ export const EqAmnesiaIntent: BaseIntent = {
     if (!bb.masterState.isPlaying) return 0;
     if (!bb.masterBassKilled) return 0;
     if (bb.masterBassKilledTicks < AMNESIA_THRESHOLD_TICKS) return 0;
+    // Don't recover if EITHER deck has significant volume overlap.
+    // isBlending checks both > 0.5, but even at 0.2 the incoming
+    // deck may be intentionally prepared (soft blend start).
     if (bb.isBlending) return 0;
+    if (bb.bothPlaying && bb.incomingState.volume > 0.15) return 0;
 
     // Scale score: longer forgotten → higher urgency, cap at 0.85.
     const overshoot = bb.masterBassKilledTicks - AMNESIA_THRESHOLD_TICKS;

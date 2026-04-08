@@ -34,8 +34,9 @@ export const VocalSpaceCarvingIntent: BaseIntent = {
     if (!bb.midClash) return 0;
     // Only carve if the master has prominent mids.
     if (bb.masterState.eq.mid < -3) return 0;
-    // Don't carve if incoming mids are already cut.
-    if (bb.incomingState.eq.mid <= -6) return 0;
+    // Don't carve if incoming mids are already cut deeper
+    // (e.g. KeyClashDefense already applied -20 dB).
+    if (bb.incomingState.eq.mid <= -8) return 0;
     return 0.5;
   },
 

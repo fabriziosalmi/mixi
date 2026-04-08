@@ -44,6 +44,8 @@ import { useMixiStore } from '../store/mixiStore';
 import { MixiEngine } from '../audio/MixiEngine';
 import { log } from '../utils/logger';
 import { clearGhostFields, markGhost } from './ghostFields';
+import { resetPhaseDriftState } from './intents/PhaseDriftCorrectionIntent';
+import { getSetRecorder, type RecordedAction } from './SetRecorder';
 
 // ── Tick config ──────────────────────────────────────────────
 
@@ -130,6 +132,7 @@ export class AutoMixEngine {
 
     this._enabled = true;
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL_MS);
+    getSetRecorder().start();
     log.success('AI', `Engine started — ${this.intents.length} intents registered`);
     this.notify();
   }
@@ -142,6 +145,17 @@ export class AutoMixEngine {
       this.tickTimer = null;
     }
     this._lastFired = [];
+    clearGhostFields();
+    // Reset stateful intent modules to avoid stale state on restart.
+    resetPhaseDriftState();
+    // Stop recording and save to localStorage.
+    const recorder = getSetRecorder();
+    if (recorder.recording) {
+      recorder.stop();
+      recorder.saveToLocal();
+      const analytics = recorder.analyze();
+      log.info('AI', `Set recorded: ${analytics.totalEvents} events, ${analytics.bassSwaps} swaps, ${analytics.safetyInterventions} safety interventions`);
+    }
     log.info('AI', 'Engine stopped');
     this.notify();
   }
@@ -233,9 +247,20 @@ export class AutoMixEngine {
     // fields whenever an intent mutates a control.  This way
     // individual intents don't need to know about ghostFields.
     const store = useMixiStore.getState();
-    const ghostStore = this.createGhostProxy(store);
+    const recordedActions: RecordedAction[] = [];
+    const ghostStore = this.createGhostProxy(store, recordedActions);
     for (const { intent } of toFire) {
       intent.execute(bb, ghostStore);
+    }
+
+    // ── 4b. Record tick for post-set analytics ──────────────
+    const recorder = getSetRecorder();
+    if (recorder.recording) {
+      recorder.recordTick(
+        bb,
+        toFire.map(({ intent, score }) => ({ name: intent.name, score })),
+        recordedActions,
+      );
     }
 
     // Only notify if the set of active intents actually changed.
@@ -278,7 +303,10 @@ export class AutoMixEngine {
   //
   // The UI reads ghostFields to decide which knobs glow purple.
 
-  private createGhostProxy(store: ReturnType<typeof useMixiStore.getState>) {
+  private createGhostProxy(
+    store: ReturnType<typeof useMixiStore.getState>,
+    recordedActions?: RecordedAction[],
+  ) {
     type Store = typeof store;
 
     const wrap = <K extends keyof Store>(key: K, ghostFn: (...args: unknown[]) => void): Store[K] => {
@@ -286,6 +314,9 @@ export class AutoMixEngine {
       if (typeof orig !== 'function') return orig;
       return ((...args: unknown[]) => {
         ghostFn(...args);
+        if (recordedActions) {
+          recordedActions.push({ method: key as string, args: [...args] });
+        }
         return (orig as (...a: unknown[]) => unknown)(...args);
       }) as Store[K];
     };
@@ -303,6 +334,8 @@ export class AutoMixEngine {
       setMasterPunch: wrap('setMasterPunch', () => markGhost('master.punch')),
       setCrossfader: wrap('setCrossfader', () => markGhost('crossfader')),
       setAutoLoop: wrap('setAutoLoop', (deck) => markGhost(`${deck}.autoLoop`)),
+      exitLoop: wrap('exitLoop', (deck) => markGhost(`${deck}.autoLoop`)),
+      setDeckPlaying: wrap('setDeckPlaying', (deck) => markGhost(`${deck}.playing`)),
     };
   }
 }

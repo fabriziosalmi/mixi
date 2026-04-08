@@ -52,6 +52,9 @@ export const DropSwapIntent: BaseIntent = {
     // The incoming bass must still be killed (waiting for the swap).
     if (bb.incomingState.eq.low > -15) return 0;
 
+    // Master bass must be alive — no point swapping if already killed.
+    if (bb.masterState.eq.low < -10) return 0;
+
     // Must be on a phrase boundary: beat number mod 16 is near 0.
     // We use a ±0.5 beat window to account for tick timing.
     const incomingBeatMod = ((bb.incomingCurrentBeat % 16) + 16) % 16;
