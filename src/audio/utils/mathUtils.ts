@@ -52,7 +52,12 @@ export function crossfaderGains(
     // 0–0.02 = A only, 0.98–1 = B only, in between = steep curve.
     const gainA = x >= 1 ? 0 : x > 0.02 ? Math.pow(1 - (x - 0.02) / 0.96, 3) : 1;
     const gainB = x <= 0 ? 0 : x < 0.98 ? Math.pow((x - 0.02) / 0.96, 3) : 1;
-    return { gainA: Math.max(0, gainA), gainB: Math.max(0, gainB) };
+    // Clamp both to [0, 1] — the cubic curve can exceed 1.0 at extremes
+    // (e.g. x=0 → gainA = (1 - (-0.02)/0.96)^3 ≈ 1.063 → clipping).
+    return {
+      gainA: Math.min(1, Math.max(0, gainA)),
+      gainB: Math.min(1, Math.max(0, gainB)),
+    };
   }
 
   // Smooth: equal-power cosine.

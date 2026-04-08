@@ -317,6 +317,8 @@ export class DeckFx {
   // G1: Track active wet gain to compensate dry level.
   // Without this, dry(1.0) + wet FX are summed, causing gain > 1.0.
   private _activeWetSum = 0;
+  /** Target wet gain values — avoids reading stale .value during ramps. */
+  private _wetTargets: Record<string, number> = {};
 
   setFx(id: FxId, amount: number, active: boolean, ctx: AudioContext): void {
     switch (id) {
@@ -331,13 +333,10 @@ export class DeckFx {
       case 'tape': this.setTape(amount, active, ctx); break;
       case 'noise': this.setNoise(amount, active, ctx); break;
     }
-    // G1: Compensate dry gain — reduce proportionally to total wet send
-    this._activeWetSum = (
-      this.dlyWet.gain.value + this.revWet.gain.value +
-      this.phaWet.gain.value + this.flgWet.gain.value +
-      this.crushWet.gain.value + this.echoWet.gain.value +
-      this.tapeWet.gain.value + this.noiseWet.gain.value
-    );
+    // G1: Compensate dry gain — reduce proportionally to total wet send.
+    // Use tracked TARGET values (not AudioParam.value which is stale
+    // during setTargetAtTime ramps, causing momentary gain spikes).
+    this._activeWetSum = Object.values(this._wetTargets).reduce((a, b) => a + b, 0);
     const dryLevel = 1.0 / (1.0 + this._activeWetSum);
     smoothParam(this.dryGain.gain, dryLevel, ctx);
   }
@@ -387,7 +386,8 @@ export class DeckFx {
   // ── DLY ────────────────────────────────────────────────────
 
   private setDelay(amount: number, active: boolean, ctx: AudioContext): void {
-    smoothParam(this.dlyWet.gain, active ? amount * 0.6 : 0, ctx);
+    this._wetTargets.dly = active ? amount * 0.6 : 0;
+    smoothParam(this.dlyWet.gain, this._wetTargets.dly, ctx);
     smoothParam(this.dlyFeedback.gain, 0.3 + amount * 0.35, ctx);
   }
 
@@ -401,7 +401,8 @@ export class DeckFx {
   // ── REV ────────────────────────────────────────────────────
 
   private setReverb(amount: number, active: boolean, ctx: AudioContext): void {
-    smoothParam(this.revWet.gain, active ? amount * 0.5 : 0, ctx);
+    this._wetTargets.rev = active ? amount * 0.5 : 0;
+    smoothParam(this.revWet.gain, this._wetTargets.rev, ctx);
     // BUG-06: Do NOT modify shared dryGain — it ducks all other FX.
   }
 
@@ -421,7 +422,8 @@ export class DeckFx {
       // musically acceptable — the LFO starts from wherever it is.
     }
     this.phaWasActive = active;
-    smoothParam(this.phaWet.gain, active ? amount * 0.7 : 0, ctx);
+    this._wetTargets.pha = active ? amount * 0.7 : 0;
+    smoothParam(this.phaWet.gain, this._wetTargets.pha, ctx);
     smoothParam(this.phaLfo.frequency, 0.2 + amount * 2, ctx); // 0.2–2.2 Hz
     smoothParam(this.phaLfoGain.gain, 400 + amount * 1200, ctx);
   }
@@ -438,7 +440,8 @@ export class DeckFx {
       this.flgDelay.delayTime.setValueAtTime(0.003, ctx.currentTime);
     }
     this.flgWasActive = active;
-    smoothParam(this.flgWet.gain, active ? amount * 0.6 : 0, ctx);
+    this._wetTargets.flg = active ? amount * 0.6 : 0;
+    smoothParam(this.flgWet.gain, this._wetTargets.flg, ctx);
     smoothParam(this.flgLfo.frequency, 0.1 + amount * 1.5, ctx);
     smoothParam(this.flgLfoGain.gain, 0.001 + amount * 0.004, ctx);
     // G2: cap feedback at 0.6 to prevent resonant peaks above 0dB
@@ -501,7 +504,8 @@ export class DeckFx {
   private _lastCrushSteps = 16;
 
   private setCrush(amount: number, active: boolean, ctx: AudioContext): void {
-    smoothParam(this.crushWet.gain, active ? amount * 0.7 : 0, ctx);
+    this._wetTargets.crush = active ? amount * 0.7 : 0;
+    smoothParam(this.crushWet.gain, this._wetTargets.crush, ctx);
     if (active) {
       const steps = Math.max(3, Math.round(16 - amount * 13));
       // C1: Only regenerate curve when step count actually changes
@@ -526,7 +530,8 @@ export class DeckFx {
   // ── ECHO (dub delay) ───────────────────────────────────────
 
   private setEcho(amount: number, active: boolean, ctx: AudioContext): void {
-    smoothParam(this.echoWet.gain, active ? amount * 0.5 : 0, ctx);
+    this._wetTargets.echo = active ? amount * 0.5 : 0;
+    smoothParam(this.echoWet.gain, this._wetTargets.echo, ctx);
     // M4: capped at 0.7 (was 0.85). At 0.85 with LP in the loop, low freqs
     // decay very slowly and build up perceptibly. 0.7 is still long but stable.
     smoothParam(this.echoFeedback.gain, 0.4 + amount * 0.3, ctx);
@@ -551,13 +556,15 @@ export class DeckFx {
     const q = active ? 0.5 + amount * 2 : 0.5; // slight resonance bump at low freqs
     smoothParam(this.tapeFilter.frequency, freq, ctx);
     smoothParam(this.tapeFilter.Q, q, ctx);
-    smoothParam(this.tapeWet.gain, active ? 0.3 + amount * 0.3 : 0, ctx);
+    this._wetTargets.tape = active ? 0.3 + amount * 0.3 : 0;
+    smoothParam(this.tapeWet.gain, this._wetTargets.tape, ctx);
   }
 
   // ── NOISE (white noise sweep) ─────────────────────────────
 
   private setNoise(amount: number, active: boolean, ctx: AudioContext): void {
-    smoothParam(this.noiseWet.gain, active ? amount * 0.35 : 0, ctx);
+    this._wetTargets.noise = active ? amount * 0.35 : 0;
+    smoothParam(this.noiseWet.gain, this._wetTargets.noise, ctx);
     // Sweep filter: 200 Hz → 12 kHz based on amount
     smoothParam(this.noiseFilter.frequency, 200 + amount * 11800, ctx);
     // G3: cap Q at 4 (~12dB peak) to prevent violent transients

@@ -180,6 +180,9 @@ export const useSettingsStore = create<SettingsStore>()(
         bpmRange: s.bpmRange,
         quantizeResolution: s.quantizeResolution,
         useWasmDsp: s.useWasmDsp,
+        colorblindMode: s.colorblindMode,
+        recFormat: s.recFormat,
+        pitchRange: s.pitchRange,
       }),
       migrate: (persisted, version) => {
         // v1→v2: strip stale fields, ensure new defaults apply via merge

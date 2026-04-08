@@ -313,7 +313,10 @@ export class MidiManager {
     let bpm = 120;
     if (deckA.isPlaying && deckA.bpm > 0) bpm = deckA.bpm;
     else if (deckB.isPlaying && deckB.bpm > 0) bpm = deckB.bpm;
-    return 60000 / (bpm * 24); // ms per tick at 24 ppqn
+    // Clamp to sane range: 30–300 BPM → 83ms–2.5ms per tick.
+    // Prevents flood on corrupt BPM (0.01) or freeze on absurd BPM (999999).
+    const safeBpm = Math.max(30, Math.min(300, bpm));
+    return 60000 / (safeBpm * 24); // ms per tick at 24 ppqn
   }
 
   private sendToAllOutputs(data: number[]): void {
