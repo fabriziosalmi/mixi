@@ -224,7 +224,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (239), Playwright (7 E2E), cargo test (203 Rust) — 449 total |
+| Tests | Vitest (391), Playwright (7 E2E), cargo test (196 Rust) — 594 total |
 | Docs | VitePress, 24 languages |
 
 ---

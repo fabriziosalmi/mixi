@@ -103,7 +103,7 @@ onUnmounted(() => cancelAnimationFrame(raf))
         :style="(phase==='expand'||phase==='flash') ? {transform:`scale(${expScale})`} : undefined">
         <!-- Vinyl (black/disc/stopping) -->
         <img v-if="phase==='black'||phase==='disc'||phase==='stopping'"
-          src="/vinyl.png" alt="" class="mi-disc"
+          src="/vinyl.webp" alt="MIXI vinyl record" class="mi-disc"
           :style="{
             transform: `rotate(${angle}deg)`,
             opacity: discOp,

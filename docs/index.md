@@ -129,7 +129,10 @@ onMounted(() => {
 <div class="hero-showcase">
   <div class="showcase-glow"></div>
   <div class="showcase-frame">
-    <img src="/screenshot.png" alt="MixiDAW Interface" />
+    <picture>
+      <source srcset="/screenshot.webp" type="image/webp" />
+      <img src="/screenshot.png" alt="MIXI DJ workstation interface showing dual decks, waveforms, mixer, and groovebox" loading="eager" width="1920" height="1080" />
+    </picture>
     <div class="showcase-reflection"></div>
   </div>
   <div class="showcase-caption">
@@ -151,12 +154,12 @@ onMounted(() => {
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">343</span>
+    <span class="stat-number">587</span>
     <span class="stat-label">Tests Passing</span>
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">20</span>
+    <span class="stat-number">17</span>
     <span class="stat-label">Skins</span>
   </div>
   <div class="stat-divider"></div>

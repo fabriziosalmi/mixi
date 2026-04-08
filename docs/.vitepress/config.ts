@@ -21,8 +21,28 @@ try {
 
 export default defineConfig({
   title: 'MIXI',
-  description: 'Next-Generation Browser-Based DJ Engine & AI AutoMixer',
+  description: 'Deterministic Audio Workstation — browser-native DJ engine with Rust/Wasm DSP, AI automixer, 17 skins, and zero install.',
   locales,
+  head: [
+    ['meta', { name: 'theme-color', content: '#050508' }],
+    ['meta', { name: 'author', content: 'Fabrizio Salmi' }],
+    ['link', { rel: 'canonical', href: 'https://www.mixidaw.com/' }],
+    ['link', { rel: 'icon', type: 'image/png', href: '/icon-192.png' }],
+    // Open Graph
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'MIXI — Deterministic Audio Workstation' }],
+    ['meta', { property: 'og:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, 17 skins, MIDI, headphone cue. Zero install.' }],
+    ['meta', { property: 'og:image', content: 'https://www.mixidaw.com/screenshot.png' }],
+    ['meta', { property: 'og:image:width', content: '1920' }],
+    ['meta', { property: 'og:image:height', content: '1080' }],
+    ['meta', { property: 'og:url', content: 'https://www.mixidaw.com/' }],
+    ['meta', { property: 'og:site_name', content: 'MIXI' }],
+    // Twitter Card
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'MIXI — Deterministic Audio Workstation' }],
+    ['meta', { name: 'twitter:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, 17 skins. Zero install.' }],
+    ['meta', { name: 'twitter:image', content: 'https://www.mixidaw.com/screenshot.png' }],
+  ],
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },

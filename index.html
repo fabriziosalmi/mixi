@@ -8,11 +8,23 @@
     <meta name="theme-color" content="#000000" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <title>Mixi</title>
+    <title>MIXI — Deterministic Audio Workstation</title>
+    <meta name="description" content="Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, 17 skins, MIDI, headphone cue. Zero install." />
+    <meta property="og:title" content="MIXI — Deterministic Audio Workstation" />
+    <meta property="og:description" content="Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, 17 skins. Zero install." />
+    <meta property="og:image" content="https://www.mixidaw.com/screenshot.png" />
+    <meta property="og:url" content="https://www.mixidaw.com/app/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>html, body { touch-action: manipulation; overscroll-behavior: none; }</style>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#050508;color:#888;font-family:system-ui;text-align:center;padding:2rem">
+        <p>MIXI requires JavaScript and Web Audio API to run.<br>Please enable JavaScript in your browser.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
