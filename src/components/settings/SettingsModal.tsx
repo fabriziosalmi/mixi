@@ -120,8 +120,8 @@ export const SettingsModal: FC = () => {
             ))}
           </nav>
 
-          {/* Content — fixed height so modal never resizes between tabs */}
-          <div className="p-5 overflow-y-auto space-y-1" style={{ height: 420, flexShrink: 0 }}>
+          {/* Content — fixed height, thin scrollbar, no horizontal overflow */}
+          <div className="p-5 overflow-y-auto overflow-x-hidden space-y-1 flex-1 mixi-settings-scroll" style={{ height: 420, flexShrink: 0 }}>
             {tab === 'mixer' && <MixerTab />}
             {tab === 'audio' && <AudioTab />}
             {tab === 'midi' && <MidiTab />}
@@ -131,9 +131,9 @@ export const SettingsModal: FC = () => {
           </div>
         </div>
 
-        {/* Version */}
-        <div className="text-center py-2" style={{ borderTop: '1px solid var(--brd-subtle)' }}>
-          <span className="text-[9px]" style={{ color: 'var(--txt-dim)' }}>Mixi v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.4'}</span>
+        {/* Version — no border, subtle */}
+        <div className="text-center py-2">
+          <span className="text-[9px]" style={{ color: 'var(--txt-dim)', opacity: 0.5 }}>Mixi v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1.4'}</span>
         </div>
       </div>
     </div>
@@ -761,7 +761,7 @@ function SegmentedControl<T extends string | number>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--brd-default)' }}>
+    <div className="flex flex-wrap rounded-md overflow-hidden" style={{ border: '1px solid var(--brd-default)', maxWidth: 340 }}>
       {options.map((opt, i) => {
         const active = value === opt.value;
         return (
