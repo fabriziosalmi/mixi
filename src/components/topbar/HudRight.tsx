@@ -11,7 +11,7 @@
 //           VFX toggle, Panic button, Settings gear.
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, type FC } from 'react';
+import { useCallback, useState, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { useMidiClockActive, toggleMidiClock } from '../hud/MasterClock';
 import { RecPanel } from '../hud/RecPanel';
@@ -152,6 +152,9 @@ export const HudRight: FC<HudRightProps> = ({
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
       </a>
+
+      {/* GitHub — star on hover */}
+      <GitHubStarBtn />
     </div>
     </div>
   </div>
@@ -177,6 +180,38 @@ const QuantizeBtn: FC = () => {
       }}
       title={`Quantize: ${active ? 'ON' : partial ? 'Partial' : 'OFF'}`}
     >Q</button>
+  );
+};
+
+/** GitHub icon → morphs to star on hover. Links to repo for starring. */
+const GitHubStarBtn: FC = () => {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <a
+      href="https://github.com/fabriziosalmi/mixi"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="rounded p-0.5 transition-all duration-300"
+      title="Star MIXI on GitHub"
+      style={{
+        color: hovered ? '#f5c518' : 'var(--txt-muted)',
+        filter: hovered ? 'drop-shadow(0 0 6px rgba(245,197,24,0.5))' : 'none',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {hovered ? (
+        /* Star icon */
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ) : (
+        /* GitHub mark */
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+      )}
+    </a>
   );
 };
 
