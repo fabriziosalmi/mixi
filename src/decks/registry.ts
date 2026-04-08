@@ -125,8 +125,20 @@ class DeckRegistryImpl {
    * Fetch the remote registry manifest and load external decks.
    * Safe to call multiple times (deduplicates).
    * Fails silently — built-in decks always work.
+   *
+   * NOTE: Disabled in production until the React dual-instance issue
+   * is resolved (error #306). External ESM modules create a separate
+   * React context that conflicts with the bundled React. The fix
+   * requires either import maps (not yet widely supported) or
+   * bundling external decks into the main Vite build.
    */
   async fetchFromRemote(url = REGISTRY_URL): Promise<void> {
+    if (import.meta.env.PROD) {
+      log.warn('DECKS', 'External deck loading disabled in production (React #306 — dual instance)');
+      this.fetched = true;
+      this.notify();
+      return;
+    }
     if (this.fetched) return;
     if (this.fetching) return this.fetching;
 
