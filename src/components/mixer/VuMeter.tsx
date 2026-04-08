@@ -103,12 +103,16 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
 
       // ── Skip DOM writes if nothing changed ───────────────
       if (litCount === prevLitCount && peakSeg === prevPeakSeg) return;
+
+      // ── Update only changed segments (no setState) ────────
+      // Save old values BEFORE overwriting so wasLit compares correctly
+      const oldLitCount = prevLitCount;
+      const oldPeakSeg = prevPeakSeg;
       prevLitCount = litCount;
       prevPeakSeg = peakSeg;
 
-      // ── Update only changed segments (no setState) ────────
       for (let i = 0; i < SEGMENT_COUNT; i++) {
-        const wasLit = i < prevLitCount || i === prevPeakSeg;
+        const wasLit = i < oldLitCount || i === oldPeakSeg;
         const isLit = i < litCount;
         const isPeak = i === peakSeg && peakSeg >= 0;
         const nowLit = isLit || isPeak;

@@ -278,10 +278,19 @@ export class MasterBus {
     this.headroomGain.connect(this.limiter);
     this.limiter.connect(this.analyser);
 
-    // 5. Analyser → Splitter → L/R
+    // 5. Analyser → Splitter → L/R analysers
+    // Each analyser must have an outgoing connection or the browser
+    // optimizes it away and stops feeding data. Connect them to a
+    // silent merger that goes nowhere (keeps the graph alive).
     this.analyser.connect(this.splitter);
     this.splitter.connect(this.analyserL, 0);
     this.splitter.connect(this.analyserR, 1);
+    // Prevent dead-end: connect L/R analysers to a silent sink
+    const sink = ctx.createGain();
+    sink.gain.value = 0;
+    this.analyserL.connect(sink);
+    this.analyserR.connect(sink);
+    sink.connect(ctx.destination);
   }
 
   setVolume(value: number, ctx: AudioContext): void {
