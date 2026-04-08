@@ -31,6 +31,9 @@ pub mod dsp;
 // ── Phase 4: PLL analysis (onset correlation, phase cancellation, variable beatgrid)
 pub mod pll_analysis;
 
+// ── Phase 5: DVS (Digital Vinyl System) — timecode decoder
+pub mod dvs;
+
 // ─────────────────────────────────────────────────────────────
 // Phase 1: Proof-of-concept exports
 // Validates that Rust → Wasm → JS pipeline works end-to-end.
