@@ -72,3 +72,6 @@ UI_REVIEW.md
 OPENTIMECODE.md
 DVS.md
 MIXI_POD.md
+
+# Local Cargo path overrides (dev only, CI uses git dependencies)
+mixi-core/.cargo/
