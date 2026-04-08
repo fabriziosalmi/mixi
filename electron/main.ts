@@ -374,24 +374,32 @@ app.whenReady().then(async () => {
     setupMixiSyncIPC();
     ipcMain.handle('app:check-for-updates', () => checkForUpdates());
 
-    // 1. Find free port
-    apiPort = await findFreePort();
-    console.log(`[mixi] API port: ${apiPort}`);
+    // 1. Try to start Python backend (OPTIONAL — app works without it)
+    try {
+      apiPort = await findFreePort();
+      console.log(`[mixi] API port: ${apiPort}`);
+      pythonProcess = spawnEngine(apiPort);
+      await waitForEngine(apiPort, 10_000);
+      console.log('[mixi] Engine is ready');
+    } catch (engineErr) {
+      // Backend is optional — the DJ app works fully without it.
+      // The backend provides MCP bridge and advanced API features only.
+      console.warn('[mixi] Backend engine not available (optional):', engineErr);
+      killEngine();
+      pythonProcess = null as any;
+    }
 
-    // 2. Spawn Python backend
-    pythonProcess = spawnEngine(apiPort);
-
-    // 3. Wait for health check
-    await waitForEngine(apiPort);
-    console.log('[mixi] Engine is ready');
-
-    // 4. Create window
+    // 2. Create window (always — even without backend)
     createWindow();
 
-    // 5. Check for updates (non-blocking, after window is shown)
+    // 3. Check for updates (non-blocking, after window is shown)
     checkForUpdates();
   } catch (err) {
     console.error('[mixi] Failed to start:', err);
+    dialog.showErrorBox(
+      'MIXI — Failed to Start',
+      `The application could not start.\n\n${err}\n\nPlease report this issue at:\nhttps://github.com/fabriziosalmi/mixi/issues`,
+    );
     killEngine();
     app.quit();
   }
