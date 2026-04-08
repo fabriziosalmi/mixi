@@ -186,19 +186,19 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
         position: 'relative',
       }}
     >
-      {/* ── Left: play + nudge column ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, flexShrink: 0, width: 52 }}>
+      {/* ── Left: play + nudge row ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 2, flexShrink: 0, width: 52 }}>
         <button
           className={isPlaying ? 'm-play-active' : undefined}
           onClick={togglePlay}
           style={{
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             border: `2px solid ${isPlaying ? color : '#444'}`,
             borderRadius: '50%',
             background: isPlaying ? `${color}22` : 'transparent',
             color: isPlaying ? color : '#888',
-            fontSize: 18,
+            fontSize: 16,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -212,7 +212,6 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
         >
           {isPlaying ? '❚❚' : '▶'}
         </button>
-        {/* Nudge buttons */}
         <div style={{ display: 'flex', gap: 2 }}>
           <NudgeBtn deckId={deckId} direction={-1} color={color} />
           <NudgeBtn deckId={deckId} direction={1} color={color} />
@@ -220,10 +219,10 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
       </div>
 
       {/* ── Center: track info + waveform ── */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 }}>
         {/* Track info row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 16 }}>
-          <span style={{ fontSize: 11, color: '#888', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minHeight: 14 }}>
+          <span style={{ fontSize: 10, color: '#888', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {trackName || `DECK ${deckId}`}
           </span>
           {/* Hot cue indicators */}
@@ -251,26 +250,26 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
           className={isPlaying ? 'm-waveform-glow' : undefined}
           style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : `1px solid ${color}18`, '--m-glow': color } as React.CSSProperties}
         >
-          <MobileWaveform deckId={deckId} height={56} color={color} />
+          <MobileWaveform deckId={deckId} height={44} color={color} />
         </div>
         <MobileVuMeter deckId={deckId} color={color} />
 
         {/* Bottom info: BPM + key + time */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 12 }}>
           <span
             className={isPlaying ? 'm-glow-text' : undefined}
-            style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
           >
             {bpm > 0 ? bpm.toFixed(1) : '---'}
           </span>
           {musicalKey && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#888', fontWeight: 600 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#888', fontWeight: 600 }}>
               {musicalKey}
             </span>
           )}
           <span style={{ flex: 1 }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#555' }}>
-            {fmtTime(currentTime)} / {fmtTime(duration)}
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#555' }}>
+            {fmtTime(currentTime)}/{fmtTime(duration)}
           </span>
         </div>
       </div>
@@ -309,9 +308,9 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
           onPointerDown={onVolPointer}
           onPointerMove={onVolPointer}
           style={{
-            width: 28,
+            width: 24,
             flex: 1,
-            minHeight: 40,
+            minHeight: 30,
             background: '#111',
             borderRadius: 4,
             position: 'relative',
@@ -386,20 +385,21 @@ const MobileCrossfader: FC = () => {
   return (
     <div
       style={{
-        padding: '4px 16px 8px',
+        padding: '2px 12px 4px',
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        flexShrink: 0,
       }}
     >
-      <span style={{ fontSize: 10, color: COLOR_DECK_A, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>A</span>
+      <span style={{ fontSize: 9, color: COLOR_DECK_A, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>A</span>
       <div
         ref={trackRef}
         onPointerDown={handlePointer}
         onPointerMove={handlePointer}
         style={{
           flex: 1,
-          height: 28,
+          height: 24,
           background: '#111',
           borderRadius: 6,
           position: 'relative',
@@ -418,9 +418,9 @@ const MobileCrossfader: FC = () => {
           style={{
             position: 'absolute',
             left: '50%',
-            top: 4,
+            top: 3,
             width: 1,
-            height: 20,
+            height: 18,
             background: '#333',
           }}
         />
@@ -429,9 +429,9 @@ const MobileCrossfader: FC = () => {
           className={Math.abs(crossfader - 0.5) < 0.03 ? 'm-xfader-center' : undefined}
           style={{
             position: 'absolute',
-            left: `calc(${crossfader * 100}% - 14px)`,
+            left: `calc(${crossfader * 100}% - 12px)`,
             top: 2,
-            width: 28,
+            width: 24,
             height: 24,
             background: '#555',
             borderRadius: 4,
@@ -444,7 +444,7 @@ const MobileCrossfader: FC = () => {
           <div style={{ width: 12, height: 2, background: '#aaa', borderRadius: 1 }} />
         </div>
       </div>
-      <span style={{ fontSize: 10, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
+      <span style={{ fontSize: 9, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
     </div>
   );
 };
@@ -472,21 +472,24 @@ const ToolBtn: FC<{ label: string; active?: boolean; color?: string; onClick: ()
   label, active, color = '#888', onClick,
 }) => (
   <button
+    className={active ? 'm-tool-active' : undefined}
     onClick={onClick}
     style={{
-      height: 48,
-      minWidth: 48,
-      padding: '0 14px',
+      height: 32,
+      minWidth: 40,
+      padding: '0 10px',
       border: `1px solid ${active ? color : '#333'}`,
-      borderRadius: 6,
+      borderRadius: 4,
       background: active ? `${color}22` : 'transparent',
       color: active ? color : '#666',
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: 700,
       fontFamily: 'var(--font-mono)',
       cursor: 'pointer',
       touchAction: 'manipulation',
       WebkitTapHighlightColor: 'transparent',
+      // @ts-expect-error CSS custom property
+      '--m-glow': active ? color : undefined,
     }}
   >
     {label}
@@ -533,11 +536,12 @@ export const MobileLandscape: FC = () => {
       {/* Header */}
       <div
         style={{
-          height: 28,
+          height: 24,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '0 8px',
+          gap: 6,
           borderBottom: '1px solid #222',
           flexShrink: 0,
         }}
@@ -605,8 +609,8 @@ export const MobileLandscape: FC = () => {
         style={{
           display: 'flex',
           justifyContent: 'center',
-          gap: 8,
-          padding: '0 16px 6px',
+          gap: 4,
+          padding: '0 8px 3px',
           flexShrink: 0,
         }}
       >

@@ -134,18 +134,18 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         background: '#111',
         borderRadius: 8,
         border: `1px solid ${color}33`,
-        padding: 10,
+        padding: 8,
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 4,
         '--m-glow': color,
       } as React.CSSProperties}
     >
       {/* ── Header: label + track name + cue dots + loop ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span
           style={{
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 700,
             color: color,
             fontFamily: 'var(--font-mono)',
@@ -157,7 +157,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         <span
           style={{
             flex: 1,
-            fontSize: 11,
+            fontSize: 10,
             color: '#888',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -190,24 +190,24 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         className={isPlaying ? 'm-waveform-glow' : undefined}
         style={{ borderRadius: 4, overflow: 'hidden', border: activeLoop ? '1px solid #22c55e44' : `1px solid ${color}18`, '--m-glow': color } as React.CSSProperties}
       >
-        <MobileWaveform deckId={deckId} height={48} color={color} />
+        <MobileWaveform deckId={deckId} height={36} color={color} />
       </div>
       <MobileVuMeter deckId={deckId} color={color} />
 
       {/* ── Controls row: Play | BPM+Key | Time | Sync ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
           className={isPlaying ? 'm-play-active' : undefined}
           onClick={togglePlay}
           style={{
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             flexShrink: 0,
             border: `2px solid ${isPlaying ? color : '#444'}`,
             borderRadius: '50%',
             background: isPlaying ? `${color}22` : 'transparent',
             color: isPlaying ? color : '#888',
-            fontSize: 16,
+            fontSize: 14,
             '--m-glow': color,
             display: 'flex',
             alignItems: 'center',
@@ -225,7 +225,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         <div style={{ flex: 1, textAlign: 'center' }}>
           <span
             className={isPlaying ? 'm-glow-text' : undefined}
-            style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color, '--m-glow': color } as React.CSSProperties}
           >
             {bpm > 0 ? bpm.toFixed(1) : '---.-'}
           </span>
@@ -245,11 +245,11 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
           className={isSynced ? 'm-synced' : undefined}
           onClick={toggleSync}
           style={{
-            width: 48,
-            height: 36,
+            width: 44,
+            height: 32,
             flexShrink: 0,
             border: `1px solid ${isSynced ? '#a855f7' : '#444'}`,
-            borderRadius: 6,
+            borderRadius: 4,
             background: isSynced ? '#a855f722' : 'transparent',
             color: isSynced ? '#a855f7' : '#666',
             fontSize: 11,
@@ -272,7 +272,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
         onPointerMove={onVolPointer}
         style={{
           width: '100%',
-          height: 24,
+          height: 20,
           background: '#0a0a0a',
           borderRadius: 4,
           position: 'relative',
@@ -303,7 +303,7 @@ const DeckCard: FC<{ deckId: DeckId }> = ({ deckId }) => {
             left: `calc(${volume * 100}% - 3px)`,
             top: 2,
             width: 6,
-            height: 20,
+            height: 16,
             background: color,
             borderRadius: 2,
           }}
@@ -345,20 +345,20 @@ const PortraitCrossfader: FC = () => {
   return (
     <div
       style={{
-        padding: '8px 16px',
+        padding: '4px 12px',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
       }}
     >
-      <span style={{ fontSize: 12, color: COLOR_DECK_A, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>A</span>
+      <span style={{ fontSize: 10, color: COLOR_DECK_A, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>A</span>
       <div
         ref={trackRef}
         onPointerDown={handlePointer}
         onPointerMove={handlePointer}
         style={{
           flex: 1,
-          height: 32,
+          height: 28,
           background: '#111',
           borderRadius: 6,
           position: 'relative',
@@ -402,7 +402,7 @@ const PortraitCrossfader: FC = () => {
           <div style={{ width: 14, height: 2, background: '#aaa', borderRadius: 1 }} />
         </div>
       </div>
-      <span style={{ fontSize: 12, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
+      <span style={{ fontSize: 10, color: COLOR_DECK_B, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>B</span>
     </div>
   );
 };
@@ -472,11 +472,11 @@ export const MobilePortrait: FC = () => {
       {/* Header */}
       <div
         style={{
-          height: 36,
+          height: 32,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 12px',
+          padding: '0 10px',
           borderBottom: '1px solid #222',
           flexShrink: 0,
         }}

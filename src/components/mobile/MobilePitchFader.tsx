@@ -90,8 +90,9 @@ export const MobilePitchFader: FC<MobilePitchFaderProps> = ({ deckId, color }) =
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         style={{
-          width: 28,
-          height: 160,
+          width: 24,
+          flex: 1,
+          minHeight: 60,
           background: '#111',
           borderRadius: 6,
           position: 'relative',
