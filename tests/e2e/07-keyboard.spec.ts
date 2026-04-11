@@ -20,14 +20,15 @@ test.describe('Keyboard Shortcuts', () => {
   });
 
   test('Q toggles Deck A quantize', async ({ page }) => {
+    // Default is true, so first press should turn it off
     await page.keyboard.press('q');
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(100);
     let state = await readDeckState(page, 'A');
-    expect(state!.quantize).toBe(true);
-    await page.keyboard.press('q');
-    await page.waitForTimeout(50);
-    state = await readDeckState(page, 'A');
     expect(state!.quantize).toBe(false);
+    await page.keyboard.press('q');
+    await page.waitForTimeout(100);
+    state = await readDeckState(page, 'A');
+    expect(state!.quantize).toBe(true);
   });
 
   test('Escape double-press resets controls (panic)', async ({ page }) => {

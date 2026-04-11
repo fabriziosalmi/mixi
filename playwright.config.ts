@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -30,9 +35,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: process.env.CI ? 'npm run preview -- --port 5173' : 'npx vite --port 5173',
+    command: process.env.CI ? 'npx vite preview --port 5173' : 'npx vite --port 5173',
     port: 5173,
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,
+    cwd: __dirname,
   },
 });

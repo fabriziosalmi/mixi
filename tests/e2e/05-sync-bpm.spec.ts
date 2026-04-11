@@ -80,18 +80,18 @@ test.describe('Sync & BPM', () => {
     expect(state!.firstBeatOffset).toBeGreaterThanOrEqual(0);
   });
 
-  test('quantize defaults to false', async ({ page }) => {
+  test('quantize defaults to true', async ({ page }) => {
     const state = await readDeckState(page, 'A');
-    expect(state!.quantize).toBe(false);
+    expect(state!.quantize).toBe(true);
   });
 
   test('quantize can be toggled', async ({ page }) => {
-    await callStoreAction(page, 'setQuantize', 'A', true);
-    let state = await readDeckState(page, 'A');
-    expect(state!.quantize).toBe(true);
     await callStoreAction(page, 'setQuantize', 'A', false);
-    state = await readDeckState(page, 'A');
+    let state = await readDeckState(page, 'A');
     expect(state!.quantize).toBe(false);
+    await callStoreAction(page, 'setQuantize', 'A', true);
+    state = await readDeckState(page, 'A');
+    expect(state!.quantize).toBe(true);
   });
 
   test('sync mode defaults to beat', async ({ page }) => {

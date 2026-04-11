@@ -14,13 +14,21 @@ test.use({
   colorScheme: 'dark',
 });
 
-const BASE = 'http://localhost:5175/';
+const BASE = '/';
 
 async function launchMobile(page: import('@playwright/test').Page) {
   await page.goto(BASE);
-  await page.waitForTimeout(1000);
-  // Click the init gate (full-screen overlay)
-  await page.mouse.click(195, 422);
+  await page.waitForTimeout(1500);
+  // Click the init gate — it's a full-screen fixed div with onClick
+  // Try text-based click first, fall back to center-screen click
+  const tapText = page.getByText('TAP TO START');
+  if (await tapText.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await tapText.click();
+  } else {
+    // Fallback: click center of viewport
+    const vp = page.viewportSize()!;
+    await page.mouse.click(vp.width / 2, vp.height / 2);
+  }
   await page.waitForTimeout(2000);
   // Verify the mobile layout rendered
   await page.waitForSelector('.m-noise', { timeout: 10000 });
