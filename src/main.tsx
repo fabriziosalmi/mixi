@@ -57,6 +57,13 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
   import('./store/settingsStore').then(m => {
     (window as any).__SETTINGS_STORE__ = m.useSettingsStore;
   });
+  import('./audio/MixiEngine').then(m => {
+    // Expose as a getter so it always returns the current singleton
+    Object.defineProperty(window, '__MIXI_ENGINE__', {
+      get: () => m.MixiEngine.getInstance(),
+      configurable: true,
+    });
+  });
 }
 
 createRoot(document.getElementById('root')!).render(
