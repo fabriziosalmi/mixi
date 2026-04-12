@@ -15,9 +15,9 @@ hero:
 
 features:
   - title: "Rust/Wasm DSP Engine"
-    details: "12 DSP modules compiled to 143KB Wasm with SIMD128. 4-stage predictive Hermite-Spline limiter, block-rate phaser LFO, auto-sleep reverb, exponential fader curves. Full stereo pipeline in 1.61µs — 99.7% headroom."
+    details: "12 DSP modules compiled to 398KB Wasm with SIMD128. Predictive brickwall limiter, 3-band LR4 isolator EQ, parallel compression, DC blocker, band-split distortion. Full stereo pipeline with 99.7% headroom."
   - title: "Intelligent Automation"
-    details: "A stateless 50ms tick arbiter continuously monitors phase alignment, spectral clashes, and headroom. Corrective actions execute as transparent Ghost Mutations — visible but non-intrusive."
+    details: "17 AI intents across 5 domains (safety, spectral, dynamics, rhythm, structure). A stateless 50ms tick arbiter monitors phase alignment, spectral clashes, and headroom. Corrections execute as visible Ghost Mutations."
   - title: "Modular Architecture"
     details: "20 instruments (3 built-in + 17 community), 17 skins, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
 ---
@@ -303,7 +303,7 @@ onMounted(() => {
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">143</span>
+    <span class="stat-number">398</span>
     <span class="stat-label">KB Wasm Binary</span>
   </div>
 </div>

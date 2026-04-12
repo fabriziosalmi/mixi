@@ -82,6 +82,16 @@ jobs:
       - name: Install deps
         run: npm install --no-audit --no-fund
 
+      - name: Install Rust + wasm-pack
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build Wasm module
+        run: |
+          cargo install wasm-pack --locked || true
+          cd mixi-core && wasm-pack build --target web --out-dir pkg
+
       - name: Build for preview
         run: npx vite build
 
