@@ -10,10 +10,28 @@
 </p>
 
 <p align="center">
+  <a href="https://www.mixidaw.com/app/"><strong>Launch in Browser</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/fabriziosalmi/mixi/releases/latest">Download Desktop</a> &nbsp;·&nbsp;
+  <a href="https://www.mixidaw.com/">Website</a> &nbsp;·&nbsp;
+  <a href="https://github.com/fabriziosalmi/mixi/discussions">Discussions</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/fabriziosalmi/mixi/releases/latest"><img src="https://img.shields.io/github/v/release/fabriziosalmi/mixi?label=latest&color=00d4ff" alt="Latest Release"></a>
   <a href="https://github.com/fabriziosalmi/mixi/actions/workflows/test.yml"><img src="https://github.com/fabriziosalmi/mixi/actions/workflows/test.yml/badge.svg" alt="Test Gate"></a>
   <a href="https://github.com/fabriziosalmi/mixi/actions/workflows/docs.yml"><img src="https://github.com/fabriziosalmi/mixi/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-blue" alt="License"></a>
 </p>
+
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://github.com/fabriziosalmi/mixi/releases/latest"><strong>macOS (ARM64)</strong><br><code>.dmg</code></a></td>
+    <td align="center"><a href="https://github.com/fabriziosalmi/mixi/releases/latest"><strong>macOS (Intel)</strong><br><code>.dmg</code></a></td>
+    <td align="center"><a href="https://github.com/fabriziosalmi/mixi/releases/latest"><strong>Windows</strong><br><code>.exe</code></a></td>
+    <td align="center"><a href="https://github.com/fabriziosalmi/mixi/releases/latest"><strong>Linux</strong><br><code>.AppImage</code></a></td>
+    <td align="center"><a href="https://www.mixidaw.com/app/"><strong>Browser</strong><br>Zero install</a></td>
+  </tr>
+</table>
 
 ---
 
