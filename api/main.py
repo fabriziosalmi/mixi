@@ -98,7 +98,7 @@ app = FastAPI(title="Mixi Stream Proxy", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:[0-9]+)?|file://.*|https://([a-zA-Z0-9-]+\.)?github\.io|https://(www\.)?mixidaw\.com)$",
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:[0-9]+)?|file://localhost|https://([a-zA-Z0-9-]+\.)?github\.io|https://(www\.)?mixidaw\.com)$",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
     expose_headers=["Content-Length", "Content-Type", "X-Track-Title"],
@@ -470,6 +470,16 @@ async def stream_endpoint(
     real-time from the original CDN to the browser.
     """
     logger.info("[request]Ricevuta richiesta per URL:[/request] [bold]%s[/bold]", url)
+
+    # Validate URL: only allow known audio platforms (prevent open proxy abuse)
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http/https URLs are supported")
+    ALLOWED_HOSTS = ("soundcloud.com", "www.soundcloud.com", "youtube.com", "www.youtube.com",
+                     "youtu.be", "m.youtube.com", "music.youtube.com")
+    if parsed.hostname and not any(parsed.hostname.endswith(h) for h in ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail=f"Unsupported platform: {parsed.hostname}. Supported: SoundCloud, YouTube.")
 
     try:
         # 1. Resolve direct CDN URL without downloading

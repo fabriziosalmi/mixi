@@ -521,6 +521,11 @@ export const useMixiStore = create<MixiStore>()(
             }
 
             if (Math.abs(seekOffset) > 0.005) { // Only if > 5ms off
+              // Exit loop before seek — prevents backwards time jump when
+              // sync seeks to a position before the loop end boundary.
+              if (thisDeck.activeLoop) {
+                engine.exitLoop(deck);
+              }
               const targetTime = thisTime + seekOffset;
               engine.seek(deck, Math.max(0, targetTime));
             }

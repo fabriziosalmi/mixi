@@ -117,6 +117,14 @@ function detectOnsets(
   const minIoiFrames = Math.ceil((MIN_IOI * sampleRate) / windowSize);
   let lastOnsetFrame = -minIoiFrames - 1;
 
+  // Compute global RMS for strength normalization.
+  // Without this, onsets after silence have arbitrarily large strength
+  // (energy spike vs near-zero local mean), biasing the IOI histogram.
+  let globalSum = 0;
+  for (let i = 0; i < energy.length; i++) globalSum += energy[i];
+  const globalMean = energy.length > 0 ? globalSum / energy.length : 1;
+  const strengthCap = globalMean * 10; // cap at 10× global average
+
   for (let i = AVG_HALF_WINDOW; i < energy.length - AVG_HALF_WINDOW; i++) {
     let sum = 0;
     for (let j = i - AVG_HALF_WINDOW; j <= i + AVG_HALF_WINDOW; j++) {
@@ -127,7 +135,10 @@ function detectOnsets(
 
     if (energy[i] > threshold && i - lastOnsetFrame >= minIoiFrames) {
       const timeSec = (i * windowSize) / sampleRate;
-      const strength = energy[i] - localMean; // how far above mean
+      const rawStrength = energy[i] - localMean;
+      // Normalize: cap strength to prevent post-silence spikes from
+      // dominating the IOI histogram with disproportionate weight.
+      const strength = Math.min(rawStrength, strengthCap);
       onsets.push({ time: timeSec, strength: Math.max(0.01, strength) });
       lastOnsetFrame = i;
     }
