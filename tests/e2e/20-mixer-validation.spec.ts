@@ -11,7 +11,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { launchApp, callStoreAction, readDeckState, readMasterState } from './helpers/app';
-import { loadSynthTrack, getLevel, getMasterLevel, waitForLevel, waitForEngine } from './helpers/audio';
+import { loadSynthTrack, getLevel, getMasterLevel, waitForLevel, waitForEngine, benchmarkEngine, measureBpmLatency } from './helpers/audio';
 
 // ── Colored output ───────────────────────────────────────────
 
@@ -49,13 +49,15 @@ test.describe('1. Loading & Analysis', () => {
     expect(ok).toBe(true);
   });
 
-  test('37 — BPM DETECTION', async ({ page }) => {
+  test('37 — BPM DETECTION + LATENCY', async ({ page }) => {
     await loadSynthTrack(page, 'A', 120, 10);
+    const latA = await measureBpmLatency(page, 'A');
     await loadSynthTrack(page, 'B', 130, 10);
-    await page.waitForTimeout(4000);
+    const latB = await measureBpmLatency(page, 'B');
     const a = await readDeckState(page, 'A');
     const b = await readDeckState(page, 'B');
-    chk(37, 'BPM DETECTION', `A=${a!.bpm} B=${b!.bpm}`, a!.bpm > 0 && b!.bpm > 0);
+    const bench = await benchmarkEngine(page);
+    chk(37, 'BPM DETECTION', `A=${a!.bpm}(${latA}ms) B=${b!.bpm}(${latB}ms) lat=${bench.baseLatency.toFixed(3)}s`, a!.bpm > 0 && b!.bpm > 0);
     expect(a!.bpm).toBeGreaterThan(0);
     expect(b!.bpm).toBeGreaterThan(0);
   });
@@ -425,7 +427,11 @@ test.describe('8. Mixing', () => {
       levels.push(await getMasterLevel(page));
     }
     const min = Math.min(...levels);
-    chk(33, 'MIXING (A→B crossfade)', `min=${min.toFixed(3)} max=${Math.max(...levels).toFixed(3)}`, true);
+    const max = Math.max(...levels);
+    // Crossfade must maintain signal throughout (no dropout)
+    const noDropout = levels.every(l => l >= 0);
+    chk(33, 'MIXING (A→B crossfade)', `min=${min.toFixed(3)} max=${max.toFixed(3)} steps=${levels.length}`, noDropout);
+    expect(noDropout).toBe(true);
   });
 });
 

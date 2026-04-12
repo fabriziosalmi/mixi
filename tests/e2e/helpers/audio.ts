@@ -79,22 +79,37 @@ export async function loadSynthTrack(
 // ── Level Measurement ────────────────────────────────────────
 
 /**
- * Read the current RMS level of a deck (0–1).
+ * Read a stable RMS level of a deck (0–1).
+ * Takes the MAX of 5 samples over 250ms to avoid measuring
+ * silence between kick hits (which gives false 0.000 readings).
  */
 export async function getLevel(page: Page, deck: 'A' | 'B'): Promise<number> {
-  return page.evaluate((d) => {
+  return page.evaluate(async (d) => {
     const engine = (window as any).__MIXI_ENGINE__;
-    return engine?.getLevel?.(d) ?? 0;
+    if (!engine?.getLevel) return 0;
+    let peak = 0;
+    for (let i = 0; i < 5; i++) {
+      peak = Math.max(peak, engine.getLevel(d));
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return peak;
   }, deck);
 }
 
 /**
- * Read the current master RMS level (0–1).
+ * Read a stable master RMS level (0–1).
+ * Same windowed-peak strategy as getLevel.
  */
 export async function getMasterLevel(page: Page): Promise<number> {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
     const engine = (window as any).__MIXI_ENGINE__;
-    return engine?.getMasterLevel?.() ?? 0;
+    if (!engine?.getMasterLevel) return 0;
+    let peak = 0;
+    for (let i = 0; i < 5; i++) {
+      peak = Math.max(peak, engine.getMasterLevel());
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return peak;
   });
 }
 
@@ -164,6 +179,51 @@ export async function getPhaseError(page: Page): Promise<number> {
     if (delta > 0.5) delta = 1 - delta;
     return delta;
   });
+}
+
+// ── Performance Benchmarks ───────────────────────────────────
+
+export interface EngineBenchmark {
+  baseLatency: number;
+  sampleRate: number;
+  contextState: string;
+  currentTime: number;
+}
+
+/**
+ * Capture engine performance metrics.
+ */
+export async function benchmarkEngine(page: Page): Promise<EngineBenchmark> {
+  return page.evaluate(() => {
+    const e = (window as any).__MIXI_ENGINE__;
+    const ctx = e?.getAudioContext?.();
+    return {
+      baseLatency: ctx?.baseLatency ?? -1,
+      sampleRate: ctx?.sampleRate ?? -1,
+      contextState: ctx?.state ?? 'unknown',
+      currentTime: ctx?.currentTime ?? -1,
+    };
+  });
+}
+
+/**
+ * Measure BPM detection latency — time from load to BPM > 0.
+ */
+export async function measureBpmLatency(
+  page: Page,
+  deck: 'A' | 'B',
+  timeoutMs = 10000,
+): Promise<number> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const bpm = await page.evaluate((d) => {
+      const store = (window as any).__MIXI_STORE__;
+      return store?.getState()?.decks?.[d]?.bpm ?? 0;
+    }, deck);
+    if (bpm > 0) return Date.now() - start;
+    await page.waitForTimeout(100);
+  }
+  return -1; // timeout
 }
 
 // ── Wait for Engine Ready ────────────────────────────────────
