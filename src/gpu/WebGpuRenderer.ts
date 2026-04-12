@@ -100,8 +100,9 @@ export class WebGpuRenderer {
     canvas: HTMLCanvasElement,
     onDeviceLost?: () => void,
   ): Promise<WebGpuRenderer> {
+    if (!navigator.gpu) throw new Error('WebGPU not supported in this browser');
     const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) throw new Error('No GPU adapter');
+    if (!adapter) throw new Error('No GPU adapter available');
 
     const features: GPUFeatureName[] = [];
     if (adapter.features.has('float32-filterable')) {

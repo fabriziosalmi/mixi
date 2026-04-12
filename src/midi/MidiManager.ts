@@ -273,6 +273,14 @@ export class MidiManager {
     log.info('MIDI', 'Clock stopped');
   }
 
+  /** Clean up all timers and listeners. Call on app shutdown. */
+  destroy(): void {
+    this.stopClock();
+    if (this.midiAccess) {
+      this.midiAccess.onstatechange = null;
+    }
+  }
+
   /**
    * Look-ahead scheduler: schedules MIDI clock ticks into the future
    * using hardware timestamps (MIDIOutput.send(data, timestamp)).
