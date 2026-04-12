@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboFireBus } from './TurboFireBus';
 import { TurboFireSynth } from './TurboFireSynth';
 import { defaultSynth, defaultFx, FxKnobId, SynthParamId } from './types';

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import { TurboFireEngine, DeckId } from './TurboFireEngine';
 import { TurboFireSnapshot, defaultSynth, defaultFx } from './types';
 
@@ -21,7 +20,7 @@ const Knob: FC<KnobProps> = ({ value, label, onChange }) => (
   </div>
 );
 
-export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }) => {
+export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwitchToTrack }) => {
   const [snapshot, setSnapshot] = useState<TurboFireSnapshot>({
     isPlaying: false,
     masterVolume: 1.0,

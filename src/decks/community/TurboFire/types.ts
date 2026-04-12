@@ -1,4 +1,3 @@
-// @ts-nocheck
 export type SynthParamId = 'warmth' | 'crackle' | 'wind';
 export type FxKnobId = 'drywet';
 

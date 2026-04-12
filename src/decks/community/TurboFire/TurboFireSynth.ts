@@ -1,8 +1,6 @@
-// @ts-nocheck
 export class TurboFireSynth {
   private ctx: AudioContext;
   private node!: AudioWorkletNode;
-  private destination!: AudioNode;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -18,7 +16,6 @@ export class TurboFireSynth {
   }
 
   connect(destination: AudioNode) {
-    this.destination = destination;
     this.node.connect(destination);
   }
 

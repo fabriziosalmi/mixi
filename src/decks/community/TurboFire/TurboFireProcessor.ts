@@ -1,4 +1,4 @@
-// @ts-nocheck
+declare const sampleRate: number;
 class TurboFireProcessor extends AudioWorkletProcessor {
   private isRunning = false;
   
@@ -33,7 +33,7 @@ class TurboFireProcessor extends AudioWorkletProcessor {
     };
   }
 
-  process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>) {
+  process(_inputs: Float32Array[][], outputs: Float32Array[][], _parameters: Record<string, Float32Array>) {
     const output = outputs[0];
     if (!output || output.length === 0) return true;
     
