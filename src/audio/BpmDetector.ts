@@ -236,6 +236,9 @@ function estimateBpm(onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT
     }
   }
 
+  // Clamp to search range — parabolic interpolation can overshoot
+  bpm = Math.max(bpmMin, Math.min(bpmMax, bpm));
+
   // Confidence
   let totalVotes = 0;
   for (let i = 0; i < numBins; i++) totalVotes += smoothed[i];

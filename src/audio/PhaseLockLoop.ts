@@ -302,16 +302,19 @@ class PhaseLockLoop {
   private computePI(deck: DeckId, phaseDelta: number): number {
     const s = this.states[deck];
 
-    // Layer 1: Freeze during human interaction
-    if (s.frozen) return 0;
-
-    // Layer 3: Reset on large discontinuity (seek, hot cue)
+    // Discontinuity detection BEFORE freeze check — otherwise a seek
+    // during freeze goes undetected, and on unfreeze the PLL starts
+    // with stale integral/lastPhaseDelta from before the seek.
     if (Math.abs(phaseDelta - s.lastPhaseDelta) > DISCONTINUITY_THRESHOLD) {
       s.integral = 0;
       s.lastPhaseDelta = phaseDelta;
       s.lastCorrection = 0;
+      if (s.frozen) return 0; // still frozen — return after reset
       return 0;
     }
+
+    // Layer 1: Freeze during human interaction
+    if (s.frozen) return 0;
 
     s.lastPhaseDelta = phaseDelta;
 

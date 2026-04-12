@@ -168,11 +168,11 @@ export const Fader: FC<FaderProps> = ({
           style={{
             ...trackStyle,
             borderRadius: 2,
-            background: '#080808',
+            background: 'var(--srf-deep, #080808)',
             border: '1px solid rgba(255,255,255,0.06)',
             boxShadow: isVertical
-              ? 'inset 3px 0 6px #000, inset -3px 0 6px #000, inset 0 3px 6px rgba(0,0,0,0.9), inset 0 -1px 2px rgba(0,0,0,0.6)'
-              : 'inset 0 3px 6px #000, inset 0 -3px 6px #000, inset 3px 0 6px rgba(0,0,0,0.9), inset -1px 0 2px rgba(0,0,0,0.6)',
+              ? 'inset 3px 0 6px var(--srf-deep, #000), inset -3px 0 6px var(--srf-deep, #000), inset 0 3px 6px rgba(0,0,0,0.9), inset 0 -1px 2px rgba(0,0,0,0.6)'
+              : 'inset 0 3px 6px var(--srf-deep, #000), inset 0 -3px 6px var(--srf-deep, #000), inset 3px 0 6px rgba(0,0,0,0.9), inset -1px 0 2px rgba(0,0,0,0.6)',
             // Centre the track in the container
             ...(isVertical
               ? { left: '50%', transform: 'translateX(-50%)' }
