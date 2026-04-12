@@ -9,12 +9,12 @@ export class TurboVoxSynth {
   }
   
   async init() {
-    await this.ctx.audioWorklet.addModule(new URL('./TurboVoxProcessor.ts', import.meta.url));
-    this.node = new AudioWorkletNode(this.ctx, 'turbovox-processor', {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [2]
-    });
+    try {
+      await this.ctx.audioWorklet.addModule(new URL('./TurboVoxProcessor.ts', import.meta.url));
+      this.node = new AudioWorkletNode(this.ctx, 'turbovox-processor', {
+        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+      });
+    } catch (err) { console.warn('[TurboVox] AudioWorklet init failed:', err); }
   }
 
   connect(destination: AudioNode) {

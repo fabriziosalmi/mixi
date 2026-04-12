@@ -7,12 +7,12 @@ export class TurboFireSynth {
   }
   
   async init() {
-    await this.ctx.audioWorklet.addModule(new URL('./TurboFireProcessor.ts', import.meta.url));
-    this.node = new AudioWorkletNode(this.ctx, 'turbofire-processor', {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [2]
-    });
+    try {
+      await this.ctx.audioWorklet.addModule(new URL('./TurboFireProcessor.ts', import.meta.url));
+      this.node = new AudioWorkletNode(this.ctx, 'turbofire-processor', {
+        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+      });
+    } catch (err) { console.warn('[TurboFire] AudioWorklet init failed:', err); }
   }
 
   connect(destination: AudioNode) {

@@ -25,12 +25,12 @@ export class TurboGeigerEngine {
     this.ctx = ctx;
     this.bus = new TurboGeigerBus(this.ctx);
 
-    await this.ctx.audioWorklet.addModule(new URL('./TurboGeigerProcessor.ts', import.meta.url));
-    this.node = new AudioWorkletNode(this.ctx, 'turbogeiger-processor', {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [2]
-    });
+    try {
+      await this.ctx.audioWorklet.addModule(new URL('./TurboGeigerProcessor.ts', import.meta.url));
+      this.node = new AudioWorkletNode(this.ctx, 'turbogeiger-processor', {
+        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+      });
+    } catch (err) { console.warn('[TurboGeiger] AudioWorklet init failed:', err); return; }
     
     this.node.port.onmessage = (event) => {
         if (event.data.id === 'tick') {
