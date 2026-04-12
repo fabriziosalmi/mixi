@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboFMBus } from './TurboFMBus';
 import { TurboFMSynth } from './TurboFMSynth';
 import { defaultSynth, defaultFx, defaultSteps, FxKnobId, SynthParamId, TurboFMStep, STEP_COUNT } from './types';
@@ -155,7 +154,7 @@ export class TurboFMEngine {
     const scale = scales[Math.floor(Math.random() * scales.length)];
     const root = 36 + Math.floor(Math.random() * 24); // C2-C4
 
-    this._steps = this._steps.map((s, i) => {
+    this._steps = this._steps.map((_s, i) => {
       const degree = scale[Math.floor(Math.random() * scale.length)];
       return {
         note: root + degree + (Math.random() > 0.8 ? 12 : 0),

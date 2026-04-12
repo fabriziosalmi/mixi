@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const STEP_COUNT = 32;
 
 export type SynthParamId = 'morph' | 'vibrato' | 'glide' | 'lfoRate' | 'attack' | 'decay';

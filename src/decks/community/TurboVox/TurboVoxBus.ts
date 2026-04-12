@@ -1,4 +1,3 @@
-// @ts-nocheck
 export class TurboVoxBus {
   public readonly output: GainNode;
   public readonly input: GainNode;
@@ -12,7 +11,7 @@ export class TurboVoxBus {
     this.input.connect(this.output);
   }
 
-  setFx(id: 'drywet', value: number) {}
+  setFx(_id: string, _value: number) {}
 
   setVolume(value: number) {
     this.smooth(this.output.gain, value * value);

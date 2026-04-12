@@ -1,4 +1,3 @@
-// @ts-nocheck
 export * from './types';
 export * from './TurboSynthEngine';
 export * from './TurboSynthBus';

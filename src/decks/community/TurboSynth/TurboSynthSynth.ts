@@ -1,10 +1,8 @@
-// @ts-nocheck
 import { TurboSynthStep } from './types';
 
 export class TurboSynthSynth {
   private ctx: AudioContext;
   private node!: AudioWorkletNode;
-  private destination!: AudioNode;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -20,7 +18,6 @@ export class TurboSynthSynth {
   }
 
   connect(destination: AudioNode) {
-    this.destination = destination;
     this.node.connect(destination);
   }
 

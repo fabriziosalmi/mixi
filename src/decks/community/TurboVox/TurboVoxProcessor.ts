@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-ignore — Wasm module loaded at runtime in AudioWorklet context
 import { TurboVoxWasm } from 'turbovox-wasm';
 
 class TurboVoxProcessor extends AudioWorkletProcessor {
@@ -25,7 +25,7 @@ class TurboVoxProcessor extends AudioWorkletProcessor {
     };
   }
 
-  process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>) {
+  process(_inputs: Float32Array[][], outputs: Float32Array[][], _parameters: Record<string, Float32Array>) {
     const output = outputs[0];
     if (!output || output.length === 0) return true;
     

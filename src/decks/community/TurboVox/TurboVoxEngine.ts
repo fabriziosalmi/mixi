@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboVoxBus } from './TurboVoxBus';
 import { TurboVoxSynth } from './TurboVoxSynth';
 import { defaultSynth, defaultFx, defaultSteps, FxKnobId, SynthParamId, TurboVoxStep, STEP_COUNT } from './types';
@@ -145,7 +144,7 @@ export class TurboVoxEngine {
     const scale = [0, 2, 4, 7, 9]; // Pentatonic works best for vocals
     const root = 48 + Math.floor(Math.random() * 12); // C3-C4
 
-    this._steps = this._steps.map((s, i) => {
+    this._steps = this._steps.map((_s, i) => {
       const degree = scale[Math.floor(Math.random() * scale.length)];
       return {
         note: root + degree + (Math.random() > 0.8 ? 12 : 0) - (Math.random() > 0.9 ? 12 : 0),

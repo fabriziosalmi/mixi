@@ -1,4 +1,3 @@
-// @ts-nocheck
 export class TurboSynthBus {
   public readonly output: GainNode;
   public readonly input: GainNode;
@@ -12,7 +11,7 @@ export class TurboSynthBus {
     this.input.connect(this.output);
   }
 
-  setFx(id: 'drywet', value: number) {
+  setFx(_id: string, _value: number) {
     // Optional placeholder
   }
 

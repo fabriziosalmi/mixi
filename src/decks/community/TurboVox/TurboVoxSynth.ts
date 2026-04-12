@@ -1,10 +1,8 @@
-// @ts-nocheck
 import { TurboVoxStep } from './types';
 
 export class TurboVoxSynth {
   private ctx: AudioContext;
   private node!: AudioWorkletNode;
-  private destination!: AudioNode;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -20,7 +18,6 @@ export class TurboVoxSynth {
   }
 
   connect(destination: AudioNode) {
-    this.destination = destination;
     this.node.connect(destination);
   }
 

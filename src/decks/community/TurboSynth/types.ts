@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const STEP_COUNT = 32;
 
 export type SynthParamId = 'waveform' | 'cutoff' | 'resonance' | 'attack' | 'release';
