@@ -1,0 +1,12 @@
+{
+  "id": "turboacid",
+  "mode": "turbo-acid",
+  "label": "TURBOACID",
+  "accentColor": "#39ff14",
+  "description": "Acid synth — 303-inspired squelch with AudioWorklet DSP",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboAcid/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": ["synth", "acid", "303"]
+}

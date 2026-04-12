@@ -1,0 +1,15 @@
+{
+  "id": "turbosynth",
+  "mode": "turbo-synth",
+  "label": "TURBOSYNTH",
+  "accentColor": "#f472b6",
+  "description": "Wavetable synthesizer with step sequencer",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboSynth/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

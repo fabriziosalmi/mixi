@@ -1,0 +1,15 @@
+{
+  "id": "turbobrain",
+  "mode": "turbo-brain",
+  "label": "TURBOBRAIN",
+  "accentColor": "#c084fc",
+  "description": "Neural network audio synthesis",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboBrain/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

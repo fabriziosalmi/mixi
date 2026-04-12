@@ -1,0 +1,12 @@
+{
+  "id": "turbonature",
+  "mode": "turbo-nature",
+  "label": "TURBONATURE",
+  "accentColor": "#4ade80",
+  "description": "Nature soundscape synthesis — wind, rain, birds, forest",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboNature/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": ["ambient", "nature", "soundscape"]
+}

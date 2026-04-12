@@ -1,0 +1,15 @@
+{
+  "id": "turbogeiger",
+  "mode": "turbo-geiger",
+  "label": "TURBOGEIGER",
+  "accentColor": "#fbbf24",
+  "description": "Geiger counter rhythms — radioactive clicks",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboGeiger/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

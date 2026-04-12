@@ -1,0 +1,15 @@
+{
+  "id": "turboboid",
+  "mode": "turbo-boid",
+  "label": "TURBOBOID",
+  "accentColor": "#ff6b9d",
+  "description": "Flocking particle synthesis — boid-driven sound",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboBoid/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "turbofractal",
+  "mode": "turbo-fractal",
+  "label": "TURBOFRACTAL",
+  "accentColor": "#8b5cf6",
+  "description": "Fractal math sonification — Mandelbrot audio",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboFractal/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

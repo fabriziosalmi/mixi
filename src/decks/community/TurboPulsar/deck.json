@@ -1,0 +1,15 @@
+{
+  "id": "turbopulsar",
+  "mode": "turbo-pulsar",
+  "label": "TURBOPULSAR",
+  "accentColor": "#a78bfa",
+  "description": "Pulsar synthesis — rotating neutron star audio",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboPulsar/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

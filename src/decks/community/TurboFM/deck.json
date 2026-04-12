@@ -1,0 +1,15 @@
+{
+  "id": "turbofm",
+  "mode": "turbo-fm",
+  "label": "TURBO FM",
+  "accentColor": "#f97316",
+  "description": "FM synthesis — DX7-inspired 6-operator",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboFM/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

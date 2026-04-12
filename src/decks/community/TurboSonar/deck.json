@@ -1,0 +1,15 @@
+{
+  "id": "turbosonar",
+  "mode": "turbo-sonar",
+  "label": "TURBOSONAR",
+  "accentColor": "#22d3ee",
+  "description": "Sonar ping synthesis — underwater acoustics",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboSonar/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

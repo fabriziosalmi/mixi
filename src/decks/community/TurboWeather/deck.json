@@ -1,0 +1,15 @@
+{
+  "id": "turboweather",
+  "mode": "turbo-weather",
+  "label": "TURBOWEATHER",
+  "accentColor": "#2dd4bf",
+  "description": "Weather data sonification — wind, rain, thunder",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboWeather/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

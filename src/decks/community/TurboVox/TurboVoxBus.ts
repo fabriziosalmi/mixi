@@ -1,0 +1,30 @@
+// @ts-nocheck
+export class TurboVoxBus {
+  public readonly output: GainNode;
+  public readonly input: GainNode;
+  private ctx: AudioContext;
+
+  constructor(ctx: AudioContext) {
+    this.ctx = ctx;
+    this.input = ctx.createGain();
+    this.output = ctx.createGain();
+
+    this.input.connect(this.output);
+  }
+
+  setFx(id: 'drywet', value: number) {}
+
+  setVolume(value: number) {
+    this.smooth(this.output.gain, value * value);
+  }
+
+  destroy() {
+    this.input.disconnect();
+    this.output.disconnect();
+  }
+
+  private smooth(param: AudioParam, value: number, tau = 0.012) {
+    param.cancelScheduledValues(this.ctx.currentTime);
+    param.setTargetAtTime(value, this.ctx.currentTime, tau);
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "turbogenome",
+  "mode": "turbo-genome",
+  "label": "TURBOGENOME",
+  "accentColor": "#10b981",
+  "description": "DNA sequence sonification",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboGenome/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "turbovox",
+  "mode": "turbo-vox",
+  "label": "TURBOVOX",
+  "accentColor": "#fb923c",
+  "description": "Voice synthesis — formant-based vocal synth",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboVox/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

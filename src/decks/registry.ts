@@ -133,6 +133,15 @@ class DeckRegistryImpl {
    * bundling external decks into the main Vite build.
    */
   async fetchFromRemote(url = REGISTRY_URL): Promise<void> {
+    // External deck loading disabled until Vite's vendor chunks support
+    // standard ESM exports. The react-vendor chunk uses CJS-to-ESM format
+    // without proper default/named exports, breaking import map resolution.
+    // Built-in decks (Groovebox, TurboKick, TurboBass) always work.
+    if (import.meta.env.PROD) {
+      this.fetched = true;
+      this.notify();
+      return;
+    }
     if (this.fetched) return;
     if (this.fetching) return this.fetching;
 

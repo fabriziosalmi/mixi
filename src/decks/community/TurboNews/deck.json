@@ -1,0 +1,15 @@
+{
+  "id": "turbonews",
+  "mode": "turbo-news",
+  "label": "TURBONEWS",
+  "accentColor": "#6366f1",
+  "description": "Text-to-rhythm — news feed sonification",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboNews/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}

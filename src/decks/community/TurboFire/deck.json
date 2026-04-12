@@ -1,0 +1,15 @@
+{
+  "id": "turbofire",
+  "mode": "turbo-fire",
+  "label": "TURBOFIRE",
+  "accentColor": "#ef4444",
+  "description": "Fire particle audio — crackling flame synth",
+  "author": "MIXI Community",
+  "version": "1.0.0",
+  "esmEntry": "https://fabriziosalmi.github.io/mixi-decks/TurboFire/index.mjs",
+  "minMixiVersion": "0.4.0",
+  "tags": [
+    "synth",
+    "instrument"
+  ]
+}
