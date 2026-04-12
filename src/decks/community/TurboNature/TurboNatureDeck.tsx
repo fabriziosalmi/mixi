@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import { TurboNatureEngine } from './TurboNatureEngine';
 import { TurboNatureSnapshot, defaultSynth, ENVIRONMENTS, EnvironmentId, SynthParamId } from './types';
 

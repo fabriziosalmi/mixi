@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboGenomeBus } from './TurboGenomeBus';
 
 export type DeckId = 'A' | 'B';

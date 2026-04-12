@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboMorseBus } from './TurboMorseBus';
 
 export type DeckId = 'A' | 'B';

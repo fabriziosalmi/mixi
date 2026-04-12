@@ -1,4 +1,3 @@
-// @ts-nocheck
 // TurboAcid Memory Map Constants (Float32 Indices)
 // Total Buffer Size: 1024 bytes = 256 Float32 slots.
 

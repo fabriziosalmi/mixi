@@ -1,4 +1,3 @@
-// @ts-nocheck
 export class TurboBrainBus {
   public readonly output: GainNode;
   public readonly input: GainNode;

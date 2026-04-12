@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboCamBus } from './TurboCamBus';
 
 export type DeckId = 'A' | 'B';

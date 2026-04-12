@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboBoidBus } from './TurboBoidBus';
 import { Boid } from './types';
 

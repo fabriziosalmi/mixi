@@ -1,4 +1,3 @@
-// @ts-nocheck
 export type SynthParamId = 'birds' | 'wind' | 'rain' | 'magic';
 export type EnvironmentId = 'forest' | 'fireplace' | 'ocean' | 'rain';
 

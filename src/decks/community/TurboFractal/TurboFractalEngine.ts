@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboFractalBus } from './TurboFractalBus';
 
 export type DeckId = 'A' | 'B';

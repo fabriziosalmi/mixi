@@ -1,4 +1,3 @@
-// @ts-nocheck
 export class TurboNewsBus {
   public readonly output: GainNode;
   public readonly input: GainNode;

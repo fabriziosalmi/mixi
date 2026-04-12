@@ -1,4 +1,3 @@
-// @ts-nocheck
 export class TurboFractalBus {
   public readonly output: GainNode;
   public readonly input: GainNode;

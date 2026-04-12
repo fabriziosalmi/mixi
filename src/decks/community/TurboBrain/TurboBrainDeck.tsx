@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import { TurboBrainEngine, DeckId } from './TurboBrainEngine';
 import { TurboBrainSnapshot } from './types';
 

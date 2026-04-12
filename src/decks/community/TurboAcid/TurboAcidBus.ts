@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
     ACID_MEM_PLAY_STATE,
     ACID_MEM_BPM,

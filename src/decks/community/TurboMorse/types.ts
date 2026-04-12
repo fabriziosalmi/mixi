@@ -1,4 +1,3 @@
-// @ts-nocheck
 export type FxKnobId = 'drywet';
 
 export interface TurboMorseSnapshot {

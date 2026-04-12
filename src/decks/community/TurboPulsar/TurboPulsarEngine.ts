@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboPulsarBus } from './TurboPulsarBus';
 
 export type DeckId = 'A' | 'B';

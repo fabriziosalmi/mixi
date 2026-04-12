@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboNewsBus } from './TurboNewsBus';
 import { NewsItem, NewsStatus } from './types';
 

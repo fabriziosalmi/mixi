@@ -1,4 +1,3 @@
-// @ts-nocheck
 export type NewsStatus = 'idle' | 'fetching' | 'playing' | 'error';
 export type FxKnobId = 'drywet';
 

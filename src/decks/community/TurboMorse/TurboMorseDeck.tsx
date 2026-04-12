@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import { TurboMorseEngine, DeckId } from './TurboMorseEngine';
 import { TurboMorseSnapshot } from './types';
 

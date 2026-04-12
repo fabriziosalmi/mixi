@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect, useRef, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import { TurboWeatherEngine, DeckId } from './TurboWeatherEngine';
 import { TurboWeatherSnapshot } from './types';
 

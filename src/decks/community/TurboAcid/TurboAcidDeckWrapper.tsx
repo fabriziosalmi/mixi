@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Wrapper that adapts TurboAcidDeck (audioContext-based interface)
  * to HouseDeckProps (deckId/color/onSwitchToTrack) used by MIXI.
@@ -12,7 +11,7 @@ interface HouseDeckProps {
   onSwitchToTrack: () => void;
 }
 
-export const TurboAcidDeckAdapter: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }) => {
+export const TurboAcidDeckAdapter: FC<HouseDeckProps> = ({ color, onSwitchToTrack }) => {
   const [ctx, setCtx] = useState<AudioContext | null>(null);
 
   useEffect(() => {
