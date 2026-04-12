@@ -93,15 +93,30 @@ const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   if (houseDeck) {
     const Comp = houseDeck.component;
     return (
-      <DeckErrorBoundary deckId={deckId} color={color} onReset={() => setDeckMode(deckId, 'track')}>
-        <Suspense fallback={<div className="flex-1" />}>
-          <Comp
-            deckId={deckId}
-            color={color}
-            onSwitchToTrack={() => setDeckMode(deckId, 'track')}
-          />
-        </Suspense>
-      </DeckErrorBoundary>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Escape hatch — always visible regardless of deck state */}
+        <button
+          onClick={() => setDeckMode(deckId, 'track')}
+          style={{
+            position: 'absolute', top: 2, right: 2, zIndex: 50,
+            padding: '1px 6px', fontSize: 8, fontFamily: 'var(--font-mono)',
+            background: '#1a1a1a', border: '1px solid #333', borderRadius: 3,
+            color: '#666', cursor: 'pointer',
+          }}
+          title="Back to Track mode"
+        >
+          TRACK
+        </button>
+        <DeckErrorBoundary deckId={deckId} color={color} onReset={() => setDeckMode(deckId, 'track')}>
+          <Suspense fallback={<div className="flex-1" style={{ background: '#0a0a0a' }} />}>
+            <Comp
+              deckId={deckId}
+              color={color}
+              onSwitchToTrack={() => setDeckMode(deckId, 'track')}
+            />
+          </Suspense>
+        </DeckErrorBoundary>
+      </div>
     );
   }
   return <DeckSection deckId={deckId} color={color} />;
