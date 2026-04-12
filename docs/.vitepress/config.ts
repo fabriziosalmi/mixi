@@ -2,6 +2,15 @@ import { defineConfig } from 'vitepress';
 import fs from 'fs';
 
 // Discover all 2-letter language codes in the docs directory
+const RTL_LANGS = new Set(['ar']);
+const LANG_LABELS: Record<string, string> = {
+  ar: 'العربية', bg: 'Български', bn: 'বাংলা', cs: 'Čeština',
+  de: 'Deutsch', el: 'Ελληνικά', es: 'Español', fr: 'Français',
+  ha: 'Hausa', hi: 'हिन्दी', id: 'Bahasa', it: 'Italiano',
+  ja: '日本語', ko: '한국어', nl: 'Nederlands', pl: 'Polski',
+  pt: 'Português', ro: 'Română', ru: 'Русский', sk: 'Slovenčina',
+  sv: 'Svenska', sw: 'Kiswahili', tr: 'Türkçe', zh: '中文',
+};
 const locales: Record<string, any> = {
   root: { label: 'English', lang: 'en' }
 };
@@ -11,8 +20,9 @@ try {
   for (const dir of dirs) {
     if (/^[a-z]{2}$/.test(dir)) {
       locales[dir] = {
-        label: dir.toUpperCase(),
+        label: LANG_LABELS[dir] || dir.toUpperCase(),
         lang: dir,
+        dir: RTL_LANGS.has(dir) ? 'rtl' : 'ltr',
         link: `/${dir}/`
       };
     }
