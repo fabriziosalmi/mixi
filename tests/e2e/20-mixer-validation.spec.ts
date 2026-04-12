@@ -87,6 +87,7 @@ test.describe('2. CH1 Controls', () => {
   });
 
   test('03 — CH1 HI KILL', async ({ page }) => {
+    await waitForLevel(page, 'A', 0.05, 5000);
     const before = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'high', -32);
     await page.waitForTimeout(300);
@@ -97,6 +98,7 @@ test.describe('2. CH1 Controls', () => {
   });
 
   test('04 — CH1 MID KILL', async ({ page }) => {
+    await waitForLevel(page, 'A', 0.05, 5000);
     const before = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'mid', -32);
     await page.waitForTimeout(300);
@@ -107,6 +109,7 @@ test.describe('2. CH1 Controls', () => {
   });
 
   test('05 — CH1 LOW KILL', async ({ page }) => {
+    await waitForLevel(page, 'A', 0.05, 5000);
     const before = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'low', -32);
     await page.waitForTimeout(300);
@@ -196,6 +199,7 @@ test.describe('3. CH2 Controls', () => {
   });
 
   test('11 — CH2 HI KILL', async ({ page }) => {
+    await waitForLevel(page, 'B', 0.05, 5000);
     const before = await getLevel(page, 'B');
     await callStoreAction(page, 'setDeckEq', 'B', 'high', -32);
     await page.waitForTimeout(300);
@@ -205,6 +209,7 @@ test.describe('3. CH2 Controls', () => {
   });
 
   test('12 — CH2 MID KILL', async ({ page }) => {
+    await waitForLevel(page, 'B', 0.05, 5000);
     const before = await getLevel(page, 'B');
     await callStoreAction(page, 'setDeckEq', 'B', 'mid', -32);
     await page.waitForTimeout(300);
@@ -214,6 +219,7 @@ test.describe('3. CH2 Controls', () => {
   });
 
   test('13 — CH2 LOW KILL', async ({ page }) => {
+    await waitForLevel(page, 'B', 0.05, 5000);
     const before = await getLevel(page, 'B');
     await callStoreAction(page, 'setDeckEq', 'B', 'low', -32);
     await page.waitForTimeout(300);
