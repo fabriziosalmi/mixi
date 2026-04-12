@@ -293,7 +293,7 @@ onMounted(() => {
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">587</span>
+    <span class="stat-number">1030</span>
     <span class="stat-label">Tests Passing</span>
   </div>
   <div class="stat-divider"></div>
