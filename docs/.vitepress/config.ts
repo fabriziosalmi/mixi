@@ -47,6 +47,8 @@ export default defineConfig({
     ['meta', { property: 'og:image:height', content: '1080' }],
     ['meta', { property: 'og:url', content: 'https://www.mixidaw.com/' }],
     ['meta', { property: 'og:site_name', content: 'MIXI' }],
+    ['meta', { property: 'og:locale', content: 'en_US' }],
+    ...Object.keys(LANG_LABELS).map(l => ['meta', { property: 'og:locale:alternate', content: l }] as [string, Record<string, string>]),
     // Twitter Card
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'MIXI — Deterministic Audio Workstation' }],
