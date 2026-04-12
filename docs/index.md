@@ -19,7 +19,7 @@ features:
   - title: "Intelligent Automation"
     details: "A stateless 50ms tick arbiter continuously monitors phase alignment, spectral clashes, and headroom. Corrective actions execute as transparent Ghost Mutations — visible but non-intrusive."
   - title: "Modular Architecture"
-    details: "17 skins with CSS-variable driven theming, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency, and an open plugin interface for community-built instruments. Fork it, skin it, extend it."
+    details: "20 instruments (3 built-in + 17 community), 17 skins, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
 ---
 
 <script setup>
