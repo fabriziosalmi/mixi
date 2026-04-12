@@ -54,6 +54,21 @@ export default defineConfig({
     ['meta', { name: 'twitter:title', content: 'MIXI — Deterministic Audio Workstation' }],
     ['meta', { name: 'twitter:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, custom skins. Zero install.' }],
     ['meta', { name: 'twitter:image', content: 'https://www.mixidaw.com/screenshot-og.jpg' }],
+    // JSON-LD structured data
+    ['script', { type: 'application/ld+json' }, JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'MIXI',
+      applicationCategory: 'MultimediaApplication',
+      operatingSystem: 'Web, Windows, macOS, Linux',
+      url: 'https://www.mixidaw.com/',
+      image: 'https://www.mixidaw.com/screenshot-og.jpg',
+      description: 'Browser-native DJ workstation with Rust/Wasm DSP engine, AI automixer, beatmatching, and custom skins.',
+      softwareVersion: '0.5.3',
+      author: { '@type': 'Person', name: 'Fabrizio Salmi' },
+      license: 'https://polyformproject.org/licenses/noncommercial/1.0.0/',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    })],
   ],
   themeConfig: {
     nav: [
