@@ -19,7 +19,7 @@ features:
   - title: "Intelligent Automation"
     details: "17 AI intents across 5 domains (safety, spectral, dynamics, rhythm, structure). A stateless 50ms tick arbiter monitors phase alignment, spectral clashes, and headroom. Corrections execute as visible Ghost Mutations."
   - title: "Modular Architecture"
-    details: "19 instruments (3 built-in + 16 community), 17 skins, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
+    details: "19 instruments (3 built-in + 16 community), 3 built-in skins + unlimited custom, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
 ---
 
 <script setup>
@@ -293,17 +293,17 @@ onMounted(() => {
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">1030</span>
+    <span class="stat-number">564</span>
     <span class="stat-label">Tests Passing</span>
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">17</span>
+    <span class="stat-number">3+</span>
     <span class="stat-label">Skins</span>
   </div>
   <div class="stat-divider"></div>
   <div class="stat-item">
-    <span class="stat-number">398</span>
+    <span class="stat-number">400</span>
     <span class="stat-label">KB Wasm Binary</span>
   </div>
 </div>
@@ -312,6 +312,7 @@ onMounted(() => {
 <div class="manifesto-section">
   <div class="manifesto-inner">
     <h2 class="manifesto-title">Open Core. Free to Play. No Exploitation.</h2>
+    <p style="text-align:center;margin:-8px 0 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-family:var(--vp-font-family-mono);font-size:11px;color:#888;letter-spacing:0.5px;">v0.5.3</span></p>
     <p class="manifesto-text">
       MixiDAW operates under the <strong>PolyForm Noncommercial 1.0.0</strong> license. The complete source code is available for inspection, modification, and non-commercial use. Artists, hobbyists, and researchers have unrestricted access. Corporate packaging, SaaS deployment, and commercial redistribution require explicit licensing.
     </p>
