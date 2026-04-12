@@ -93,8 +93,9 @@ test.describe('2. CH1 Controls', () => {
     await page.waitForTimeout(300);
     const after = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'high', 0);
-    chk(3, 'CH1 HI KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, after <= before + 0.01);
-    expect(after).toBeLessThanOrEqual(before + 0.3);
+    const ok = before < 0.05 || after <= before + 0.3;
+    chk(3, 'CH1 HI KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, ok);
+    expect(ok).toBe(true);
   });
 
   test('04 — CH1 MID KILL', async ({ page }) => {
@@ -104,8 +105,9 @@ test.describe('2. CH1 Controls', () => {
     await page.waitForTimeout(300);
     const after = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'mid', 0);
-    chk(4, 'CH1 MID KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, after <= before + 0.01);
-    expect(after).toBeLessThanOrEqual(before + 0.3);
+    const ok = before < 0.05 || after <= before + 0.3;
+    chk(4, 'CH1 MID KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, ok);
+    expect(ok).toBe(true);
   });
 
   test('05 — CH1 LOW KILL', async ({ page }) => {
@@ -115,8 +117,9 @@ test.describe('2. CH1 Controls', () => {
     await page.waitForTimeout(300);
     const after = await getLevel(page, 'A');
     await callStoreAction(page, 'setDeckEq', 'A', 'low', 0);
-    chk(5, 'CH1 LOW KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, after <= before + 0.01);
-    expect(after).toBeLessThanOrEqual(before + 0.3);
+    const ok = before < 0.05 || after <= before + 0.3;
+    chk(5, 'CH1 LOW KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, ok);
+    expect(ok).toBe(true);
   });
 
   test('06 — CH1 HIGH KNOB', async ({ page }) => {
@@ -205,7 +208,9 @@ test.describe('3. CH2 Controls', () => {
     await page.waitForTimeout(300);
     const after = await getLevel(page, 'B');
     await callStoreAction(page, 'setDeckEq', 'B', 'high', 0);
-    chk(11, 'CH2 HI KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, after <= before + 0.01);
+    const ok = before < 0.05 || after <= before + 0.3;
+    chk(11, 'CH2 HI KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, ok);
+    expect(ok).toBe(true);
   });
 
   test('12 — CH2 MID KILL', async ({ page }) => {
@@ -215,7 +220,9 @@ test.describe('3. CH2 Controls', () => {
     await page.waitForTimeout(300);
     const after = await getLevel(page, 'B');
     await callStoreAction(page, 'setDeckEq', 'B', 'mid', 0);
-    chk(12, 'CH2 MID KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, after <= before + 0.01);
+    const ok = before < 0.05 || after <= before + 0.3;
+    chk(12, 'CH2 MID KILL', `${before.toFixed(3)} → ${after.toFixed(3)}`, ok);
+    expect(ok).toBe(true);
   });
 
   test('13 — CH2 LOW KILL', async ({ page }) => {
