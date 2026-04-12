@@ -1,9 +1,8 @@
 // MIXI Service Worker — minimal cache-first for app shell
-// Cache version auto-derived from __APP_VERSION__ injected at build time.
 // Vite hashes asset filenames, so /assets/* are safe to cache indefinitely.
 // Note: sw.js is in /public/ and NOT processed by Vite — it's served as-is.
-// So we derive a version from the HTML (which changes hash every build).
-const CACHE = 'mixi-v5';
+// Cache name bumped with each release to force stale cache eviction.
+const CACHE = 'mixi-0.5.3';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {
