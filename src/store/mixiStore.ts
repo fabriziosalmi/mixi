@@ -630,6 +630,17 @@ export const useMixiStore = create<MixiStore>()(
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized) return;
       engine.seek(deck, time);
+      // If synced, freeze PLL briefly so it doesn't fight the seek discontinuity.
+      // seek() already calls phaseLockLoop.reset(), but without freeze the PLL
+      // immediately sees a large phase error and applies max correction.
+      if (d.isSynced) {
+        phaseLockLoop.freeze(deck);
+        if (_syncUnfreezeTimer[deck]) clearTimeout(_syncUnfreezeTimer[deck]!);
+        _syncUnfreezeTimer[deck] = setTimeout(() => {
+          phaseLockLoop.unfreeze(deck);
+          _syncUnfreezeTimer[deck] = null;
+        }, 150);
+      }
     },
 
     /** Remove a hot cue from the given slot (with undo support). */

@@ -281,16 +281,21 @@ function resolveOctave(bpm: number, onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, b
     // better in alignment to override the statistical evidence.
     const priorBonus = (candidate === bpm) ? 1.35 : 1.0;
 
-    // ── DJ range preference ──
-    let rangeFactor = 1.0;
-    if (candidate >= 80 && candidate <= 185) {
+    // ── DJ range preference (smooth gradient, no cliff edges) ──
+    // Core range [85, 180] gets full 1.3× bonus.
+    // Tapers smoothly to 0.5× at the extremes (<65, >210).
+    // This avoids the discontinuity where 79.9 BPM got 1.1× but 80.0 got 1.3×.
+    let rangeFactor: number;
+    if (candidate >= 85 && candidate <= 180) {
       rangeFactor = 1.3;
-    } else if (candidate >= 70 && candidate < 80) {
-      rangeFactor = 1.1;
-    } else if (candidate > 185 && candidate <= 200) {
-      rangeFactor = 1.0;
+    } else if (candidate < 85 && candidate >= 65) {
+      // Smooth taper: 65→0.5, 85→1.3
+      rangeFactor = 0.5 + (candidate - 65) / (85 - 65) * (1.3 - 0.5);
+    } else if (candidate > 180 && candidate <= 210) {
+      // Smooth taper: 180→1.3, 210→0.5
+      rangeFactor = 1.3 - (candidate - 180) / (210 - 180) * (1.3 - 0.5);
     } else {
-      rangeFactor = 0.5; // <70 or >200: almost certainly wrong octave
+      rangeFactor = 0.5;
     }
 
     const score = alignment * swBonus * rangeFactor * priorBonus;

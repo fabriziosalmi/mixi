@@ -175,6 +175,10 @@ export class AutoMixEngine {
     //   ASSIST → AI runs, but pauses when user interacts.
     //            Resumes after `assistResumeDelay` seconds of inactivity.
 
+    // Always clear ghost fields first — even when AI is OFF.
+    // Otherwise, switching CRUISE→OFF leaves stale purple indicators.
+    clearGhostFields();
+
     const ai = useMixiStore.getState().ai;
 
     if (ai.mode === 'OFF') return;
@@ -182,17 +186,12 @@ export class AutoMixEngine {
     if (ai.mode === 'ASSIST' && ai.isPaused) {
       const elapsed = (Date.now() - ai.lastInteractionTime) / 1000;
       if (elapsed >= ai.assistResumeDelay) {
-        // User hasn't touched anything for N seconds — resume.
         useMixiStore.getState().setAiPaused(false);
         log.info('AI', 'ASSIST mode resuming after user inactivity');
       } else {
-        // Still paused — skip this tick.
         return;
       }
     }
-
-    // ── 0b. Clear ghost fields from previous tick ──────────────
-    clearGhostFields();
 
     // ── 1. Sense: compute blackboard ─────────────────────────
     const bb = computeBlackboard();
