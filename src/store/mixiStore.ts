@@ -346,10 +346,16 @@ export const useMixiStore = create<MixiStore>()(
         const effectiveBpm = d.originalBpm > 0
           ? Math.round(d.originalBpm * clamped * 10) / 10
           : 0;
+        // Auto-unsync: manual pitch fader change breaks sync contract.
+        // The PLL would overwrite the user's adjustment otherwise.
+        const wasSynced = d.isSynced;
+        if (wasSynced) {
+          phaseLockLoop.reset(deck);
+        }
         return {
           decks: {
             ...s.decks,
-            [deck]: { ...d, playbackRate: clamped, bpm: effectiveBpm },
+            [deck]: { ...d, playbackRate: clamped, bpm: effectiveBpm, isSynced: false },
           },
         };
       }),

@@ -423,15 +423,15 @@ def download_audio(page_url: str) -> tuple[Path, str | None]:
             info = ydl.extract_info(page_url, download=True)
             title = info.get("title") if info else None
     except yt_dlp.utils.DownloadError as exc:
-        Path(tmp_path).unlink(missing_ok=True)
+        Path(tmp.name).unlink(missing_ok=True)
         logger.error("[error]yt-dlp download error:[/error] %s", exc)
         raise HTTPException(status_code=422, detail=f"yt-dlp error: {exc}")
     except Exception as exc:
-        Path(tmp_path).unlink(missing_ok=True)
+        Path(tmp.name).unlink(missing_ok=True)
         logger.error("[error]Unexpected download error:[/error]", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Download error: {exc}")
 
-    out = Path(tmp_path)
+    out = Path(tmp.name)
     if not out.exists() or out.stat().st_size == 0:
         out.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="Download produced no audio file.")

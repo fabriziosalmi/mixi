@@ -243,6 +243,9 @@ class PhaseLockLoop {
       const masterDeck: DeckId = deck === 'A' ? 'B' : 'A';
       const master = store.decks[masterDeck];
       if (!master.isPlaying || master.bpm <= 0 || d.bpm <= 0) continue;
+      // Guard: if master is ALSO synced, skip to prevent circular dependency.
+      // Both decks pushing/pulling each other = 20Hz oscillation.
+      if (master.isSynced) continue;
 
       const phaseDelta = this.computePhaseDelta(deck, masterDeck, engine, store);
       if (phaseDelta === null) continue;
