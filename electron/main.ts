@@ -294,15 +294,31 @@ function createWindow(): void {
     event.preventDefault();
   });
 
-  // Load the Vite build without query parameters
-  const indexPath = join(__dirname, '..', 'dist', 'index.html');
+  // Load the Vite build — try multiple paths for packaged vs dev
+  const appRoot = app.getAppPath(); // In packaged: path to app.asar root
+  const candidates = [
+    join(appRoot, 'dist', 'index.html'),               // standard: <asar>/dist/index.html
+    join(__dirname, '..', 'dist', 'index.html'),        // relative from electron/dist/
+    join(__dirname, '..', '..', 'dist', 'index.html'),  // fallback
+  ];
 
-  if (existsSync(indexPath)) {
-    // Production: load from dist/
+  const indexPath = candidates.find((p) => existsSync(p));
+
+  if (indexPath) {
+    console.log(`[mixi] Loading UI from: ${indexPath}`);
     mainWindow.loadFile(indexPath);
-  } else {
+  } else if (!app.isPackaged) {
     // Dev: load from Vite dev server
+    console.log('[mixi] Dev mode — loading from http://localhost:5173');
     mainWindow.loadURL('http://localhost:5173');
+  } else {
+    // Packaged but can't find index.html — show error instead of black screen
+    const searched = candidates.map((c) => `  ${c}`).join('\n');
+    console.error(`[mixi] FATAL: index.html not found!\n__dirname: ${__dirname}\nappRoot: ${appRoot}\nSearched:\n${searched}`);
+    dialog.showErrorBox(
+      'MIXI — Missing UI Files',
+      `Could not find the application UI.\n\n__dirname: ${__dirname}\nApp root: ${appRoot}\n\nSearched:\n${searched}\n\nPlease reinstall the application or report this at:\nhttps://github.com/fabriziosalmi/mixi/issues`,
+    );
   }
 
   mainWindow.on('closed', () => {
