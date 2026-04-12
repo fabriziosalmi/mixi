@@ -36,7 +36,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { Onboarding } from './components/Onboarding';
 import { VfxCanvas } from './components/VfxCanvas';
 import { MidiManager } from './midi/MidiManager';
-import { generateFingerprint, createUiWatermarkCanvas } from './utils/watermark';
+import { generateFingerprint, createUiWatermarkCanvas, buildZwcWatermark } from './utils/watermark';
 import { log } from './utils/logger';
 import type { DeckId } from './types';
 
@@ -150,6 +150,18 @@ const App: FC = () => {
       document.body.appendChild(canvas);
     });
     return () => { canvas?.remove(); };
+  }, []);
+
+  // ── UI Watermark (Tier 2) — ZWC steganography in DOM ──────
+  // Invisible zero-width characters embedded in a hidden element.
+  // Survives copy-paste of HTML — identifies build version + date.
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    el.textContent = buildZwcWatermark();
+    document.body.appendChild(el);
+    return () => { el.remove(); };
   }, []);
 
   // ── Panic reset (requires double-press within 500ms) ────

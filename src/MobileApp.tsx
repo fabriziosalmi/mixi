@@ -34,6 +34,7 @@ import { MobilePortrait } from './components/mobile/MobilePortrait';
 import { MobileInitGate } from './components/mobile/MobileInitGate';
 import { mobilePanic } from './components/mobile/mobilePanic';
 import { deckRegistry } from './decks/registry';
+import { buildZwcWatermark } from './utils/watermark';
 
 // ── Shake detection constants ────────────────────────────────
 
@@ -60,6 +61,16 @@ export default function MobileApp() {
   // Fetch external deck plugins from mixi-decks registry
   useEffect(() => {
     deckRegistry.fetchFromRemote().catch(() => {});
+  }, []);
+
+  // ZWC steganography watermark (Tier 2) — survives copy-paste
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    el.textContent = buildZwcWatermark();
+    document.body.appendChild(el);
+    return () => { el.remove(); };
   }, []);
 
   // Prevent pull-to-refresh and overscroll on mobile
