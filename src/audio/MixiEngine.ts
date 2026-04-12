@@ -157,7 +157,12 @@ export class MixiEngine {
       return;
     }
 
-    this.ctx = new AudioContext({ sampleRate: 44_100 });
+    try {
+      this.ctx = new AudioContext({ sampleRate: 44_100 });
+    } catch (err) {
+      log.error('Engine', 'AudioContext creation failed — browser may have denied audio access', err);
+      throw new Error(`Audio not available: ${err instanceof Error ? err.message : err}`);
+    }
 
     // Build channel strips with current EQ model.
     const eqModel = useSettingsStore.getState().eqModel;

@@ -52,6 +52,9 @@ import type { QuantizeResolution } from './settingsStore';
 const _syncLastCall: Record<string, number> = {};
 const _hotCueLastCall: Record<string, number> = {};
 
+// ── PLL unfreeze timer per deck (cleared on eject to prevent orphans) ──
+const _syncUnfreezeTimer: Record<string, ReturnType<typeof setTimeout> | null> = { A: null, B: null };
+
 // ── Actions interface ────────────────────────────────────────
 
 export interface MixiActions {
@@ -232,6 +235,13 @@ export const useMixiStore = create<MixiStore>()(
       set({ crossfaderCurve: curve }),
 
     ejectDeck: (deck) => {
+      // Cancel any pending PLL unfreeze timer (prevents orphan callback).
+      if (_syncUnfreezeTimer[deck]) {
+        clearTimeout(_syncUnfreezeTimer[deck]!);
+        _syncUnfreezeTimer[deck] = null;
+      }
+      // Stop PLL for this deck.
+      phaseLockLoop.reset(deck);
       // Stop playback first.
       const engine = MixiEngine.getInstance();
       if (engine.isInitialized) {
@@ -516,7 +526,13 @@ export const useMixiStore = create<MixiStore>()(
         phaseLockLoop.reset(deck);
         phaseLockLoop.start();
         phaseLockLoop.freeze(deck);
-        setTimeout(() => phaseLockLoop.unfreeze(deck), 200);
+        // Clear any previous unfreeze timer, then schedule new one.
+        // Timer ID stored so ejectDeck() can cancel it (prevents orphan).
+        if (_syncUnfreezeTimer[deck]) clearTimeout(_syncUnfreezeTimer[deck]!);
+        _syncUnfreezeTimer[deck] = setTimeout(() => {
+          phaseLockLoop.unfreeze(deck);
+          _syncUnfreezeTimer[deck] = null;
+        }, 200);
 
         return {
           decks: {
