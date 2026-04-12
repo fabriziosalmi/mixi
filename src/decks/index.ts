@@ -76,8 +76,6 @@ export const HOUSE_DECKS: HouseDeckEntry[] = [
 
   // ── Community Decks (from mixi-decks repo, bundled at build time) ──
 
-  { mode: 'turbo-acid', label: 'TURBOACID', accentColor: '#39ff14',
-    component: lazy(() => import('./community/TurboAcid/TurboAcidDeckWrapper').then(m => ({ default: m.TurboAcidDeckAdapter }))) },
   { mode: 'turbo-boid', label: 'TURBOBOID', accentColor: '#ff6b9d',
     component: lazy(() => import('./community/TurboBoid/TurboBoidDeck').then(m => ({ default: m.TurboBoidDeck }))) },
   { mode: 'turbo-brain', label: 'TURBOBRAIN', accentColor: '#c084fc',

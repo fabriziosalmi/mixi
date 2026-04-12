@@ -19,7 +19,7 @@ features:
   - title: "Intelligent Automation"
     details: "17 AI intents across 5 domains (safety, spectral, dynamics, rhythm, structure). A stateless 50ms tick arbiter monitors phase alignment, spectral clashes, and headroom. Corrections execute as visible Ghost Mutations."
   - title: "Modular Architecture"
-    details: "20 instruments (3 built-in + 17 community), 17 skins, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
+    details: "19 instruments (3 built-in + 17 community), 17 skins, fully decoupled step-sequencer bus, Electron desktop with 2.9ms latency. Fork it, skin it, extend it."
 ---
 
 <script setup>
