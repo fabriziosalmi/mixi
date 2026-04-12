@@ -2,7 +2,7 @@
 // Vite hashes asset filenames, so /assets/* are safe to cache indefinitely.
 // Note: sw.js is in /public/ and NOT processed by Vite — it's served as-is.
 // Cache name bumped with each release to force stale cache eviction.
-const CACHE = 'mixi-0.5.3';
+const CACHE = 'mixi-0.5.4';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {

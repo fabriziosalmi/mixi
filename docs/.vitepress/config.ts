@@ -64,7 +64,7 @@ export default defineConfig({
       url: 'https://www.mixidaw.com/',
       image: 'https://www.mixidaw.com/screenshot-og.jpg',
       description: 'Browser-native DJ workstation with Rust/Wasm DSP engine, AI automixer, beatmatching, and custom skins.',
-      softwareVersion: '0.5.3',
+      softwareVersion: '0.5.4',
       author: { '@type': 'Person', name: 'Fabrizio Salmi' },
       license: 'https://polyformproject.org/licenses/noncommercial/1.0.0/',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

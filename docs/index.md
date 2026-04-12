@@ -312,7 +312,7 @@ onMounted(() => {
 <div class="manifesto-section">
   <div class="manifesto-inner">
     <h2 class="manifesto-title">Open Core. Free to Play. No Exploitation.</h2>
-    <p style="text-align:center;margin:-8px 0 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-family:var(--vp-font-family-mono);font-size:11px;color:#888;letter-spacing:0.5px;">v0.5.3</span></p>
+    <p style="text-align:center;margin:-8px 0 12px;"><span style="display:inline-block;padding:2px 10px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-family:var(--vp-font-family-mono);font-size:11px;color:#888;letter-spacing:0.5px;">v0.5.4</span></p>
     <p class="manifesto-text">
       MixiDAW operates under the <strong>PolyForm Noncommercial 1.0.0</strong> license. The complete source code is available for inspection, modification, and non-commercial use. Artists, hobbyists, and researchers have unrestricted access. Corporate packaging, SaaS deployment, and commercial redistribution require explicit licensing.
     </p>
