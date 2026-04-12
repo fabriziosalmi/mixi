@@ -11,7 +11,7 @@
 // Mixi – Main Application Shell
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, useRef, type FC } from 'react';
+import React, { useState, useCallback, useEffect, useRef, type FC } from 'react';
 import { useMixiSync } from './hooks/useMixiSync';
 import { useMixiBridge } from './hooks/useMixiBridge';
 import { useMixiStore } from './store/mixiStore';
@@ -48,22 +48,60 @@ const ORANGE = COLOR_DECK_B;
 
 // ── Deck slot: renders track deck or groovebox per slot mode ─
 
+/** Catches render errors in community decks without crashing the whole mixer */
+class DeckErrorBoundary extends React.Component<
+  { children: React.ReactNode; deckId: string; color: string; onReset: () => void },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(err: Error) { return { error: err.message }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: 8, padding: 16, background: '#0a0a0a',
+          border: `1px solid ${this.props.color}33`, borderRadius: 8,
+          fontFamily: 'var(--font-mono)', color: '#888', fontSize: 11,
+        }}>
+          <span style={{ color: '#ef4444', fontSize: 10, fontWeight: 700 }}>DECK ERROR</span>
+          <span style={{ color: '#555', fontSize: 9, textAlign: 'center', maxWidth: 200, wordBreak: 'break-word' }}>
+            {this.state.error}
+          </span>
+          <button
+            onClick={() => { this.setState({ error: null }); this.props.onReset(); }}
+            style={{
+              padding: '4px 12px', border: `1px solid ${this.props.color}44`,
+              borderRadius: 4, background: 'none', color: this.props.color,
+              fontSize: 9, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+            }}
+          >
+            BACK TO TRACK
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const DeckSlot: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => {
   const mode = useMixiStore((s) => s.deckModes[deckId]);
   const setDeckMode = useMixiStore((s) => s.setDeckMode);
 
-  // Check house decks registry first
   const houseDeck = deckRegistry.findByMode(mode);
   if (houseDeck) {
     const Comp = houseDeck.component;
     return (
-      <Suspense fallback={<div className="flex-1" />}>
-        <Comp
-          deckId={deckId}
-          color={color}
-          onSwitchToTrack={() => setDeckMode(deckId, 'track')}
-        />
-      </Suspense>
+      <DeckErrorBoundary deckId={deckId} color={color} onReset={() => setDeckMode(deckId, 'track')}>
+        <Suspense fallback={<div className="flex-1" />}>
+          <Comp
+            deckId={deckId}
+            color={color}
+            onSwitchToTrack={() => setDeckMode(deckId, 'track')}
+          />
+        </Suspense>
+      </DeckErrorBoundary>
     );
   }
   return <DeckSection deckId={deckId} color={color} />;
