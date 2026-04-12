@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboGeigerBus } from './TurboGeigerBus';
 
 export type DeckId = 'A' | 'B';
@@ -16,7 +15,6 @@ export class TurboGeigerEngine {
   private node!: AudioWorkletNode;
   
   // DSP State
-  private decayEnvelope = 0.0;
   public onTick?: () => void;
 
   constructor(deckId: DeckId) {
