@@ -8,6 +8,9 @@
  */
 
 import { create } from 'zustand';
+
+// Auto-cancel timer for MIDI learn mode
+let _learnTimer: ReturnType<typeof setTimeout> | null = null;
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeStorage } from './safeStorage';
 import type { MidiAction, MidiMapping } from '../midi/MidiManager';
@@ -35,7 +38,19 @@ export const useMidiStore = create<MidiState>()(
       mappings: [],
       activePreset: 'Manual',
 
-      setLearning: (learning) => set({ isLearning: learning, learningAction: null }),
+      setLearning: (learning) => {
+        // Auto-cancel learn mode after 10 seconds if no MIDI input received
+        if (_learnTimer) clearTimeout(_learnTimer);
+        if (learning) {
+          _learnTimer = setTimeout(() => {
+            set({ isLearning: false, learningAction: null });
+            _learnTimer = null;
+          }, 10_000);
+        } else {
+          _learnTimer = null;
+        }
+        set({ isLearning: learning, learningAction: null });
+      },
       setLearningAction: (action) => set({ learningAction: action }),
       
       addMapping: (mapping) =>
