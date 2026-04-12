@@ -152,7 +152,7 @@ python main.py --port 7779
 
 | Module | What It Does |
 |--------|-------------|
-| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. 19 pluggable deck modes: Track, Groovebox, TurboKick, TurboBass + 16 community instruments (TurboAcid, TurboFM, TurboSynth, TurboVox, and more via [mixi-decks](https://github.com/fabriziosalmi/mixi-decks)). |
+| **Dual Decks** | Independent transport, pitch/tempo, hot cues, loops, scratch emulation. 19 pluggable deck modes: Track, Groovebox, TurboKick, TurboBass + 16 community instruments (TurboFM, TurboSynth, TurboVox, and more via [mixi-decks](https://github.com/fabriziosalmi/mixi-decks)). |
 | **TurboKick Deck** | Kick drum synthesizer + 16-step sequencer. THUMP macro, dual valves (tube + punch), filter + LFO, Berghain-style RUMBLE. |
 | **TurboBass Deck** | Acid synth with 4-pole diode ladder filter (AudioWorklet, mismatched first pole, per-sample tanh saturation, 2x oversampling). Mathematically derived DSP: VT from pole signal geometry, k_max from Barkhausen criterion, resonance compensation, quadratic curve. Saw + variable duty-cycle pulse wave, sub-oscillator, analog drift, pre-filter drive/HP. Bipolar filter envelope, octave-based env mod, accent with resonance-controlled depth. TIE (legato), gate length, slide time, filter tracking (Devil Fish mod). Rat-style distortion, ducking spring reverb, chorus, BPM-synced delay. ACID macro, copy/paste, pattern mutate/shift, 32 factory patterns (4 banks), 16/32-step sequencer. Two-row knob UI. |
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
