@@ -8,7 +8,7 @@ export class TurboFMEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboFMBus;
+  public bus!: TurboFMBus;
   private synth!: TurboFMSynth;
 
   private _playing = false;

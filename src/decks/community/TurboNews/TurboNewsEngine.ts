@@ -7,7 +7,7 @@ export class TurboNewsEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboNewsBus;
+  public bus!: TurboNewsBus;
 
   private _status: NewsStatus = 'idle';
   private _feedUrl: string = '';

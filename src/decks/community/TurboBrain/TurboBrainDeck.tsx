@@ -35,6 +35,10 @@ export const TurboBrainDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
     const engine = new TurboBrainEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+
+    // Route audio through mixer channel (EQ, fader, crossfader, master)
+    const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+    if (ch && engine.bus) engine.bus.output.connect(ch.input);
     return () => engine.destroy();
   }, [deckId]);
 

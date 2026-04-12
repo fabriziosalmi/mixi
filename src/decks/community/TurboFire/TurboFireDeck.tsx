@@ -39,6 +39,10 @@ export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwi
     engine.init(ctx).then(() => {
       if (isMounted) {
         engineRef.current = engine;
+
+        // Route audio through mixer channel (EQ, fader, crossfader, master)
+        const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+        if (ch && engine.bus) engine.bus.output.connect(ch.input);
         setIsReady(true);
       }
     });

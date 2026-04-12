@@ -8,7 +8,7 @@ export class TurboSynthEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboSynthBus;
+  public bus!: TurboSynthBus;
   private synth!: TurboSynthSynth;
 
   private _playing = false;

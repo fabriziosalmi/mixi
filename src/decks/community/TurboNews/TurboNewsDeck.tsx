@@ -31,6 +31,10 @@ export const TurboNewsDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
+    // Route audio through mixer channel (EQ, fader, crossfader, master)
+    const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+    if (ch && engine.bus) engine.bus.output.connect(ch.input);
+
     engine.onStatusChange = (status, err) => {
       setSnapshot(s => ({ ...s, status, errorMessage: err }));
     };

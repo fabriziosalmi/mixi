@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboSonarEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboSonarBus;
+  public bus!: TurboSonarBus;
 
   private _isActive = false;
   private _depth = 0.8;

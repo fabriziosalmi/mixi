@@ -6,7 +6,7 @@ export type DeckId = 'A' | 'B';
 export class TurboWeatherEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboWeatherBus;
+  public bus!: TurboWeatherBus;
 
   private _isActive = false;
   private _masterVolume = 1.0;

@@ -89,6 +89,9 @@ export const TurboNatureDeck: FC<TurboNatureDeckProps> = ({ deckId, onSwitchToTr
                     if (!isMounted) return;
                     engine.linkPlayer(event.target);
                     engine.init(ctx).then(() => {
+                        // Route audio through mixer channel
+                        const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+                        if (ch && engine.masterGain) engine.masterGain.connect(ch.input);
                         setIsReady(true);
                     });
                 }

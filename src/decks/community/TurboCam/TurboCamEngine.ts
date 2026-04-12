@@ -6,7 +6,7 @@ export class TurboCamEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboCamBus;
+  public bus!: TurboCamBus;
 
   private _isActive = false;
   private _masterVolume = 1.0;

@@ -15,7 +15,7 @@ const MORSE_DICT: Record<string, string> = {
 export class TurboMorseEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboMorseBus;
+  public bus!: TurboMorseBus;
 
   private _isActive = false;
   private _message = "MIXI ENIGMA TRANSMISSION";

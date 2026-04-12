@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboFractalEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboFractalBus;
+  public bus!: TurboFractalBus;
 
   private _isActive = false;
   private _posX = -0.7; // Mandelbrot default C center

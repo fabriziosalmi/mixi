@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboBrainEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboBrainBus;
+  public bus!: TurboBrainBus;
 
   private _isActive = false;
   private _baseFreq = 200;

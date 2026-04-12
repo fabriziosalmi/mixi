@@ -8,7 +8,7 @@ export class TurboFireEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboFireBus;
+  public bus!: TurboFireBus;
   private synth!: TurboFireSynth;
 
   private _playing = false;

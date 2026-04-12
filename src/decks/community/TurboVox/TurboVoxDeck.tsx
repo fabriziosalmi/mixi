@@ -44,6 +44,10 @@ export const TurboVoxDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
     engine.init(ctx).then(() => {
       if (isMounted) {
         engineRef.current = engine;
+
+        // Route audio through mixer channel (EQ, fader, crossfader, master)
+        const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+        if (ch && engine.bus) engine.bus.output.connect(ch.input);
         engine.onStepChange = (step) => {
           setSnapshot(s => ({ ...s, currentStep: step }));
         };

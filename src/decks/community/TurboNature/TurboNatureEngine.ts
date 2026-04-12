@@ -6,7 +6,7 @@ export class TurboNatureEngine {
   private _masterVolume: number = 1.0;
   private ytPlayer: any = null;
   private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
+  public masterGain: GainNode | null = null;
   
   public synthParams: Record<SynthParamId, number> = {
     birds: 0.0,
@@ -58,7 +58,7 @@ export class TurboNatureEngine {
     this.ctx = ctx;
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = this._masterVolume;
-    this.masterGain.connect(ctx.destination);
+    // Do NOT connect to ctx.destination — Deck component routes to mixer channel
 
     // Create a 2-second continuous noise buffer for Wind/Rain
     const bufferSize = ctx.sampleRate * 2;

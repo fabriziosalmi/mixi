@@ -39,6 +39,10 @@ export const TurboCamDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
+    // Route audio through mixer channel (EQ, fader, crossfader, master)
+    const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+    if (ch && engine.bus) engine.bus.output.connect(ch.input);
+
     engine.onMotionUpdate = (x, y) => {
       setMotion({ x, y });
       // Example integration: Dispatching custom event to window so Mixi can hook it!

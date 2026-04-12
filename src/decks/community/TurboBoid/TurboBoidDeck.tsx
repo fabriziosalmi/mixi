@@ -37,6 +37,10 @@ export const TurboBoidDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
+    // Route audio through mixer channel (EQ, fader, crossfader, master)
+    const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+    if (ch && engine.bus) engine.bus.output.connect(ch.input);
+
     engine.onBoidsUpdate = (boids, triggers) => {
        const canvas = canvasRef.current;
        if (!canvas) return;

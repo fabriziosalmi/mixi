@@ -36,6 +36,10 @@ export const TurboSonarDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
+    // Route audio through mixer channel (EQ, fader, crossfader, master)
+    const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
+    if (ch && engine.bus) engine.bus.output.connect(ch.input);
+
     let pingId = 0;
     engine.onPing = (angle) => {
        const id = pingId++;

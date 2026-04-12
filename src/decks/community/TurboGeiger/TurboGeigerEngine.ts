@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboGeigerEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboGeigerBus;
+  public bus!: TurboGeigerBus;
 
   private _isPlaying = false;
   private _halfLife = 0.5; 

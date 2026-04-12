@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboGenomeEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboGenomeBus;
+  public bus!: TurboGenomeBus;
 
   private _isActive = false;
   

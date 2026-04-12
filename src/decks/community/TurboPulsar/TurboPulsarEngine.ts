@@ -5,7 +5,7 @@ export type DeckId = 'A' | 'B';
 export class TurboPulsarEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
-  private bus!: TurboPulsarBus;
+  public bus!: TurboPulsarBus;
 
   private _isActive = false;
   private _periodMs = 89.33; // Vela pulsar period

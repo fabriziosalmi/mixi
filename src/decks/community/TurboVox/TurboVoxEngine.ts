@@ -8,7 +8,7 @@ export class TurboVoxEngine {
   readonly deckId: DeckId;
   private ctx!: AudioContext;
   
-  private bus!: TurboVoxBus;
+  public bus!: TurboVoxBus;
   private synth!: TurboVoxSynth;
 
   private _playing = false;
