@@ -1,46 +1,35 @@
-// Pure JS 4-operator FM synth processor — no Wasm dependency
-declare const sampleRate: number;
-export {}; // TS module boundary — each processor runs in its own AudioWorklet scope
-
+// Pure JS 4-operator FM synth processor
 class TurboFMProcessor extends AudioWorkletProcessor {
-  private isRunning = false;
-  private tempo = 120;
-  private pattern: number[][] = [];
-  private currentStep = 0;
-  private samplesPerStep = 0;
-  private stepCounter = 0;
-
-  // FM params
-  private algo = 0;     // 0..3 algorithm index
-  private feedback = 0.5;
-  private carAttack = 0;
-  private carDecay = 0.3;
-  private modAttack = 0;
-  private modDecay = 0.1;
-  private opRatio = [1, 2, 3, 4];
-  private opLevel = [1, 1, 1, 1];
-
-  // Phase accumulators for 4 operators
-  private opPhase = [0, 0, 0, 0];
-  private freq = 440;
-
-  // Envelopes (carrier + modulator)
-  private carEnv = 0;
-  private modEnv = 0;
-  private carStage: 'off' | 'attack' | 'decay' = 'off';
-  private modStage: 'off' | 'attack' | 'decay' = 'off';
-
-  // Feedback state
-  private fbPrev = 0;
-
   constructor() {
     super();
-    this.updateTiming();
+    this.isRunning = false;
+    this.tempo = 120;
+    this.pattern = [];
+    this.currentStep = 0;
+    this.samplesPerStep = 0;
+    this.stepCounter = 0;
+    this.algo = 0;
+    this.feedback = 0.5;
+    this.carAttack = 0;
+    this.carDecay = 0.3;
+    this.modAttack = 0;
+    this.modDecay = 0.1;
+    this.opRatio = [1, 2, 3, 4];
+    this.opLevel = [1, 1, 1, 1];
+    this.opPhase = [0, 0, 0, 0];
+    this.freq = 440;
+    this.carEnv = 0;
+    this.modEnv = 0;
+    this.carStage = 'off';
+    this.modStage = 'off';
+    this.fbPrev = 0;
+    this._updateTiming();
+
     this.port.onmessage = (event) => {
       const { id, value, op } = event.data;
       switch (id) {
         case 'setRunning': this.isRunning = value; break;
-        case 'setTempo': this.tempo = value; this.updateTiming(); break;
+        case 'setTempo': this.tempo = value; this._updateTiming(); break;
         case 'setPattern': this.pattern = value; break;
         case 'setAlgo': this.algo = Math.round(value * 3); break;
         case 'setFeedback': this.feedback = value; break;
@@ -59,15 +48,11 @@ class TurboFMProcessor extends AudioWorkletProcessor {
     };
   }
 
-  private updateTiming() {
+  _updateTiming() {
     this.samplesPerStep = Math.floor((sampleRate * 60) / (this.tempo * 4));
   }
 
-  private midiToFreq(note: number): number {
-    return 440 * Math.pow(2, (note - 69) / 12);
-  }
-
-  private advanceEnv(level: number, stage: string, attackTime: number, decayTime: number): [number, string] {
+  _advanceEnv(level, stage, attackTime, decayTime) {
     if (stage === 'attack') {
       const rate = 1 / (Math.max(0.001, attackTime) * sampleRate);
       level += rate;
@@ -80,78 +65,76 @@ class TurboFMProcessor extends AudioWorkletProcessor {
     return [level, stage];
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]) {
+  process(_inputs, outputs) {
     const output = outputs[0];
     if (!output || output.length === 0) return true;
     const channelData = output[0];
 
     for (let i = 0; i < channelData.length; i++) {
       if (!this.isRunning || this.pattern.length === 0) {
-        channelData[i] = 0;
-        continue;
+        channelData[i] = 0; continue;
       }
 
-      // Sequencer
       if (this.stepCounter >= this.samplesPerStep) {
         this.stepCounter = 0;
         this.currentStep = (this.currentStep + 1) % this.pattern.length;
         const step = this.pattern[this.currentStep];
         if (step && step[1]) {
-          this.freq = this.midiToFreq(step[0]);
+          this.freq = 440 * Math.pow(2, (step[0] - 69) / 12);
           this.carStage = 'attack'; this.carEnv = 0;
           this.modStage = 'attack'; this.modEnv = 0;
         }
       }
       this.stepCounter++;
 
-      // Envelopes
-      [this.carEnv, this.carStage] = this.advanceEnv(this.carEnv, this.carStage, this.carAttack, this.carDecay) as [number, 'off' | 'attack' | 'decay'];
-      [this.modEnv, this.modStage] = this.advanceEnv(this.modEnv, this.modStage, this.modAttack, this.modDecay) as [number, 'off' | 'attack' | 'decay'];
+      let r;
+      r = this._advanceEnv(this.carEnv, this.carStage, this.carAttack, this.carDecay);
+      this.carEnv = r[0]; this.carStage = r[1];
+      r = this._advanceEnv(this.modEnv, this.modStage, this.modAttack, this.modDecay);
+      this.modEnv = r[0]; this.modStage = r[1];
 
-      // Advance operator phases
       const inc = this.freq / sampleRate;
       for (let o = 0; o < 4; o++) {
         this.opPhase[o] += inc * this.opRatio[o];
         if (this.opPhase[o] >= 1) this.opPhase[o] -= Math.floor(this.opPhase[o]);
       }
 
-      // FM synthesis — 4 algorithms
       const TWO_PI = Math.PI * 2;
       const fb = this.feedback * this.fbPrev * 0.5;
       let out = 0;
 
-      const op = (idx: number, mod: number) =>
+      const opFn = (idx, mod) =>
         Math.sin((this.opPhase[idx] + mod) * TWO_PI) * this.opLevel[idx];
 
       switch (this.algo) {
-        case 0: { // Stack: 4→3→2→1(carrier)
-          const o4 = op(3, fb) * this.modEnv;
-          const o3 = op(2, o4) * this.modEnv;
-          const o2 = op(1, o3) * this.modEnv;
-          out = op(0, o2) * this.carEnv;
+        case 0: {
+          const o4 = opFn(3, fb) * this.modEnv;
+          const o3 = opFn(2, o4) * this.modEnv;
+          const o2 = opFn(1, o3) * this.modEnv;
+          out = opFn(0, o2) * this.carEnv;
           this.fbPrev = o4;
           break;
         }
-        case 1: { // Parallel pairs: (4→3) + (2→1)
-          const o4 = op(3, fb) * this.modEnv;
-          const o3 = op(2, o4) * this.carEnv;
-          const o2 = op(1, 0) * this.modEnv;
-          const o1 = op(0, o2) * this.carEnv;
+        case 1: {
+          const o4 = opFn(3, fb) * this.modEnv;
+          const o3 = opFn(2, o4) * this.carEnv;
+          const o2 = opFn(1, 0) * this.modEnv;
+          const o1 = opFn(0, o2) * this.carEnv;
           out = (o3 + o1) * 0.5;
           this.fbPrev = o4;
           break;
         }
-        case 2: { // Y: (3+4)→2→1
-          const o4 = op(3, fb) * this.modEnv;
-          const o3 = op(2, 0) * this.modEnv;
-          const o2 = op(1, (o3 + o4) * 0.5) * this.modEnv;
-          out = op(0, o2) * this.carEnv;
+        case 2: {
+          const o4 = opFn(3, fb) * this.modEnv;
+          const o3 = opFn(2, 0) * this.modEnv;
+          const o2 = opFn(1, (o3 + o4) * 0.5) * this.modEnv;
+          out = opFn(0, o2) * this.carEnv;
           this.fbPrev = o4;
           break;
         }
-        default: { // All parallel
-          out = (op(0, fb) + op(1, 0) + op(2, 0) + op(3, 0)) * 0.25 * this.carEnv;
-          this.fbPrev = op(0, fb);
+        default: {
+          out = (opFn(0, fb) + opFn(1, 0) + opFn(2, 0) + opFn(3, 0)) * 0.25 * this.carEnv;
+          this.fbPrev = opFn(0, fb);
           break;
         }
       }

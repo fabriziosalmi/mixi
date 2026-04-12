@@ -26,7 +26,7 @@ export class TurboGeigerEngine {
     this.bus = new TurboGeigerBus(this.ctx);
 
     try {
-      await this.ctx.audioWorklet.addModule(new URL('./TurboGeigerProcessor.ts', import.meta.url));
+      await this.ctx.audioWorklet.addModule(new URL('./TurboGeigerProcessor.js', import.meta.url));
       this.node = new AudioWorkletNode(this.ctx, 'turbogeiger-processor', {
         numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
       });

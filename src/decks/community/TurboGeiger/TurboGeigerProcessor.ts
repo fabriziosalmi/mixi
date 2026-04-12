@@ -1,3 +1,4 @@
+export {}; // TS module boundary — each processor runs in its own AudioWorklet scope
 class TurboGeigerProcessor extends AudioWorkletProcessor {
   private isPlaying = false;
   private halfLife = 0.5;

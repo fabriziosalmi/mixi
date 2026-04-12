@@ -10,7 +10,7 @@ export class TurboSynthSynth {
   
   async init() {
     try {
-      await this.ctx.audioWorklet.addModule(new URL('./TurboSynthProcessor.ts', import.meta.url));
+      await this.ctx.audioWorklet.addModule(new URL('./TurboSynthProcessor.js', import.meta.url));
       this.node = new AudioWorkletNode(this.ctx, 'turbosynth-processor', {
         numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
       });

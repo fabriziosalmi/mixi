@@ -1375,7 +1375,7 @@ export class MixiEngine {
     if (!useWasm) {
       try {
         await this.ctx.audioWorklet.addModule(
-          new URL('./pitch-shift-processor.ts', import.meta.url),
+          new URL('./pitch-shift-processor.js', import.meta.url),
         );
         for (const deck of ['A', 'B'] as const) {
           const node = new AudioWorkletNode(this.ctx, 'pitch-shift-processor', {

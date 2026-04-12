@@ -1,41 +1,30 @@
-// Pure JS subtractive synth processor — no Wasm dependency
-declare const sampleRate: number;
-export {}; // TS module boundary — each processor runs in its own AudioWorklet scope
-
+// Pure JS subtractive synth processor
 class TurboSynthProcessor extends AudioWorkletProcessor {
-  private isRunning = false;
-  private tempo = 120;
-  private pattern: number[][] = []; // [note, gate] pairs
-  private currentStep = 0;
-  private samplesPerStep = 0;
-  private stepCounter = 0;
-
-  // Synth params
-  private waveform = 2; // 0=sine, 1=tri, 2=saw, 3=square
-  private cutoff = 0.5;
-  private resonance = 0.2;
-  private attack = 0.1;
-  private release = 0.2;
-
-  // Oscillator state
-  private phase = 0;
-  private freq = 440;
-
-  // Envelope
-  private envLevel = 0;
-  private envStage: 'off' | 'attack' | 'release' = 'off';
-
-  // Moog-style filter state
-  private f0 = 0; private f1 = 0; private f2 = 0; private f3 = 0;
-
   constructor() {
     super();
-    this.updateTiming();
+    this.isRunning = false;
+    this.tempo = 120;
+    this.pattern = [];
+    this.currentStep = 0;
+    this.samplesPerStep = 0;
+    this.stepCounter = 0;
+    this.waveform = 2;
+    this.cutoff = 0.5;
+    this.resonance = 0.2;
+    this.attack = 0.1;
+    this.release = 0.2;
+    this.phase = 0;
+    this.freq = 440;
+    this.envLevel = 0;
+    this.envStage = 'off';
+    this.f0 = 0; this.f1 = 0; this.f2 = 0; this.f3 = 0;
+    this._updateTiming();
+
     this.port.onmessage = (event) => {
       const { id, value } = event.data;
       switch (id) {
         case 'setRunning': this.isRunning = value; break;
-        case 'setTempo': this.tempo = value; this.updateTiming(); break;
+        case 'setTempo': this.tempo = value; this._updateTiming(); break;
         case 'setPattern': this.pattern = value; break;
         case 'setWaveform': this.waveform = Math.round(value); break;
         case 'setCutoff': this.cutoff = value; break;
@@ -47,43 +36,36 @@ class TurboSynthProcessor extends AudioWorkletProcessor {
     };
   }
 
-  private updateTiming() {
-    // 16th notes: (60 / BPM) / 4 seconds per step
+  _updateTiming() {
     this.samplesPerStep = Math.floor((sampleRate * 60) / (this.tempo * 4));
   }
 
-  private midiToFreq(note: number): number {
-    return 440 * Math.pow(2, (note - 69) / 12);
-  }
-
-  private oscillator(phase: number): number {
+  _oscillator(phase) {
     switch (this.waveform) {
-      case 0: return Math.sin(phase * Math.PI * 2); // sine
-      case 1: return Math.abs(phase * 4 - 2) - 1;  // triangle
-      case 2: return phase * 2 - 1;                  // saw
-      case 3: return phase < 0.5 ? 1 : -1;           // square
+      case 0: return Math.sin(phase * Math.PI * 2);
+      case 1: return Math.abs(phase * 4 - 2) - 1;
+      case 2: return phase * 2 - 1;
+      case 3: return phase < 0.5 ? 1 : -1;
       default: return phase * 2 - 1;
     }
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]) {
+  process(_inputs, outputs) {
     const output = outputs[0];
     if (!output || output.length === 0) return true;
     const channelData = output[0];
 
     for (let i = 0; i < channelData.length; i++) {
       if (!this.isRunning || this.pattern.length === 0) {
-        channelData[i] = 0;
-        continue;
+        channelData[i] = 0; continue;
       }
 
-      // Step sequencer
       if (this.stepCounter >= this.samplesPerStep) {
         this.stepCounter = 0;
         this.currentStep = (this.currentStep + 1) % this.pattern.length;
         const step = this.pattern[this.currentStep];
-        if (step && step[1]) { // gate on
-          this.freq = this.midiToFreq(step[0]);
+        if (step && step[1]) {
+          this.freq = 440 * Math.pow(2, (step[0] - 69) / 12);
           this.envStage = 'attack';
         } else {
           this.envStage = 'release';
@@ -91,7 +73,6 @@ class TurboSynthProcessor extends AudioWorkletProcessor {
       }
       this.stepCounter++;
 
-      // Envelope
       const attackRate = 1 / (Math.max(0.001, this.attack) * sampleRate);
       const releaseRate = 1 / (Math.max(0.01, this.release) * sampleRate);
       if (this.envStage === 'attack') {
@@ -102,12 +83,10 @@ class TurboSynthProcessor extends AudioWorkletProcessor {
         if (this.envLevel <= 0) { this.envLevel = 0; this.envStage = 'off'; }
       }
 
-      // Oscillator
       this.phase += this.freq / sampleRate;
       if (this.phase >= 1) this.phase -= 1;
-      let sample = this.oscillator(this.phase) * this.envLevel;
+      let sample = this._oscillator(this.phase) * this.envLevel;
 
-      // Moog-style ladder filter (simplified)
       const fc = 20 + this.cutoff * this.cutoff * 18000;
       const g = 1 - Math.exp(-2 * Math.PI * fc / sampleRate);
       const res = this.resonance * 3.99;
