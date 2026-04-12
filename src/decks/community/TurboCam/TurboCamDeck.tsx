@@ -36,7 +36,7 @@ export const TurboCamDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
 
   useEffect(() => {
     const engine = new TurboCamEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onMotionUpdate = (x, y) => {

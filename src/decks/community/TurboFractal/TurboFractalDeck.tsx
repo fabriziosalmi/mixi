@@ -35,7 +35,7 @@ export const TurboFractalDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchTo
 
   useEffect(() => {
     const engine = new TurboFractalEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onFractalUpdate = (iters, escape) => {

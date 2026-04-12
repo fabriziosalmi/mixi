@@ -37,7 +37,7 @@ export const TurboGeigerDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
 
   useEffect(() => {
     const engine = new TurboGeigerEngine(deckId);
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     
     let isMounted = true;
     engine.init(ctx).then(() => {

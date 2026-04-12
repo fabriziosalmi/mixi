@@ -34,7 +34,7 @@ export const TurboGenomeDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
 
   useEffect(() => {
     const engine = new TurboGenomeEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
     
     setSnapshot(s => ({ ...s, sequenceStr: engine.baseSequence }));

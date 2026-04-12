@@ -24,7 +24,7 @@ export const TurboWeatherDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchTo
 
   useEffect(() => {
     const engine = new TurboWeatherEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onWeatherUpdate = (data) => {

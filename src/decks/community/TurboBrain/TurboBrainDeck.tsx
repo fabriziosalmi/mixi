@@ -33,7 +33,7 @@ export const TurboBrainDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
 
   useEffect(() => {
     const engine = new TurboBrainEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
     return () => engine.destroy();
   }, [deckId]);

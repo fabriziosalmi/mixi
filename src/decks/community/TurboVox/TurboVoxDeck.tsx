@@ -38,7 +38,7 @@ export const TurboVoxDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
 
   useEffect(() => {
     const engine = new TurboVoxEngine(deckId);
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     
     let isMounted = true;
     engine.init(ctx).then(() => {

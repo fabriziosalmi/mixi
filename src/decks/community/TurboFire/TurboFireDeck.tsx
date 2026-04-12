@@ -33,7 +33,7 @@ export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwi
 
   useEffect(() => {
     const engine = new TurboFireEngine(deckId);
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     
     let isMounted = true;
     engine.init(ctx).then(() => {

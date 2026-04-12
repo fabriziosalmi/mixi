@@ -38,7 +38,7 @@ export const TurboSynthDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
 
   useEffect(() => {
     const engine = new TurboSynthEngine(deckId);
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     
     let isMounted = true;
     engine.init(ctx).then(() => {

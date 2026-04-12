@@ -38,7 +38,7 @@ export const TurboFMDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack
 
   useEffect(() => {
     const engine = new TurboFMEngine(deckId);
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     
     let isMounted = true;
     engine.init(ctx).then(() => {

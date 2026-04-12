@@ -59,7 +59,7 @@ export const TurboNatureDeck: FC<TurboNatureDeckProps> = ({ deckId, onSwitchToTr
     const engine = new TurboNatureEngine(deckId);
     engineRef.current = engine;
     
-    const ctx = new window.AudioContext();
+    const ctx = ((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext());
     if (ctx.state === 'running') ctx.suspend(); // Start suspended until play
 
     let isMounted = true;

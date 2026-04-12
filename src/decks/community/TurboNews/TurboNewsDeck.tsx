@@ -28,7 +28,7 @@ export const TurboNewsDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
 
   useEffect(() => {
     const engine = new TurboNewsEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onStatusChange = (status, err) => {

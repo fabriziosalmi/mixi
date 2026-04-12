@@ -33,7 +33,7 @@ export const TurboSonarDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
 
   useEffect(() => {
     const engine = new TurboSonarEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     let pingId = 0;

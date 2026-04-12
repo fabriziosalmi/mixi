@@ -34,7 +34,7 @@ export const TurboBoidDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
 
   useEffect(() => {
     const engine = new TurboBoidEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onBoidsUpdate = (boids, triggers) => {

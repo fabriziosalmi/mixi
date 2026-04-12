@@ -34,7 +34,7 @@ export const TurboMorseDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
 
   useEffect(() => {
     const engine = new TurboMorseEngine(deckId);
-    engine.init(new window.AudioContext());
+    engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
 
     engine.onTransmit = (sym) => {
