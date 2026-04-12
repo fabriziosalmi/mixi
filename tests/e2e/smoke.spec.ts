@@ -40,14 +40,18 @@ test.describe('App Smoke Tests', () => {
     await launchBtn.waitFor({ state: 'visible', timeout: 10_000 });
     await launchBtn.click();
     await page.waitForSelector('.mixi-chassis', { timeout: 20_000 });
-    // Filter expected errors
+    // Filter expected errors in Playwright E2E context:
+    // - WebSocket/backend: Python backend not running in E2E
+    // - favicon: dev server doesn't serve favicon
+    // - COOP/SharedArrayBuffer: Playwright doesn't set COOP/COEP headers
+    // - NotAllowedError: AudioContext autoplay policy (no real user gesture)
+    // - ERR_CONNECTION_REFUSED: backend API not running
+    const EXPECTED_E2E = [
+      'WebSocket', 'favicon', 'COOP', 'SharedArrayBuffer',
+      'NotAllowedError', 'backend', 'ERR_CONNECTION_REFUSED',
+    ];
     const critical = errors.filter((e) =>
-      !e.includes('WebSocket') &&
-      !e.includes('favicon') &&
-      !e.includes('COOP') &&
-      !e.includes('SharedArrayBuffer') &&
-      !e.includes('NotAllowedError') &&
-      !e.includes('backend'),
+      !EXPECTED_E2E.some((pattern) => e.includes(pattern)),
     );
     expect(critical).toHaveLength(0);
   });
