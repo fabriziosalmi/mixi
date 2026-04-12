@@ -133,12 +133,6 @@ class DeckRegistryImpl {
    * bundling external decks into the main Vite build.
    */
   async fetchFromRemote(url = REGISTRY_URL): Promise<void> {
-    if (import.meta.env.PROD) {
-      log.warn('DECKS', 'External deck loading disabled in production (React #306 — dual instance)');
-      this.fetched = true;
-      this.notify();
-      return;
-    }
     if (this.fetched) return;
     if (this.fetching) return this.fetching;
 

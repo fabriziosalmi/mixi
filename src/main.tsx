@@ -21,15 +21,10 @@
 // in the desktop bundle.
 // ─────────────────────────────────────────────────────────────
 
-import React, { StrictMode, lazy, Suspense } from 'react';
+import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
-
-// ── Expose React for external deck plugins (dev only) ────────
-// External decks loaded via dynamic import() reference these globals.
-// In production, external deck loading is disabled (React #306).
-(window as any).__MIXI_REACT__ = React;
 
 // ── Device detection: synchronous, pre-mount, one-time ──────
 // Uses the short side of the viewport (invariant to orientation)
