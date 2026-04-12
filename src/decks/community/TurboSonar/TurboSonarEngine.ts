@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TurboSonarBus } from './TurboSonarBus';
 
 export type DeckId = 'A' | 'B';
@@ -148,4 +147,6 @@ export class TurboSonarEngine {
     this._masterVolume = v;
     this.bus.setVolume(v);
   }
+
+  destroy() { this.stop(); this.bus.destroy(); }
 }
