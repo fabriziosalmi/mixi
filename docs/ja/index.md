@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Web版を開く
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: 技術ドキュメント
       link: /guide/architecture

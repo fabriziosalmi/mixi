@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Fungua Toleo la Wavuti
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: Nyaraka za Kiufundi
       link: /guide/architecture

@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Buɗe Sigar Yanar Gizo
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: Takardun Fasaha
       link: /guide/architecture

@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Otvoriť webovú verziu
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: Technická dokumentácia
       link: /guide/architecture

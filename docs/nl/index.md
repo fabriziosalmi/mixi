@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: Open Webversie
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: Technische Documentatie
       link: /guide/architecture

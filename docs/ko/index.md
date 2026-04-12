@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: 웹 버전 열기
-      link: /app/
+      link: https://fabriziosalmi.github.io/mixi/app/
     - theme: alt
       text: 기술 문서
       link: /guide/architecture
