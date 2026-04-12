@@ -21,13 +21,16 @@ import {
  * Usa SharedArrayBuffer e manipolazioni Float32/Int32 per una latenza di 1ns.
  */
 export class TurboAcidBus {
-    private sab: SharedArrayBuffer;
+    private sab: SharedArrayBuffer | ArrayBuffer;
     private floatView: Float32Array;
-    private intView: Int32Array; // Usata per manipolazione esatta dei bit del Sequencer
+    private intView: Int32Array;
+    private _hasSAB: boolean;
 
     constructor() {
-        // 1024 Bytes / 4 = 256 slot Float32/Int32
-        this.sab = new SharedArrayBuffer(1024);
+        // Fallback to ArrayBuffer when SharedArrayBuffer is not available
+        // (requires COOP/COEP headers which GitHub Pages doesn't provide)
+        this._hasSAB = typeof SharedArrayBuffer !== 'undefined';
+        this.sab = this._hasSAB ? new SharedArrayBuffer(1024) : new ArrayBuffer(1024);
         this.floatView = new Float32Array(this.sab);
         this.intView = new Int32Array(this.sab);
 
@@ -37,14 +40,23 @@ export class TurboAcidBus {
         this.setPlayState(false);
     }
 
-    public getSharedBuffer(): SharedArrayBuffer {
+    public getSharedBuffer(): SharedArrayBuffer | ArrayBuffer {
         return this.sab;
+    }
+
+    /** Write int32 — uses Atomics when SAB available, direct write otherwise */
+    private atomicStore(index: number, value: number): void {
+        if (this._hasSAB) {
+            Atomics.store(this.intView, index, value);
+        } else {
+            this.intView[index] = value;
+        }
     }
 
     // --- GLOBAL CONTROLS ---
 
     public setPlayState(playing: boolean): void {
-        Atomics.store(this.intView, ACID_MEM_PLAY_STATE, playing ? 1 : 0);
+        this.atomicStore(ACID_MEM_PLAY_STATE, playing ? 1 : 0);
     }
 
     public setBPM(bpm: number): void {
@@ -100,6 +112,6 @@ export class TurboAcidBus {
         if (data.slide) mask |= (1 << 8);
         if (data.accent) mask |= (1 << 9);
 
-        Atomics.store(this.intView, targetAddr, mask);
+        this.atomicStore(targetAddr, mask);
     }
 }
