@@ -50,7 +50,7 @@ test.describe('Keyboard Shortcuts', () => {
     await page.keyboard.press('Tab');
     await page.waitForTimeout(300);
     // Browser panel should be visible
-    const browser = page.locator('.track-browser, [class*="browser"]');
+    page.locator('.track-browser, [class*="browser"]');
     // Just verify no crash — browser visibility depends on implementation
   });
 

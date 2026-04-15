@@ -77,7 +77,7 @@ export const TurboGeigerDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
     return () => clearInterval(ds);
   }, [snapshot.isPlaying]);
 
-  if (!isReady || !engineRef.current) {
+  if (!isReady) {
     return (
       <div className="flex flex-col h-full w-full bg-[#1a0500] border border-orange-900 text-orange-500 rounded-lg p-4 font-mono shadow-[0_0_20px_rgba(255,85,0,0.1)] items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-4">
@@ -88,7 +88,7 @@ export const TurboGeigerDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
     );
   }
   
-  const engine = engineRef.current;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isPlaying) {

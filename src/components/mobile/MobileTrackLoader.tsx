@@ -180,7 +180,7 @@ export const MobileTrackLoader: FC<MobileTrackLoaderProps> = ({
 
       if (!res.ok) {
         let detail = `Server error ${res.status}`;
-        try { const body = await res.json(); if (body.detail) detail = body.detail; } catch {}
+        try { const body = await res.json(); if (body.detail) detail = body.detail; } catch { /* non-JSON error body */ }
         throw new Error(detail);
       }
 

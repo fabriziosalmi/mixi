@@ -110,7 +110,6 @@ describe('Auto-Cue — Grid-Snapped First Downbeat', () => {
 
   it('works with different BPMs', () => {
     const bpm = 174; // DnB
-    const beatPeriod = 60 / bpm;
     const buffer = makeMockBuffer(SR, 30, bpm, OFFSET, [0, 1, 2, 3, 4, 5]);
     const cue = findAutoCuePoint(buffer, bpm, OFFSET);
 

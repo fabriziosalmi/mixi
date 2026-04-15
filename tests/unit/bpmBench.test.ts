@@ -126,14 +126,12 @@ function generateKickHatTrack(bpm: number, offsetSec = 0): Float32Array {
   const beatInterval = (60 / bpm) * SR;
   const offsetSamples = Math.floor(offsetSec * SR);
   let pos = offsetSamples;
-  let beat = 0;
   while (pos < SAMPLES) {
     addKick(buf, Math.floor(pos));
     // Hihat on every 8th note (between beats)
     const hatPos = Math.floor(pos + beatInterval / 2);
     if (hatPos < SAMPLES) addHihat(buf, hatPos);
     pos += beatInterval;
-    beat++;
   }
   return buf;
 }
@@ -217,11 +215,10 @@ function bpmMatchesExact(detected: number, expected: number, toleranceBpm = 1.5)
 function checkPhaseAlignment(
   resultA: BpmResult,
   resultB: BpmResult,
-  expectedBpmA: number,
-  expectedBpmB: number,
+  _expectedBpmA: number,
+  _expectedBpmB: number,
 ): { tempoRatio: number; phaseError: number } {
   const tempoRatio = resultB.bpm / resultA.bpm;
-  const expectedRatio = expectedBpmB / expectedBpmA;
 
   // Phase: how well the grid offsets align
   const beatPeriodA = 60 / resultA.bpm;
@@ -236,7 +233,7 @@ function checkPhaseAlignment(
 // ── Additional synthesis: tonal bass ─────────────────────────
 
 /** Low sine bass hit (sub-bass, different timbre from kick) */
-function addBass(buf: Float32Array, pos: number, amplitude = 0.6) {
+function _addBass(buf: Float32Array, pos: number, amplitude = 0.6) {
   const len = Math.floor(SR * 0.12);
   for (let i = 0; i < len && pos + i < buf.length; i++) {
     const t = i / SR;
@@ -315,7 +312,6 @@ function generateTechnoTrack(bpm: number): Float32Array {
   const buf = new Float32Array(SAMPLES);
   const beatInterval = (60 / bpm) * SR;
   let pos = 0;
-  let beat = 0;
   while (pos < SAMPLES) {
     addKick(buf, Math.floor(pos), 0.9);
     // Rim on offbeat
@@ -327,7 +323,6 @@ function generateTechnoTrack(bpm: number): Float32Array {
       if (p < SAMPLES) addHihat(buf, p, 0.1 + (i % 2) * 0.08);
     }
     pos += beatInterval;
-    beat++;
   }
   return buf;
 }

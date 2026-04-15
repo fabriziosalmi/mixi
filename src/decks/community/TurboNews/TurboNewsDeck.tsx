@@ -25,11 +25,13 @@ export const TurboNewsDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
 
   const [inputUrl, setInputUrl] = useState('');
   const engineRef = useRef<TurboNewsEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboNewsEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -61,8 +63,8 @@ export const TurboNewsDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
     return () => clearInterval(timer);
   }, [snapshot.status, snapshot.headlines.length]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleFetch = (url: string) => {
     setInputUrl(url);

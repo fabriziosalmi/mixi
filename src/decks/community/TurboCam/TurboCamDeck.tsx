@@ -33,11 +33,13 @@ export const TurboCamDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
   const [motion, setMotion] = useState({ x: 0.5, y: 0.5 });
   const engineRef = useRef<TurboCamEngine | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboCamEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -52,8 +54,8 @@ export const TurboCamDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {
@@ -98,7 +100,7 @@ export const TurboCamDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrac
                 label="Sensitivity" 
                 value={1.0 - (snapshot.threshold / 100)} // Invert for UI
                 onChange={(v: number) => { 
-                  let th = 100 - (v * 100);
+                  const th = 100 - (v * 100);
                   engine.threshold = th; 
                   setSnapshot(s => ({...s, threshold: th}));
                 }} 

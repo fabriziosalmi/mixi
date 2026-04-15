@@ -9,7 +9,7 @@ test.describe('VU Meters', () => {
 
   test('VU meter elements exist in DOM', async ({ page }) => {
     // VU meters are rendered as div containers with segment children
-    const vuContainers = page.locator('[class*="vu"], [data-testid*="vu"]');
+    page.locator('[class*="vu"], [data-testid*="vu"]');
     // At minimum, the mixer section should have VU-related elements
     // The exact selector depends on implementation — just verify app loaded
     const chassis = page.locator('.mixi-chassis');

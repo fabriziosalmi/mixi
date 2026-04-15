@@ -59,7 +59,7 @@ export const MobileRecPanel: FC<{ onClose: () => void }> = ({ onClose }) => {
     };
 
     recorder.onstop = () => {
-      try { masterOutput.disconnect(dest); } catch {}
+      try { masterOutput.disconnect(dest); } catch { /* already disconnected */ }
       destRef.current = null;
 
       const blob = new Blob(chunksRef.current, { type: mimeType });

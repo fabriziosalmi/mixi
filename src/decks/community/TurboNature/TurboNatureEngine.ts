@@ -167,7 +167,7 @@ export class TurboNatureEngine {
     if (this.noiseSource) {
       try {
         this.noiseSource.start();
-      } catch(e) { /* already started */ }
+      } catch { /* already started */ }
     }
     
     if (this.ctx && this.ctx.state === 'suspended') {
@@ -193,7 +193,7 @@ export class TurboNatureEngine {
     this.stop();
     if (this.oscInterval) clearInterval(this.oscInterval);
     if (this.noiseSource) {
-        try { this.noiseSource.stop(); } catch(e){}
+        try { this.noiseSource.stop(); } catch { /* already stopped */ }
     }
   }
 }

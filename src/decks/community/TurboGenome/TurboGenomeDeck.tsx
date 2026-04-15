@@ -31,11 +31,13 @@ export const TurboGenomeDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
 
   const [cursor, setCursor] = useState({ index: 0, char: '', mut: false });
   const engineRef = useRef<TurboGenomeEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboGenomeEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -50,8 +52,8 @@ export const TurboGenomeDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {
@@ -102,7 +104,7 @@ export const TurboGenomeDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
               <Knob 
                 label="Mutagen" value={snapshot.mutationRate * 5} // 0 to 0.20
                 onChange={(v: number) => { 
-                  let rate = v / 5;
+                  const rate = v / 5;
                   engine.mutationRate = rate; setSnapshot(s => ({...s, mutationRate: rate}));
                 }} 
               />

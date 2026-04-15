@@ -32,11 +32,13 @@ export const TurboFractalDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchTo
 
   const [fractalDat, setFractalDat] = useState({ iters: 0, escape: false });
   const engineRef = useRef<TurboFractalEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboFractalEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -49,8 +51,8 @@ export const TurboFractalDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchTo
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {
@@ -130,7 +132,7 @@ export const TurboFractalDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchTo
            <div className="w-full flex-1 flex items-end justify-center gap-1 mt-6">
               {/* Direct deterministic mapping to the escape velocity equation */}
               {Array.from({length: 32}).map((_, i) => {
-                 let active = snapshot.isActive && i < fractalDat.iters;
+                 const active = snapshot.isActive && i < fractalDat.iters;
                  // As the index increases, we map it to expected harmonic strength dropoff
                  // ensuring larger iterations maintain deterministic geometry.
                  return (

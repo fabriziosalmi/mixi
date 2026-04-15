@@ -54,7 +54,7 @@ export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwi
     };
   }, [deckId]);
 
-  if (!isReady || !engineRef.current) {
+  if (!isReady) {
     return (
       <div className="flex flex-col h-full w-full bg-black/80 text-white rounded-lg p-4 font-mono items-center justify-center border border-[#ff6600]/30 shadow-[0_0_30px_rgb(255,100,0,0.1)]">
         <div className="animate-pulse flex flex-col items-center gap-4">
@@ -65,7 +65,7 @@ export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwi
     );
   }
   
-  const engine = engineRef.current;
+  const engine = engineRef.current!;
 
   const handleMutateSynth = () => {
     engine.mutateParams();

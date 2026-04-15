@@ -19,7 +19,7 @@
 //   6. Disabled unnecessary Chromium features
 // ─────────────────────────────────────────────────────────────
 
-import { app, BrowserWindow, screen, session, globalShortcut, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, screen, session, ipcMain, dialog, shell } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
 import { join, resolve } from 'path';
@@ -32,7 +32,7 @@ import { tmpdir } from 'os';
 import { createWavHeader, patchWavHeaderSize, isOrphanWav, WAV_HEADER_SIZE, WAV_DATA_SIZE_SENTINEL } from './wavHeader';
 import { createSocket, Socket as DgramSocket } from 'dgram';
 import { net } from 'electron';
-import { compareSemver, parseTagVersion, shouldShowUpdate, truncateReleaseNotes } from './updateCheck';
+import { parseTagVersion, shouldShowUpdate, truncateReleaseNotes } from './updateCheck';
 
 // ── Process-level crash guards ──────────────────────────────
 process.on('uncaughtException', (err) => {
@@ -98,6 +98,7 @@ let apiPort = 0;
 
 let nativeAudio: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   nativeAudio = require('./native/index.js');
   if (nativeAudio.isLoaded()) {
     console.log(`[mixi-native] Loaded — host: ${nativeAudio.getHostName()}`);
@@ -679,7 +680,7 @@ const syncPeers = new Map<string, { ip: string; port: number; lastSeen: number }
 
 function setupMixiSyncIPC(): void {
   // Start sync (publisher or subscriber)
-  ipcMain.handle('mixi-sync:start', (_event, args: { broadcastIp?: string }) => {
+  ipcMain.handle('mixi-sync:start', (_event, _args: { broadcastIp?: string }) => {
     if (syncSocket) return { ok: true, msg: 'Already running' };
 
     try {

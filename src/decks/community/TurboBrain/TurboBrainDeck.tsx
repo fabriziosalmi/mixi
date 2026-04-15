@@ -30,11 +30,13 @@ export const TurboBrainDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
   });
 
   const engineRef = useRef<TurboBrainEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboBrainEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -42,8 +44,8 @@ export const TurboBrainDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {

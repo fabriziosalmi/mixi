@@ -121,7 +121,7 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
 
     // Cache the static image so we don't redraw every frame.
     staticRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  }, [waveformData, width, height]);
+  }, [waveformData, width, height, deckId]);
 
   // ── Animate cursor at 30 FPS ───────────────────────────────
   useEffect(() => {

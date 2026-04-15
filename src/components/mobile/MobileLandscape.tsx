@@ -171,7 +171,7 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
   );
 
   const toggleSync = useCallback(
-    () => { isSynced ? unsyncDeck(deckId) : syncDeck(deckId); haptics.snap(); },
+    () => { if (isSynced) unsyncDeck(deckId); else syncDeck(deckId); haptics.snap(); },
     [deckId, isSynced, syncDeck, unsyncDeck, haptics],
   );
 

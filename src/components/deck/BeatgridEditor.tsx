@@ -142,7 +142,7 @@ const GridPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => 
   const resetGrid = useCallback(() => {
     // TODO: implement userGridOverride = null
     // For now, reset to original values
-  }, [deckId]);
+  }, []);
 
   const btnStyle = {
     background: 'rgba(255,255,255,0.04)',

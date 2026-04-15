@@ -31,11 +31,13 @@ export const TurboBoidDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<TurboBoidEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboBoidEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -84,8 +86,8 @@ export const TurboBoidDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {
@@ -131,14 +133,14 @@ export const TurboBoidDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTra
               <Knob 
                 label="Boids" value={snapshot.boidCount / 100} 
                 onChange={(v: number) => { 
-                  let cnt = Math.max(1, Math.floor(v * 100));
+                  const cnt = Math.max(1, Math.floor(v * 100));
                   engine.boidCount = cnt; setSnapshot(s => ({...s, boidCount: cnt}));
                 }} 
               />
               <Knob 
                 label="Velocity" value={snapshot.maxSpeed / 10} 
                 onChange={(v: number) => { 
-                  let spd = v * 10;
+                  const spd = v * 10;
                   engine.maxSpeed = spd; setSnapshot(s => ({...s, maxSpeed: spd}));
                 }} 
               />

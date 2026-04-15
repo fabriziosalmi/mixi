@@ -30,11 +30,13 @@ export const TurboPulsarDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
 
   const [blink, setBlink] = useState(false);
   const engineRef = useRef<TurboPulsarEngine | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const engine = new TurboPulsarEngine(deckId);
     engine.init(((window as any).__MIXI_ENGINE__?.getAudioContext?.() ?? new AudioContext()));
     engineRef.current = engine;
+    setIsReady(true);
 
     // Route audio through mixer channel (EQ, fader, crossfader, master)
     const ch = (window as any).__MIXI_ENGINE__?.getChannel?.(deckId);
@@ -49,8 +51,8 @@ export const TurboPulsarDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToT
     return () => engine.destroy();
   }, [deckId]);
 
-  if (!engineRef.current) return null;
-  const engine = engineRef.current;
+  if (!isReady) return null;
+  const engine = engineRef.current!;
 
   const handleToggle = () => {
     if (snapshot.isActive) {

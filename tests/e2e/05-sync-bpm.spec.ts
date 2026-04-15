@@ -50,7 +50,7 @@ test.describe('Sync & BPM', () => {
 
   test('unsync restores original rate', async ({ page }) => {
     await waitForBpm(page, 'B');
-    const originalRate = (await readDeckState(page, 'B'))!.playbackRate;
+    const _originalRate = (await readDeckState(page, 'B'))!.playbackRate;
     await callStoreAction(page, 'setDeckPlaying', 'A', true);
     await callStoreAction(page, 'setDeckPlaying', 'B', true);
     await callStoreAction(page, 'syncDeck', 'B');

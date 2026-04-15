@@ -20,13 +20,11 @@ import { findBestRatio } from '../../src/audio/harmonicSync';
 import {
   makeAudioBuffer, generateKickTrack, generateKickHatTrack,
   generateHouseTrack, generateSyncopatedTrack, generateNoisyTrack,
-  generateTechnoTrack, generateDnbTrack, bpmMatchesExact,
-  SR, SAMPLES,
-  addKick,
+  generateTechnoTrack, generateDnbTrack,
 } from '../helpers/audioGen';
 import {
   createDeck, createSyncSim, computePhaseError,
-  type SimDeck, type SyncSim,
+  type SyncSim,
 } from '../helpers/pllSim';
 
 const MAX_PLL_CORRECTION = 0.003; // must match PhaseLockLoop.ts

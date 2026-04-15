@@ -10,7 +10,7 @@
  * Run: npx playwright test tests/e2e/20-mixer-validation.spec.ts --project=chromium
  */
 import { test, expect } from '@playwright/test';
-import { launchApp, callStoreAction, readDeckState, readMasterState } from './helpers/app';
+import { launchApp, callStoreAction, readDeckState } from './helpers/app';
 import { loadSynthTrack, getLevel, getMasterLevel, waitForLevel, waitForEngine, benchmarkEngine, measureBpmLatency } from './helpers/audio';
 
 // ── Colored output ───────────────────────────────────────────
@@ -19,7 +19,7 @@ const G = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const R = (s: string) => `\x1b[31m${s}\x1b[0m`;
 const C = (s: string) => `\x1b[36m${s}\x1b[0m`;
 const D = (s: string) => `\x1b[2m${s}\x1b[0m`;
-const B = (s: string) => `\x1b[1m${s}\x1b[0m`;
+const _B = (s: string) => `\x1b[1m${s}\x1b[0m`;
 
 function chk(id: number, name: string, val: string, pass: boolean) {
   const st = pass ? G('PASS') : R('FAIL');
@@ -474,7 +474,7 @@ test.describe('9. Recording / VFX / DVS', () => {
     expect(ok).toBe(true);
   });
 
-  test('35 — VIDEO FX / SPACE', async ({ page }) => {
+  test('35 — VIDEO FX / SPACE', async ({ page: _page }) => {
     chk(35, 'VIDEO FX / SPACE', 'engine_ok=true', true);
   });
 

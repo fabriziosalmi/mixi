@@ -1,6 +1,6 @@
 {
   "name": "mixi",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "author": "Fabrizio Salmi <fabrizio.salmi@gmail.com>",
   "description": "Deterministic Audio Workstation",
   "homepage": "https://github.com/fabriziosalmi/mixi",
@@ -93,7 +93,9 @@
       {
         "from": "api/dist/mixi-engine${env.EXEC_EXT}",
         "to": "mixi-engine${env.EXEC_EXT}",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {

@@ -127,7 +127,7 @@ export class TurboVoxEngine {
     const isRobotic = Math.random() > 0.5;
     
     // Rhythm generator
-    let pattern: boolean[] = Array(STEP_COUNT).fill(false);
+    const pattern: boolean[] = Array(STEP_COUNT).fill(false);
     if (isRobotic) {
        // Stutters (many short notes)
        const hits = 8 + Math.floor(Math.random() * 8);

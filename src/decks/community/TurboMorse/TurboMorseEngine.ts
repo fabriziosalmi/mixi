@@ -71,7 +71,7 @@ export class TurboMorseEngine {
     this.currentSequence = [];
     const text = this._message.toUpperCase();
     
-    for (let char of text) {
+    for (const char of text) {
        if (char === ' ') {
          this.currentSequence.push({type: 'gap', duration: unitMs * 7});
        } else {

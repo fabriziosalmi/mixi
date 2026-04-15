@@ -114,7 +114,7 @@ export const TurboSonarDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
               <Knob 
                 label="Ping Freq" value={snapshot.pingRate * 2} // 0 to 0.5Hz max
                 onChange={(v: number) => { 
-                  let hz = Math.max(0.01, v / 2);
+                  const hz = Math.max(0.01, v / 2);
                   engine.pingRate = hz; setSnapshot(s => ({...s, pingRate: hz}));
                 }} 
               />

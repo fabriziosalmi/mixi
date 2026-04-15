@@ -74,7 +74,7 @@ export const TurboSynthDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
     setSnapshot(s => ({ ...s, synth: { ...engineRef.current!.synthParams } }));
   };
 
-  if (!isReady || !engineRef.current) {
+  if (!isReady) {
     return (
       <div className="flex flex-col h-full w-full bg-black/40 text-white rounded-lg p-4 font-mono items-center justify-center border border-gray-800">
         <div className="animate-pulse flex flex-col items-center gap-4">
@@ -85,7 +85,7 @@ export const TurboSynthDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTr
     );
   }
   
-  const engine = engineRef.current;
+  const engine = engineRef.current!;
 
   const handlePlayToggle = () => {
     if (snapshot.isPlaying) {

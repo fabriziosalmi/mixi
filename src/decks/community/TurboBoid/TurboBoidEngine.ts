@@ -85,15 +85,15 @@ export class TurboBoidEngine {
   private loop = () => {
     if (!this._isActive) return;
 
-    let triggers: {x:number, y:number}[] = [];
+    const triggers: {x:number, y:number}[] = [];
 
     // O(N^2) naive flocking... okay for N < 100
-    for (let b of this.boids) {
+    for (const b of this.boids) {
       let cx = 0, cy = 0, cvx = 0, cvy = 0;
       let sx = 0, sy = 0;
       let count = 0;
 
-      for (let other of this.boids) {
+      for (const other of this.boids) {
         if (b === other) continue;
         const d = Math.hypot(b.x - other.x, b.y - other.y);
         

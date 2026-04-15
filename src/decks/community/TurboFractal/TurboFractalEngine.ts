@@ -79,7 +79,7 @@ export class TurboFractalEngine {
      const wave = this.ctx.createPeriodicWave(real, imag, { disableNormalization: false });
      try {
        this.osc.setPeriodicWave(wave);
-     } catch(e) {
+     } catch {
        // if context stopped, ignore
      }
   }
@@ -97,7 +97,7 @@ export class TurboFractalEngine {
     
     // Count non zeros
     let activeIters = 0;
-    for (let m of magnitudes) if (m > 0) activeIters++;
+    for (const m of magnitudes) if (m > 0) activeIters++;
     
     if (this.onFractalUpdate) {
        this.onFractalUpdate(activeIters, activeIters < 32);

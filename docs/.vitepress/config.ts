@@ -27,7 +27,7 @@ try {
       };
     }
   }
-} catch(e) {}
+} catch { /* locale dir scan optional */ }
 
 export default defineConfig({
   title: 'MIXI',

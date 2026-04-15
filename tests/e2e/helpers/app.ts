@@ -1,7 +1,7 @@
 /**
  * E2E test helpers — app lifecycle and common interactions.
  */
-import { type Page, expect } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 /**
  * Launch the app: navigate, click the splash button, wait for chassis.

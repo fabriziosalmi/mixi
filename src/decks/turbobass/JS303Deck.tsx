@@ -800,7 +800,9 @@ export const JS303Deck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }
             }}
             className="text-[7px] font-bold px-1 py-0.5 rounded active:scale-95"
             style={{
+              // eslint-disable-next-line react-hooks/refs
               color: engineRef.current?.hasClipboard ? SLIDE_CLR : '#444',
+              // eslint-disable-next-line react-hooks/refs
               border: `1px solid ${engineRef.current?.hasClipboard ? SLIDE_CLR + '33' : '#333'}`,
             }}>PST</button>
 
