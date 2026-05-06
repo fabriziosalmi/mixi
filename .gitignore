@@ -75,3 +75,6 @@ MIXI_POD.md
 
 # Local Cargo path overrides (dev only, CI uses git dependencies)
 mixi-core/.cargo/
+
+# Workspace settings - 2026-05-07
+tmp/
