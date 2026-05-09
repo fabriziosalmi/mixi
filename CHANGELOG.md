@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-05-09
+
+### Security
+- **Electron disk-recording IPC arbitrary file write (P0)** — `disk-rec:save-as` and `disk-rec:recover` validated only the source path and copied to any renderer-supplied destination. A compromised renderer (e.g. via a malicious community deck) could overwrite any user-writable file (`~/.zshrc`, `~/.ssh/authorized_keys`, app config). Destinations must now match a path blessed by `disk-rec:show-save-dialog`; entries are single-use.
+
+### Fixed
+- **WASM init race in 6 detectors (P1)** — `BpmDetector`, `KeyDetector`, `DropDetector`, `WaveformAnalyzer`, `metadataParser`, `Blackboard` each had their own `import('mixi_core').then(m => wasmModule = m).catch(() => {})` racing against `wasmBridge`'s init flag. When `isWasmReady()` was true but the local module ref was still null, detection silently fell back to the slower JS path and the empty `.catch` swallowed every failure. Replaced with a synchronous `getWasm()` getter on `wasmBridge` that returns the already-statically-imported namespace; zero race window, zero duplicate import.
+
 ## [0.3.1] - 2026-04-08
 
 ### Added
