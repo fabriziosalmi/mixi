@@ -18,8 +18,18 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-hooks/exhaustive-deps': 'error',
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/ban-ts-comment': 'off',
+      // Visible-but-non-blocking. We have ~130 existing `any` at browser-API
+      // boundaries (WebMIDI, WebGPU, native addon). New uses should justify
+      // themselves; the `npm run lint` ceiling prevents net regression.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // ts-ignore is banned outright; ts-expect-error must carry a reason.
+      '@typescript-eslint/ban-ts-comment': ['error', {
+        'ts-ignore': true,
+        'ts-nocheck': true,
+        'ts-check': false,
+        'ts-expect-error': 'allow-with-description',
+        minimumDescriptionLength: 8,
+      }],
       'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }]
     },

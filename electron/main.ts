@@ -79,9 +79,11 @@ app.commandLine.appendSwitch('enable-highres-timer');
 // Reduce memory footprint: single-origin app, no need for site isolation
 app.commandLine.appendSwitch('disable-site-isolation-trials');
 
-// Disable renderer code integrity checks (saves CPU cycles)
-app.commandLine.appendSwitch('disable-features',
-  'RendererCodeIntegrity,MediaRouter');
+// Disable MediaRouter (Cast/AirPlay discovery) — unused by mixi.
+// NOTE: RendererCodeIntegrity (Windows anti-injection mitigation) is
+// intentionally left enabled. The CPU savings are negligible and
+// disabling it weakens defense-in-depth for the renderer process.
+app.commandLine.appendSwitch('disable-features', 'MediaRouter');
 
 // V8 optimization: Wasm SIMD and tiering
 app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff --experimental-wasm-simd');
@@ -290,9 +292,22 @@ function createWindow(): void {
   // Disable pinch-to-zoom
   mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
 
-  // Disable back/forward navigation (trackpad swipe)
+  // Disable back/forward navigation (trackpad swipe) and any in-app navigation.
   mainWindow.webContents.on('will-navigate', (event) => {
     event.preventDefault();
+  });
+
+  // Block all window.open / target=_blank attempts. Anything with a real
+  // http(s) URL is opened in the user's default browser; everything else
+  // is denied. The renderer must never spawn a new BrowserWindow.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url);
+      }
+    } catch { /* malformed URL — deny */ }
+    return { action: 'deny' };
   });
 
   // Load the Vite build — try multiple paths for packaged vs dev
