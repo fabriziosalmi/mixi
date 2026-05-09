@@ -124,6 +124,14 @@ let recState: {
   channels: number;
 } | null = null;
 
+// SEC-2: Destination paths blessed by `disk-rec:show-save-dialog`.
+// The renderer is sandboxed but still exposes IPC; without this,
+// a compromised renderer (XSS via track metadata, malicious community
+// deck content) can call `disk-rec:save-as` / `disk-rec:recover` with
+// any `dest` and overwrite arbitrary user-writable files. Each entry
+// is consumed (single-use) on a successful save/recover.
+const _approvedSaveDests: Set<string> = new Set();
+
 // ── Helpers ──────────────────────────────────────────────────
 
 /** Grab an available port by briefly binding to :0 */
@@ -601,7 +609,10 @@ function setupDiskRecordingIPC(): void {
       filters: [{ name: 'WAV Audio', extensions: ['wav'] }],
     });
 
-    return result.canceled ? null : result.filePath;
+    if (result.canceled || !result.filePath) return null;
+    // SEC-2: Bless this path so a subsequent save-as / recover can use it.
+    _approvedSaveDests.add(resolve(result.filePath));
+    return result.filePath;
   });
 
   // Copy temp file to user-chosen destination
@@ -611,10 +622,15 @@ function setupDiskRecordingIPC(): void {
     if (!resolvedSrc.startsWith(tmpdir())) {
       throw new Error('Source path outside temp directory');
     }
-    copyFileSync(resolvedSrc, args.dest);
+    // SEC-2: Destination must come from a prior `disk-rec:show-save-dialog`.
+    const resolvedDest = resolve(args.dest);
+    if (!_approvedSaveDests.delete(resolvedDest)) {
+      throw new Error('Destination not approved by save dialog');
+    }
+    copyFileSync(resolvedSrc, resolvedDest);
     try { unlinkSync(resolvedSrc); } catch { /* temp may already be gone */ }
-    console.log(`[mixi-rec] Saved: ${args.dest}`);
-    return { dest: args.dest };
+    console.log(`[mixi-rec] Saved: ${resolvedDest}`);
+    return { dest: resolvedDest };
   });
 
   // Check for orphan recordings (crash recovery)
@@ -664,16 +680,21 @@ function setupDiskRecordingIPC(): void {
     if (!resolvedSrc.startsWith(tmpdir())) {
       throw new Error('Source path outside temp directory');
     }
+    // SEC-2: Destination must come from a prior `disk-rec:show-save-dialog`.
+    const resolvedDest = resolve(args.dest);
+    if (!_approvedSaveDests.delete(resolvedDest)) {
+      throw new Error('Destination not approved by save dialog');
+    }
     const stat = statSync(resolvedSrc);
     const fd = openSync(resolvedSrc, 'r+');
     patchWavHeaderSize(fd, stat.size, { writeSync });
     closeSync(fd);
 
-    copyFileSync(resolvedSrc, args.dest);
+    copyFileSync(resolvedSrc, resolvedDest);
     try { unlinkSync(resolvedSrc); } catch { /* temp cleanup */ }
 
-    console.log(`[mixi-rec] Recovered: ${args.dest} (${(stat.size / 1048576).toFixed(1)} MB)`);
-    return { dest: args.dest, sizeBytes: stat.size };
+    console.log(`[mixi-rec] Recovered: ${resolvedDest} (${(stat.size / 1048576).toFixed(1)} MB)`);
+    return { dest: resolvedDest, sizeBytes: stat.size };
   });
 
   // Discard an orphan recording

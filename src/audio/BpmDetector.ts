@@ -40,11 +40,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { log } from '../utils/logger';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm module — imported dynamically
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -519,7 +515,8 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
   const { sampleRate } = lowBandBuffer;
 
   // ── Rust fast path ──────────────────────────────────────
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     const ch0 = lowBandBuffer.getChannelData(0);
     const numCh = lowBandBuffer.numberOfChannels;
     const spc = lowBandBuffer.length;

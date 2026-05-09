@@ -39,11 +39,7 @@
 
 import { log } from '../utils/logger';
 import type { WaveformPoint } from './WaveformAnalyzer';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm module — imported dynamically
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 /** A detected drop with its beat position and strength. */
 export interface DropMarker {
@@ -76,7 +72,8 @@ export function detectDrops(
   const t0 = performance.now();
 
   // ── Wasm fast path ──────────────────────────────────────────
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     const lowBand = new Float32Array(waveform.length);
     for (let i = 0; i < waveform.length; i++) {
       lowBand[i] = waveform[i].low;

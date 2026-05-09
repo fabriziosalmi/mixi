@@ -35,11 +35,7 @@ import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import { timeToBeat, calcMixOutBeat } from '../automixer/beatUtils';
 import { isHarmonicMatch } from '../audio/KeyDetector';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm module — imported dynamically
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 // ── The Blackboard Data Structure ────────────────────────────
 
@@ -215,7 +211,8 @@ export function computeBlackboard(): Blackboard {
   // ── Wasm fast path (20 Hz tick) ─────────────────────────────
   // Pack raw deck state into Float64Array, compute all derived
   // metrics in Rust, then hydrate the remaining JS-only fields.
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     const raw = new Float64Array([
       masterTime, ms.bpm, ms.firstBeatOffset, ms.duration,
       ms.volume, ms.eq.low, ms.eq.mid, ms.colorFx,

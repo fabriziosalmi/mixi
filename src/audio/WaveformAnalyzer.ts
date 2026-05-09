@@ -35,11 +35,7 @@ import { detectBpm, type BpmResult } from './BpmDetector';
 import { useSettingsStore, BPM_RANGE_PRESETS } from '../store/settingsStore';
 import { detectDrops, type DropMarker } from './DropDetector';
 import { detectKey, type KeyResult } from './KeyDetector';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm functions — imported dynamically at analysis time
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -117,7 +113,8 @@ function computeRms(buffer: AudioBuffer, chunkSize: number): Float32Array {
   const spc = buffer.length; // samples per channel
 
   // ── Rust fast path ──────────────────────────────────────
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     if (channels === 1) {
       const data = buffer.getChannelData(0);
       const result = wasmModule.compute_rms(data, chunkSize);
@@ -163,7 +160,8 @@ function computeRms(buffer: AudioBuffer, chunkSize: number): Float32Array {
 
 /** Normalise a Float32Array in-place so peak = 1.0. Uses Wasm when available. */
 function normalise(arr: Float32Array): number {
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     return wasmModule.normalise(arr);
   }
   // JS fallback
@@ -216,7 +214,8 @@ export async function analyzeWaveform(
 
   // ── Peak level detection + band rendering in parallel ──────
   let peakLevelPromise: Promise<number>;
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     // Rust fast path: scan all channels in one call
     const flat = new Float32Array(buffer.length * buffer.numberOfChannels);
     for (let ch = 0; ch < buffer.numberOfChannels; ch++) {

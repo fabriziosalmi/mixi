@@ -44,3 +44,15 @@ export async function wasmCore(): Promise<typeof wasm> {
 export function isWasmReady(): boolean {
   return initialized;
 }
+
+/**
+ * Synchronous access to the Wasm module — returns the namespace if
+ * `wasmCore()` has finished initializing, otherwise null. Use this in
+ * sync hot paths (BPM/key/drop/waveform analysis) instead of a
+ * per-file dynamic import: a duplicate `import().then()` introduces a
+ * race window where `isWasmReady()` is true but the local module ref
+ * is still null, causing silent fallback to the slower JS path.
+ */
+export function getWasm(): typeof wasm | null {
+  return initialized ? wasm : null;
+}

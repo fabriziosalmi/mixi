@@ -48,11 +48,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { log } from '../utils/logger';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm module — imported dynamically
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -204,7 +200,8 @@ export function detectKey(buffer: AudioBuffer): KeyResult {
   const { sampleRate } = buffer;
 
   // ── Rust fast path ──────────────────────────────────────
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     const numCh = buffer.numberOfChannels;
     const spc = buffer.length;
     let flat: Float32Array;

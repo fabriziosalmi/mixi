@@ -16,11 +16,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { parseBlob } from 'music-metadata';
-import { isWasmReady } from '../wasm/wasmBridge';
-
-// Wasm module — imported dynamically
-let wasmModule: typeof import('../../mixi-core/pkg/mixi_core') | null = null;
-import('../../mixi-core/pkg/mixi_core').then((m) => { wasmModule = m; }).catch(() => {});
+import { getWasm } from '../wasm/wasmBridge';
 
 export interface TrackMeta {
   title: string;
@@ -37,7 +33,8 @@ export interface TrackMeta {
  */
 export async function parseTrackMeta(blob: Blob): Promise<TrackMeta> {
   // ── Wasm fast path ──────────────────────────────────────────
-  if (isWasmReady() && wasmModule) {
+  const wasmModule = getWasm();
+  if (wasmModule) {
     try {
       const buffer = await blob.arrayBuffer();
       // Only send first 256KB — metadata is always in the header
