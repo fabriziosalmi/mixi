@@ -158,7 +158,7 @@ export class MixiEngine {
     }
 
     try {
-      this.ctx = new AudioContext({ sampleRate: 44_100 });
+      this.ctx = new AudioContext({ sampleRate: 44_100, latencyHint: 'interactive' });
     } catch (err) {
       log.error('Engine', 'AudioContext creation failed — browser may have denied audio access', err);
       throw new Error(`Audio not available: ${err instanceof Error ? err.message : err}`);
@@ -482,9 +482,23 @@ export class MixiEngine {
     // Serialize analysis to avoid 6 concurrent OfflineAudioContext jobs
     // when two tracks load simultaneously. Each analysis uses 3 offline
     // renders, so running them in parallel saturates the CPU for 2+ seconds.
+    // 15s timeout guards against a hung OfflineAudioContext or Wasm stall —
+    // without it a deadlocked queue would block all subsequent track loads.
     let analysis!: Awaited<ReturnType<typeof analyzeWaveform>>;
     await (this._analysisQueue = this._analysisQueue.then(async () => {
-      analysis = await analyzeWaveform(buffer);
+      const ANALYSIS_TIMEOUT_MS = 15_000;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('analyzeWaveform timeout')), ANALYSIS_TIMEOUT_MS),
+      );
+      try {
+        analysis = await Promise.race([analyzeWaveform(buffer), timeout]);
+      } catch (err) {
+        log.warn('Engine', 'Waveform analysis timed out or failed — using safe defaults', err);
+        analysis = {
+          waveform: [], bpm: 0, firstBeatOffset: 0, bpmConfidence: 0,
+          dropBeats: [], musicalKey: '', musicalKeyName: '', peakLevel: 1,
+        } as Awaited<ReturnType<typeof analyzeWaveform>>;
+      }
     }));
 
     // BUG-21: Check generation again after second await.

@@ -339,6 +339,10 @@ pub struct DspEngine {
     // Pre-allocated scratch buffers — ZERO allocations in process()
     scratch_a: Vec<f32>,
     scratch_b: Vec<f32>,
+    // Sidechain snapshot buffers — hold post-deck copy for cross-feed.
+    // Pre-allocated to avoid Vec::to_vec() in the audio hot path.
+    sc_snap_a: Vec<f32>,
+    sc_snap_b: Vec<f32>,
     /// Sidechain: deck A triggers duck on deck B
     sidechain_a_to_b: SpectralSidechainCompressor,
     /// Sidechain: deck B triggers duck on deck A
@@ -361,6 +365,8 @@ impl DspEngine {
             sr: sample_rate,
             scratch_a: vec![0.0; MAX_BLOCK],
             scratch_b: vec![0.0; MAX_BLOCK],
+            sc_snap_a: vec![0.0; MAX_BLOCK],
+            sc_snap_b: vec![0.0; MAX_BLOCK],
             sidechain_a_to_b: SpectralSidechainCompressor::new(sample_rate, 0.0, 0.0),
             sidechain_b_to_a: SpectralSidechainCompressor::new(sample_rate, 0.0, 0.0),
         }
@@ -402,22 +408,23 @@ impl DspEngine {
         self.scratch_b[..len].copy_from_slice(&input_r[..len]);
         self.deck_b.process(&mut self.scratch_b[..len], params, DECK_B_BASE, self.sr);
 
-        // Sidechain compression: read depth/mix from param bus and apply
+        // Sidechain compression: read depth/mix from param bus and apply.
+        // Uses pre-allocated sc_snap_* buffers — ZERO heap allocation.
         {
             let sc_depth = read_f32(params, MASTER_SIDECHAIN_DEPTH);
             let sc_mix   = read_f32(params, MASTER_SIDECHAIN_MIX);
 
+            // Snapshot deck outputs before cross-feed mutates them.
+            self.sc_snap_a[..len].copy_from_slice(&self.scratch_a[..len]);
+            self.sc_snap_b[..len].copy_from_slice(&self.scratch_b[..len]);
+
             self.sidechain_a_to_b.set_depth(sc_depth);
             self.sidechain_a_to_b.set_mix(sc_mix);
-            // deck A output is sidechain for B
-            let sc_a = self.scratch_a[..len].to_vec(); // snapshot before B processes it
-            self.sidechain_a_to_b.process_block(&sc_a, &mut self.scratch_b[..len]);
+            self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b[..len]);
 
             self.sidechain_b_to_a.set_depth(sc_depth);
             self.sidechain_b_to_a.set_mix(sc_mix);
-            // deck B output is sidechain for A (use the post-duck B snapshot)
-            let sc_b = self.scratch_b[..len].to_vec();
-            self.sidechain_b_to_a.process_block(&sc_b, &mut self.scratch_a[..len]);
+            self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a[..len]);
         }
 
         // C1 fix: True stereo mix — deck A left, deck B right
