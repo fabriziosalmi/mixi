@@ -158,8 +158,8 @@ python main.py --port 7779
 | **3-Band Isolator EQ** | Parallel Linkwitz-Riley 24dB/oct crossover. Kill = gain 0, other bands unaffected. |
 | **Deck Effects** | 10 built-in (7 in FX strip + 3 system): Filter (inline bipolar LP/HP), Delay (BPM-synced), Reverb (synthetic IR), Phaser (4-stage allpass), Flanger, Gate (beat-locked chop), Bitcrusher, Echo (dub delay with LP feedback), Tape Stop (LP darkening), Noise (white noise sweep). Parallel sends, gain-compensated. |
 | **Master DSP** | Band-split distortion, gain-compensated parallel compression, DC blocker, brickwall limiter. Sub-bass mono sum. |
-| **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + master chain. 10µs/block, 99.6% headroom. Toggle in Settings. |
-| **AutoMixer** | Stateless 50ms-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. |
+| **Rust DSP Engine** | Full signal chain in Wasm AudioWorklet. Per-deck EQ/FX/Fader + spectral sidechain compression + master chain. 10µs/block, 99.6% headroom. Zero-alloc hot path. Toggle in Settings. |
+| **AutoMixer** | Stateless 20Hz-tick arbiter. Reads a Blackboard of deck states. Applies Ghost Mutations — visible, auditable corrections for phase drift, spectral clash, headroom recovery. 20 intents across 5 domains (safety, spectral, dynamics, rhythm, structure). |
 | **Groovebox Deck** | 4-voice step sequencer (kick/snare/hat/perc) with drum synthesis on a decoupled bus. Own panning, mute, solo. Synced to master BPM. |
 | **BPM/Key Detection** | Powered by [open-bpm](https://github.com/fabriziosalmi/open-bpm): 7-estimator architecture (IOI + Comb + AC + Spectral FFT + Hopf + Tempogram + Low-band AC), SuperFlux onset detection, metrical fusion for octave resolution. 68.8% Acc1 on GiantSteps, 8.5:1 vs librosa. Two-speed API (fast + full). Goertzel chromagram for key (Camelot). Pure Rust/Wasm — no browser pre-processing. |
 | **MIDI** | WebMIDI API. Map any CC/note to any parameter. MIDI Clock Out/In (24 ppqn) for external gear sync. |
@@ -168,7 +168,7 @@ python main.py --port 7779
 | **Waveform** | Min-max decimation, drag-to-scrub, beatgrid editing (Shift+Click), BPM confidence display, overview viewport drag, energy shadow, zoom sync. Direct DOM writes, no React reconciliation. |
 | **Headphone Cue** | Split-stereo or dual-output routing. Mix knob blends cue and master. |
 | **Recording** | Crash-proof WAV recording (SPSC ring buffer → disk, 1MB fixed RAM). WebM fallback in browser. Orphan recovery on crash. |
-| **WebGPU VFX** | 14-effect GPU shader: spectrum border, beat shockwave, particles, plasma, CRT, Tron floor, feedback loops. Canvas 2D fallback. ESC kill-switch. |
+| **WebGPU VFX** | 14-effect GPU shader: spectrum border, beat shockwave, particles, plasma, CRT, Tron floor, feedback loops. Ring texture spectrogram (64-frame history, 30 KB/s GPU upload). Canvas 2D fallback. ESC kill-switch. |
 | **Native Audio** | Optional cpal output via N-API addon (Electron). CoreAudio/WASAPI/ALSA bypass. Zero-copy SharedArrayBuffer ring. |
 | **17 Skins** | Runtime-switchable. Pure CSS custom properties — zero JavaScript per skin. |
 
@@ -242,7 +242,7 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | Bundler | Vite 6 |
 | Desktop | Electron 41 |
 | Backend | FastAPI + MCP server (Python, optional) |
-| Tests | Vitest (564), Playwright E2E (106), cargo test (196 Rust), BPM bench (164) — 1030 total |
+| Tests | Vitest (568), Playwright E2E (106), cargo test (198 Rust), BPM bench (164) — 1036 total |
 | Docs | VitePress, 24 languages |
 
 ---
@@ -261,12 +261,12 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 | `npm run dist` | Package desktop app for current OS |
 | `npm run docs:dev` | VitePress dev server |
 | `npm run docs:build` | Build documentation site |
-| `npm test` | Run unit tests (Vitest, 564 tests) |
+| `npm test` | Run unit tests (Vitest, 568 tests) |
 | `npm run bench` | BPM detection + sync bench (164 tests) |
 | `npm run test:e2e` | Playwright E2E tests (106 tests: smoke + mixer validation) |
 | `npm run test:watch` | Watch mode for unit tests |
 | `npm run test:coverage` | Test coverage report |
-| `cd mixi-core && cargo test` | Rust DSP tests (196 tests) |
+| `cd mixi-core && cargo test` | Rust DSP tests (198 tests) |
 
 ---
 

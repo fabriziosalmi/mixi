@@ -18,7 +18,7 @@ Each tick:
 1. Check mode (OFF = skip, ASSIST = check pause/resume)
 2. Clear ghost fields from previous tick
 3. Compute Blackboard (all deck/master state)
-4. Score all 18 intents via `intent.evaluate(blackboard)`
+4. Score all 20 intents via `intent.evaluate(blackboard)`
 5. Sort by score descending
 6. Arbitrate: fire each intent unless its domain is locked by a higher-scoring exclusive intent
 7. Execute winners, marking affected controls as "ghost fields"
@@ -73,7 +73,7 @@ Variables computed once per tick from the Zustand store and audio engine:
 
 The Blackboard has an optional **Wasm fast path** — if the Rust module is loaded, 18 floats are packed into a `Float64Array` and computed in Wasm.
 
-## All 18 Intents
+## All 20 Intents
 
 ### Safety Domain
 
@@ -102,6 +102,8 @@ The Blackboard has an optional **Wasm fast path** — if the Rust module is load
 | **LPF Mud Dive** | 0.05–0.5 | Bass killed, no filter | Ramps master colorFx to -0.5 (LPF underwater) |
 | **Pre-Drop Silence** | 0.95 | 0.3–1.0 beats to phrase boundary | Sets BOTH volumes to 0 |
 | **Filter Wobble** | 0.55 | 1–8 beats to phrase, no filter | Oscillates colorFx ±0.2 every half-beat |
+| **Build-Up Tension** | 0.65 | 4–16 beats before incoming drop, no filter active | Progressive HPF sweep (colorFx 0.15→0.85) proportional to countdown |
+| **Ghost Note Echo** | 0.48 | Master vol ≤ 0.45 and incoming > 0.6 (fade-in moment) | Bass kill proportional to fade depth, hi-mid boost +4 dB, 1/4-note colorFx tremolo |
 
 ### Rhythm Domain
 
