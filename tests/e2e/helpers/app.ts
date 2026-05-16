@@ -40,6 +40,17 @@ export async function launchApp(page: Page): Promise<void> {
 
   // Wait for the main app shell to render
   await page.waitForSelector('.mixi-chassis, #root > div', { timeout: 15000 });
+  // Wait for async stores and engine to be exposed on the window
+  const start = Date.now();
+  const timeoutMs = 10000;
+  while (Date.now() - start < timeoutMs) {
+    const isReady = await page.evaluate(() => !!(window as any).__MIXI_STORE__ && !!(window as any).__MIXI_ENGINE__);
+    if (isReady) break;
+    await page.waitForTimeout(200);
+  }
+
+  // Give audio engine a moment to initialize
+  await page.waitForTimeout(500);
 }
 
 /**
