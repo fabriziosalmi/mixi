@@ -93,7 +93,7 @@ jobs:
           cd mixi-core && wasm-pack build --target web --out-dir pkg
 
       - name: Build for preview
-        run: npx vite build
+        run: npx vite build --mode test
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
