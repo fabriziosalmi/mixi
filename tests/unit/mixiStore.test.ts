@@ -267,6 +267,36 @@ describe('mixiStore', () => {
     expect(useMixiStore.getState().deckModes.A).toBe('track');
   });
 
+  // ── setFirstBeatOffset clamping ────────────────────────────
+
+  it('clamps negative firstBeatOffset to 0', () => {
+    const store = useMixiStore.getState();
+    store.setDeckWaveform('A', [], 180);
+    store.setFirstBeatOffset('A', -1.5);
+    expect(useMixiStore.getState().decks.A.firstBeatOffset).toBe(0);
+  });
+
+  it('clamps firstBeatOffset > duration to duration', () => {
+    const store = useMixiStore.getState();
+    store.setDeckWaveform('A', [], 180);
+    store.setFirstBeatOffset('A', 200);
+    expect(useMixiStore.getState().decks.A.firstBeatOffset).toBe(180);
+  });
+
+  it('passes valid firstBeatOffset through unchanged', () => {
+    const store = useMixiStore.getState();
+    store.setDeckWaveform('A', [], 180);
+    store.setFirstBeatOffset('A', 4.5);
+    expect(useMixiStore.getState().decks.A.firstBeatOffset).toBe(4.5);
+  });
+
+  it('skips upper clamp when duration is 0', () => {
+    const store = useMixiStore.getState();
+    store.setDeckWaveform('A', [], 0);
+    store.setFirstBeatOffset('A', 2.0);
+    expect(useMixiStore.getState().decks.A.firstBeatOffset).toBe(2.0);
+  });
+
   // ── AI mode ────────────────────────────────────────────────
 
   it('sets AI mode', () => {

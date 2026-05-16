@@ -297,15 +297,19 @@ export class WebGpuRenderer {
       { bytesPerRow: 128 * 4 }, { width: 128, height: 1 },
     );
 
-    // ── Ring texture (#2): write peak-held row ───────────────
+    // ── Ring texture (#2): write only the current row ───────────
+    // Upload 512 bytes (one row) instead of 32 KB (all 64 rows) per frame.
+    // At 60 fps this cuts ring texture PCIe bandwidth from ~1.9 MB/s → ~30 KB/s.
     const peak = params.peakBins;
     const rowOffset = this.ringRow * 128;
     for (let i = 0; i < 128; i++) {
       this.ringData[rowOffset + i] = i < peak.length ? peak[i] : 0;
     }
     this.device.queue.writeTexture(
-      { texture: this.ringTexture }, this.ringData.buffer,
-      { bytesPerRow: 128 * 4 }, { width: 128, height: 64 },
+      { texture: this.ringTexture, origin: { x: 0, y: this.ringRow, z: 0 } },
+      this.ringData.buffer,
+      { bytesPerRow: 128 * 4, rowsPerImage: 1, offset: rowOffset * 4 },
+      { width: 128, height: 1 },
     );
     this.ringRow = (this.ringRow + 1) % 64;
 

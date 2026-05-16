@@ -140,9 +140,10 @@ const GridPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => 
 
   // Reset to auto-detected grid
   const resetGrid = useCallback(() => {
-    // TODO: implement userGridOverride = null
-    // For now, reset to original values
-  }, []);
+    const s = useMixiStore.getState();
+    const detected = s.decks[deckId].detectedFirstBeatOffset;
+    s.setFirstBeatOffset(deckId, detected);
+  }, [deckId]);
 
   const btnStyle = {
     background: 'rgba(255,255,255,0.04)',

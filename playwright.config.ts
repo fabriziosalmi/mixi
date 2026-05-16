@@ -9,8 +9,8 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: 1,
+  workers: process.env.CI ? 1 : 3,
   reporter: process.env.CI ? 'github' : 'list',
   timeout: 60_000,
   expect: { timeout: 10_000 },
@@ -28,7 +28,15 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
-          args: ['--autoplay-policy=no-user-gesture-required'],
+          args: [
+            '--autoplay-policy=no-user-gesture-required',
+            // Prevent rAF throttling in background tabs — with multiple
+            // parallel workers some tabs run offscreen and rAF slows to
+            // ~1fps, causing the splash animation to never reach is-ready.
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+          ],
         },
       },
     },

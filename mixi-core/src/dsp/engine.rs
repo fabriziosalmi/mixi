@@ -23,6 +23,7 @@ use crate::dsp::gate::Gate;
 use crate::dsp::waveshaper::Waveshaper;
 use crate::dsp::smoother::ParamSmoother;
 use crate::dsp::predictive_limiter::PredictiveLimiter;
+use crate::dsp::spectral_sidechain::SpectralSidechainCompressor;
 
 // ── ParamBus layout (must match ParamLayout.ts) ──────────────
 
@@ -67,6 +68,8 @@ const MASTER_PUNCH: usize = 272;
 const MASTER_PUNCH_ACTIVE: usize = 276;
 const MASTER_LIMITER_ACTIVE: usize = 280;
 const MASTER_LIMITER_THRESH: usize = 284;
+const MASTER_SIDECHAIN_DEPTH: usize = 288;
+const MASTER_SIDECHAIN_MIX: usize = 292;
 
 // Global
 const GLOBAL_CROSSFADER: usize = 384;
@@ -336,6 +339,14 @@ pub struct DspEngine {
     // Pre-allocated scratch buffers — ZERO allocations in process()
     scratch_a: Vec<f32>,
     scratch_b: Vec<f32>,
+    // Sidechain snapshot buffers — hold post-deck copy for cross-feed.
+    // Pre-allocated to avoid Vec::to_vec() in the audio hot path.
+    sc_snap_a: Vec<f32>,
+    sc_snap_b: Vec<f32>,
+    /// Sidechain: deck A triggers duck on deck B
+    sidechain_a_to_b: SpectralSidechainCompressor,
+    /// Sidechain: deck B triggers duck on deck A
+    sidechain_b_to_a: SpectralSidechainCompressor,
 }
 
 /// Maximum block size supported (AudioWorklet standard = 128).
@@ -354,6 +365,10 @@ impl DspEngine {
             sr: sample_rate,
             scratch_a: vec![0.0; MAX_BLOCK],
             scratch_b: vec![0.0; MAX_BLOCK],
+            sc_snap_a: vec![0.0; MAX_BLOCK],
+            sc_snap_b: vec![0.0; MAX_BLOCK],
+            sidechain_a_to_b: SpectralSidechainCompressor::new(sample_rate, 0.0, 0.0),
+            sidechain_b_to_a: SpectralSidechainCompressor::new(sample_rate, 0.0, 0.0),
         }
     }
 
@@ -392,6 +407,25 @@ impl DspEngine {
 
         self.scratch_b[..len].copy_from_slice(&input_r[..len]);
         self.deck_b.process(&mut self.scratch_b[..len], params, DECK_B_BASE, self.sr);
+
+        // Sidechain compression: read depth/mix from param bus and apply.
+        // Uses pre-allocated sc_snap_* buffers — ZERO heap allocation.
+        {
+            let sc_depth = read_f32(params, MASTER_SIDECHAIN_DEPTH);
+            let sc_mix   = read_f32(params, MASTER_SIDECHAIN_MIX);
+
+            // Snapshot deck outputs before cross-feed mutates them.
+            self.sc_snap_a[..len].copy_from_slice(&self.scratch_a[..len]);
+            self.sc_snap_b[..len].copy_from_slice(&self.scratch_b[..len]);
+
+            self.sidechain_a_to_b.set_depth(sc_depth);
+            self.sidechain_a_to_b.set_mix(sc_mix);
+            self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b[..len]);
+
+            self.sidechain_b_to_a.set_depth(sc_depth);
+            self.sidechain_b_to_a.set_mix(sc_mix);
+            self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a[..len]);
+        }
 
         // C1 fix: True stereo mix — deck A left, deck B right
         // Both decks contribute to both channels (mono sources → stereo sum)
@@ -446,6 +480,9 @@ impl DspEngine {
         self.master_r.punch.reset();
         self.master_r.limiter.reset();
         self.master_r.predictive.reset();
+
+        self.sidechain_a_to_b.reset();
+        self.sidechain_b_to_a.reset();
     }
 
     /// Process audio via raw memory offsets (for AudioWorklet direct access).

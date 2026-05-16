@@ -17,4 +17,5 @@ pub mod waveshaper;
 pub mod smoother;
 pub mod predictive_limiter;
 pub mod pitch_shift;
+pub mod spectral_sidechain;
 pub mod engine;

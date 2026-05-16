@@ -156,6 +156,7 @@ function defaultDeck() {
     bpm: 0,
     originalBpm: 0,
     firstBeatOffset: 0,
+    detectedFirstBeatOffset: 0,
     bpmConfidence: 0,
     isSynced: false,
     syncMode: 'beat' as const,
@@ -379,6 +380,7 @@ export const useMixiStore = create<MixiStore>()(
             bpm,
             originalBpm: bpm,
             firstBeatOffset,
+            detectedFirstBeatOffset: firstBeatOffset,
             ...(bpmConfidence !== undefined && { bpmConfidence }),
             // #46: Loading a new track clears sync so it never
             // hijacks the other deck's tempo as an accidental master.
@@ -390,12 +392,16 @@ export const useMixiStore = create<MixiStore>()(
 
     /** Set firstBeatOffset independently (for beatgrid editing). */
     setFirstBeatOffset: (deck, offset) =>
-      set((s) => ({
-        decks: {
-          ...s.decks,
-          [deck]: { ...s.decks[deck], firstBeatOffset: offset },
-        },
-      })),
+      set((s) => {
+        const duration = s.decks[deck].duration;
+        const clamped = Math.max(0, duration > 0 ? Math.min(offset, duration) : offset);
+        return {
+          decks: {
+            ...s.decks,
+            [deck]: { ...s.decks[deck], firstBeatOffset: clamped },
+          },
+        };
+      }),
 
     setDeckTrackName: (deck, name) => {
       // Restore persisted hot cues for this track (if any).
