@@ -4,29 +4,38 @@
 import { type Page } from '@playwright/test';
 
 /**
- * Launch the app: navigate, click the splash button, wait for chassis.
- * Every E2E test should call this in beforeEach or at the start.
+ * Launch the app: navigate past the splash screen, wait for engine ready.
+ *
+ * The splash has a ~1.5s vinyl animation before the button becomes interactive
+ * (class `is-ready`). Clicking before that is a no-op — the handler returns
+ * early when phase !== 'ready'. We wait for the ready class, then click the
+ * outer .mixi-splash div (which always has the onClick handler), and finally
+ * wait for the main chassis to render.
  */
 export async function launchApp(page: Page): Promise<void> {
   await page.goto('/');
 
-  // The app shows a splash/onboarding gate. Click past it.
-  // Try multiple possible selectors (splash varies by version).
-  const launchBtn = page.locator(
-    'button:has-text("Launch"), button:has-text("Start"), button:has-text("Enter"), [aria-label="Launch Mixi"]'
-  );
+  // Wait for the splash vinyl button to become interactive (animation complete)
+  const readyBtn = page.locator('.mixi-splash-vinyl-btn.is-ready');
+  const splash = page.locator('.mixi-splash');
 
   try {
-    await launchBtn.first().waitFor({ state: 'visible', timeout: 8000 });
-    await launchBtn.first().click();
+    await readyBtn.waitFor({ state: 'visible', timeout: 12000 });
+    // Click the outer splash div — it carries the onClick → handleLaunch
+    await splash.click();
   } catch {
-    // Some builds auto-init without splash — proceed
+    // No splash (auto-init build) or already past it — try the button anyway
+    try {
+      const btn = page.locator('[aria-label="Launch Mixi"]:not([disabled])');
+      await btn.waitFor({ state: 'visible', timeout: 3000 });
+      await btn.click();
+    } catch {
+      // Auto-init build, proceed
+    }
   }
 
   // Wait for the main app shell to render
   await page.waitForSelector('.mixi-chassis, #root > div', { timeout: 15000 });
-  // Give audio engine a moment to initialize
-  await page.waitForTimeout(500);
 }
 
 /**

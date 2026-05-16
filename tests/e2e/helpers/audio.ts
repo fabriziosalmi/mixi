@@ -19,10 +19,17 @@ export async function loadSynthTrack(
   bpm: number,
   durationSec = 5,
 ): Promise<void> {
-  await page.evaluate(async ({ deck, bpm, durationSec }) => {
-    const engine = (window as any).__MIXI_ENGINE__;
-    const store = (window as any).__MIXI_STORE__;
-    if (!engine || !store) throw new Error('Engine/Store not ready');
+  // Retry up to 3× with 500ms backoff — guards against the rare case where
+  // waitForEngine returned but the dynamic import for __MIXI_STORE__ hasn't
+  // resolved yet (main.tsx uses separate import() calls for each global).
+  let lastErr: Error | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await page.waitForTimeout(500);
+    try {
+      await page.evaluate(async ({ deck, bpm, durationSec }) => {
+        const engine = (window as any).__MIXI_ENGINE__;
+        const store = (window as any).__MIXI_STORE__;
+        if (!engine || !store) throw new Error('Engine/Store not ready');
 
     const sr = 44100;
     const samples = sr * durationSec;
@@ -73,7 +80,13 @@ export async function loadSynthTrack(
     await engine.loadTrack(deck, wav);
     store.getState().setDeckTrackName(deck, `Synth ${bpm}BPM`);
     store.getState().setDeckTrackLoaded(deck, true);
-  }, { deck, bpm, durationSec });
+      }, { deck, bpm, durationSec });
+      return; // success
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw lastErr ?? new Error('loadSynthTrack failed after 3 attempts');
 }
 
 // ── Level Measurement ────────────────────────────────────────
@@ -229,17 +242,20 @@ export async function measureBpmLatency(
 // ── Wait for Engine Ready ────────────────────────────────────
 
 /**
- * Wait until __MIXI_ENGINE__ is available on window.
+ * Wait until __MIXI_ENGINE__ and __MIXI_STORE__ are both available and
+ * the engine is initialized. Throws on timeout so callers get a clear
+ * failure instead of a silent false that propagates to loadSynthTrack.
  */
-export async function waitForEngine(page: Page, timeoutMs = 10000): Promise<boolean> {
+export async function waitForEngine(page: Page, timeoutMs = 15000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const ready = await page.evaluate(() => {
       const e = (window as any).__MIXI_ENGINE__;
-      return e && e.isInitialized;
+      const s = (window as any).__MIXI_STORE__;
+      return !!(e && e.isInitialized && s);
     });
-    if (ready) return true;
+    if (ready) return;
     await page.waitForTimeout(200);
   }
-  return false;
+  throw new Error(`Engine/Store not ready after ${timeoutMs}ms — splash click may have failed`);
 }
