@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { launchApp } from './helpers/app';
 
 /**
  * MIXI Sync E2E Test
@@ -16,22 +17,8 @@ test.describe('MIXI Sync — BroadcastChannel (same-origin)', () => {
     const pageA = await context.newPage();
     const pageB = await context.newPage();
 
-    await pageA.goto('/');
-    await pageB.goto('/');
-
-    // Wait for both apps to load
-    const launchA = pageA.locator('button[aria-label="Launch Mixi"]');
-    const launchB = pageB.locator('button[aria-label="Launch Mixi"]');
-
-    if (await launchA.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await launchA.click();
-    }
-    if (await launchB.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await launchB.click();
-    }
-
-    await pageA.waitForSelector('.mixi-chassis', { timeout: 20_000 });
-    await pageB.waitForSelector('.mixi-chassis', { timeout: 20_000 });
+    await launchApp(pageA);
+    await launchApp(pageB);
 
     // Test BroadcastChannel directly (protocol layer, not full sync bridge)
     const result = await pageA.evaluate(() => {
