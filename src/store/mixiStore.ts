@@ -392,12 +392,16 @@ export const useMixiStore = create<MixiStore>()(
 
     /** Set firstBeatOffset independently (for beatgrid editing). */
     setFirstBeatOffset: (deck, offset) =>
-      set((s) => ({
-        decks: {
-          ...s.decks,
-          [deck]: { ...s.decks[deck], firstBeatOffset: offset },
-        },
-      })),
+      set((s) => {
+        const duration = s.decks[deck].duration;
+        const clamped = Math.max(0, duration > 0 ? Math.min(offset, duration) : offset);
+        return {
+          decks: {
+            ...s.decks,
+            [deck]: { ...s.decks[deck], firstBeatOffset: clamped },
+          },
+        };
+      }),
 
     setDeckTrackName: (deck, name) => {
       // Restore persisted hot cues for this track (if any).

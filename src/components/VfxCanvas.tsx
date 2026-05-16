@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useCallback, useState, type FC } from 'react';
+import { log } from '../utils/logger';
 import { MixiEngine } from '../audio/MixiEngine';
 import { useMixiStore } from '../store/mixiStore';
 import { detectGpuBackend, type GpuBackend } from '../gpu/detectGpu';
@@ -520,7 +521,7 @@ export const VfxCanvas: FC<{ active: boolean }> = ({ active }) => {
           }
 
           rendererRef.current = renderer;
-          console.log('[mixi-vfx] WebGPU renderer active');
+          log.success('GPU', 'WebGPU renderer active');
           rafRef.current = requestAnimationFrame(renderGpu);
         } catch (err) {
           console.warn('[mixi-vfx] WebGPU init failed, using Canvas 2D:', err);
