@@ -20,6 +20,10 @@ export async function launchApp(page: Page): Promise<void> {
   const splash = page.locator('.mixi-splash');
 
   try {
+    // Press Space early — if the splash is in 'spin' phase this sets
+    // skipRef=true and jumps immediately to ring-draw→ready (~500ms).
+    // Harmless if the phase has already advanced.
+    await page.keyboard.press('Space');
     await readyBtn.waitFor({ state: 'visible', timeout: 12000 });
     // Click the outer splash div — it carries the onClick → handleLaunch
     await splash.click();

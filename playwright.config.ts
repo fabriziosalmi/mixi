@@ -28,7 +28,15 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
-          args: ['--autoplay-policy=no-user-gesture-required'],
+          args: [
+            '--autoplay-policy=no-user-gesture-required',
+            // Prevent rAF throttling in background tabs — with multiple
+            // parallel workers some tabs run offscreen and rAF slows to
+            // ~1fps, causing the splash animation to never reach is-ready.
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+          ],
         },
       },
     },
