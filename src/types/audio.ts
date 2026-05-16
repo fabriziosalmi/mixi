@@ -80,6 +80,8 @@ export interface DeckState {
   originalBpm: number;
   /** Time of the first downbeat in seconds (grid phase). */
   firstBeatOffset: number;
+  /** Auto-detected firstBeatOffset — restored on grid reset. */
+  detectedFirstBeatOffset: number;
   /** BPM detection confidence (0-1). Low = unreliable. */
   bpmConfidence: number;
   /** True if this deck has been synced to the other deck's tempo. */

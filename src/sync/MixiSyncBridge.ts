@@ -242,8 +242,19 @@ export class MixiSyncBridge {
       timeSigNum: 4,
       deckId: deckA.isPlaying ? 0 : 1,
       flags,
-      energyRms: 0, // TODO: compute from analyser
-      triggers: packTriggers(0, 0, 0), // TODO: predictive onsets
+      energyRms: Math.min(255, Math.round(engine.isInitialized ? engine.getLevel(deckA.isPlaying ? 'A' : 'B') * 255 : 0)),
+      triggers: (() => {
+        if (bpm <= 0 || beatPhase === undefined) return packTriggers(0, 0, 0);
+        // Kick: every beat — countdown = subdivisions until next beat (0-7 range)
+        const kickCd = Math.min(7, Math.round((1 - beatPhase) * 7));
+        // Snare: beats 2 & 4 of bar — countdown in whole beats (0-7)
+        const beatInBar = beatCount % 4;
+        const beatsToSnare = beatInBar < 2 ? 2 - beatInBar : 6 - beatInBar;
+        const snareCd = Math.min(7, Math.round(beatsToSnare));
+        // Hi-hat: every half-beat — countdown in half-beat units (0-3)
+        const hihatCd = Math.min(3, Math.round((1 - beatPhase) * 3));
+        return packTriggers(kickCd, snareCd, hihatCd);
+      })(),
       eqBass: 128, // 0dB
       trackHash: new Uint8Array(8),
     };

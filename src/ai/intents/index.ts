@@ -35,6 +35,8 @@ export { FilterWashoutIntent } from './FilterWashoutIntent';
 export { LpfMudDiveIntent } from './LpfMudDiveIntent';
 export { PreDropSilenceIntent } from './PreDropSilenceIntent';
 export { FilterWobbleIntent } from './FilterWobbleIntent';
+export { BuildUpTensionIntent } from './BuildUpTensionIntent';
+export { GhostNoteEchoIntent } from './GhostNoteEchoIntent';
 
 // ── Rhythm domain (score 0.45–0.75) ─────────────────────────
 export { LoopRollBuildupIntent } from './LoopRollBuildupIntent';
@@ -60,6 +62,8 @@ import { FilterWashoutIntent } from './FilterWashoutIntent';
 import { LpfMudDiveIntent } from './LpfMudDiveIntent';
 import { PreDropSilenceIntent } from './PreDropSilenceIntent';
 import { FilterWobbleIntent } from './FilterWobbleIntent';
+import { BuildUpTensionIntent } from './BuildUpTensionIntent';
+import { GhostNoteEchoIntent } from './GhostNoteEchoIntent';
 import { LoopRollBuildupIntent } from './LoopRollBuildupIntent';
 import { TeaserStabIntent } from './TeaserStabIntent';
 import { OutroRidingIntent } from './OutroRidingIntent';
@@ -86,6 +90,8 @@ export const ALL_INTENTS: BaseIntent[] = [
   LpfMudDiveIntent,
   PreDropSilenceIntent,
   FilterWobbleIntent,
+  BuildUpTensionIntent,
+  GhostNoteEchoIntent,
 
   // Rhythm
   LoopRollBuildupIntent,
