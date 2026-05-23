@@ -103,11 +103,6 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     const worker = workerRef.current;
     if (!worker) return;
     const dpr = window.devicePixelRatio || 1;
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-    }
     worker.postMessage({
       type: 'resize',
       width,
@@ -118,14 +113,21 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
   // Set up the Web Worker drawing loop and store subscriptions
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Clean up any existing canvas in the container
+    container.innerHTML = '';
+
+    // Create a new canvas element
+    const canvas = document.createElement('canvas');
+    canvas.className = "w-full h-full block";
+    container.appendChild(canvas);
+    canvasRef.current = canvas;
 
     const dpr = window.devicePixelRatio || 1;
     canvas.width = widthRef.current * dpr;
     canvas.height = heightRef.current * dpr;
-    canvas.style.width = `${widthRef.current}px`;
-    canvas.style.height = `${heightRef.current}px`;
 
     const offscreen = canvas.transferControlToOffscreen();
     const worker = new Worker(new URL('./waveform.worker.ts', import.meta.url), { type: 'module' });
@@ -273,7 +275,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   }, [deckId]);
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLCanvasElement>) => {
+    (e: React.WheelEvent<HTMLDivElement>) => {
       e.preventDefault();
       const oldZoom = zoomRef.current;
       const delta = e.deltaY > 0 ? -0.2 : 0.2;
@@ -309,7 +311,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   );
 
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -437,7 +439,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; time: number } | null>(null);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault();
       const rect = e.currentTarget.getBoundingClientRect();
       const time = mouseXToTime(e.clientX, rect);
@@ -504,15 +506,14 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   );
 
   return (
-    <div ref={containerRef} className="w-full relative">
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onWheel={handleWheel}
-        onContextMenu={handleContextMenu}
-        className="rounded-lg w-full cursor-crosshair shadow-[inset_0_2px_6px_rgba(0,0,0,0.6),inset_0_-1px_2px_rgba(0,0,0,0.3)]"
-        style={{ height }}
-      />
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
+      className="rounded-lg w-full cursor-crosshair shadow-[inset_0_2px_6px_rgba(0,0,0,0.6),inset_0_-1px_2px_rgba(0,0,0,0.3)] relative overflow-hidden"
+      style={{ height }}
+    >
       {/* Glass reflection overlay */}
       <div
         className="absolute inset-0 rounded-lg pointer-events-none"
