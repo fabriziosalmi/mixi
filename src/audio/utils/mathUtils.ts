@@ -92,3 +92,27 @@ export function logFrequency(t: number): number {
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
+
+/** DJ-grade BPM adjustment boundaries. */
+export const MIN_BPM = 30;
+export const MAX_BPM = 300;
+
+/**
+ * Halve a BPM value if it remains within the allowable MIN_BPM boundary.
+ * Returns the halved value, or null if the operation would go out of bounds.
+ */
+export function halveBpm(bpm: number): number | null {
+  if (bpm <= 0) return null;
+  const halved = bpm / 2;
+  return halved >= MIN_BPM ? halved : null;
+}
+
+/**
+ * Double a BPM value if it remains within the allowable MAX_BPM boundary.
+ * Returns the doubled value, or null if the operation would go out of bounds.
+ */
+export function doubleBpm(bpm: number): number | null {
+  if (bpm <= 0) return null;
+  const doubled = bpm * 2;
+  return doubled <= MAX_BPM ? doubled : null;
+}

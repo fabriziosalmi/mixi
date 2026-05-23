@@ -14,11 +14,8 @@
 // All functions are pure — no React, no DOM, no side effects.
 // ─────────────────────────────────────────────────────────────
 
-import { POINTS_PER_SECOND } from '../../audio/WaveformAnalyzer';
-
-const BAR_WIDTH = 3;
-const BAR_GAP = 1;
-export const BAR_STEP = BAR_WIDTH + BAR_GAP;
+import { POINTS_PER_SECOND, BAR_STEP } from './waveformConstants';
+export { BAR_STEP };
 
 // ── Coordinate conversion ───────────────────────────────────
 

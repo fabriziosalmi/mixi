@@ -43,16 +43,20 @@ import { AudioDeviceGuard } from './AudioDeviceGuard';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore, EQ_RANGE_PRESETS } from '../store/settingsStore';
 import { log } from '../utils/logger';
+import { telemetry } from '../utils/TelemetryService';
 import { LocalParamBus, SharedParamBus, PARAM_BUS_SIZE } from './dsp';
 import { DspParamWriter } from './dsp/DspParamWriter';
 import { WasmDspBridge } from './dsp/WasmDspBridge';
 import { NativeAudioBridge } from './native/NativeAudioBridge';
+
+import { AudioStreamingBuffer } from './AudioStreamingBuffer';
 
 // ── Per-deck transport state (not exposed to store) ──────────
 
 interface DeckTransport {
   buffer: AudioBuffer | null;
   source: AudioBufferSourceNode | null;
+  gain: GainNode | null;
   offset: number;
   startedAt: number;
   playbackRate: number;
@@ -60,17 +64,30 @@ interface DeckTransport {
   slipStartTime: number | null;
   /** Slip mode: transport offset at the moment slip was engaged. */
   slipRealOffset: number;
+
+  // Decimated Streaming variables:
+  streamingBuffer: AudioStreamingBuffer | null;
+  currentSegmentStart: number;
+  currentSegmentDuration: number;
+  totalDuration: number;
+  isTransitioning?: boolean;
 }
 
 function createTransport(): DeckTransport {
   return {
     buffer: null,
     source: null,
+    gain: null,
     offset: 0,
     startedAt: 0,
     playbackRate: 1.0,
     slipStartTime: null,
     slipRealOffset: 0,
+    streamingBuffer: null,
+    currentSegmentStart: 0,
+    currentSegmentDuration: 0,
+    totalDuration: 0,
+    isTransitioning: false,
   };
 }
 
@@ -97,6 +114,7 @@ export class MixiEngine {
   /** Per-deck pitch shift AudioWorkletNode for Key Lock. */
   private pitchShifters: Record<DeckId, AudioWorkletNode | null> = { A: null, B: null };
   private _gateTimer: ReturnType<typeof setInterval> | null = null;
+  private _streamingLookAheadTimer: ReturnType<typeof setInterval> | null = null;
   private _keepAliveOsc: OscillatorNode | null = null;
   private _keepAliveGain: GainNode | null = null;
   private _deviceGuard: AudioDeviceGuard | null = null;
@@ -200,6 +218,14 @@ export class MixiEngine {
     };
 
     this.initialized = true;
+
+    // Segment streaming look-ahead loop (1Hz)
+    this._streamingLookAheadTimer = setInterval(() => {
+      if (!this.initialized) return;
+      for (const deck of ['A', 'B'] as const) {
+        this.checkSegmentTransition(deck);
+      }
+    }, 1000);
 
     // ── DSP Param Bus (Phase 3) ────────────────────────────
     // Create the param bus and writer. In native mode the bus
@@ -369,6 +395,11 @@ export class MixiEngine {
       this._gateTimer = null;
     }
 
+    if (this._streamingLookAheadTimer) {
+      clearInterval(this._streamingLookAheadTimer);
+      this._streamingLookAheadTimer = null;
+    }
+
     // A1: Clear vinyl brake timers
     for (const d of ['A', 'B'] as const) {
       if (this._brakeTimers[d]) {
@@ -429,12 +460,13 @@ export class MixiEngine {
 
   // ── Track Loading ──────────────────────────────────────────
 
-  /** Maximum file size allowed for decoding (200 MB). */
-  private static MAX_FILE_SIZE = 200 * 1024 * 1024;
+  /** Maximum file size allowed for decoding (2 GB). */
+  private static MAX_FILE_SIZE = 2000 * 1024 * 1024;
 
   async loadTrack(deck: DeckId, arrayBuffer: ArrayBuffer): Promise<void> {
     this.assertReady();
     this._loadInProgress[deck] = true;
+    const wasPlaying = useMixiStore.getState().decks[deck].isPlaying;
     const setStage = (stage: string | null) => useMixiStore.getState().setDeckLoadingStage(deck, stage);
 
     // BUG-21: Increment load generation so stale async loads are discarded.
@@ -443,36 +475,46 @@ export class MixiEngine {
     // Edge-case #17: Reject huge files before decodeAudioData OOMs the tab.
     if (arrayBuffer.byteLength > MixiEngine.MAX_FILE_SIZE) {
       setStage(null);
-      throw new Error(`File too large (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Maximum is 200MB.`);
+      throw new Error(`File too large (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2000MB.`);
     }
 
-    setStage('decoding audio');
+    setStage('parsing format');
 
-    // Edge-case #20: Catch corrupt / undecodable files.
-    let buffer: AudioBuffer;
+    const streamingBuffer = new AudioStreamingBuffer(this.ctx, arrayBuffer);
     try {
-      buffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0));
+      await streamingBuffer.initialize();
     } catch (err) {
       setStage(null);
-      const detail = err instanceof Error ? ` (${err.message})` : '';
-      throw new Error(
-        `File could not be decoded${detail}. ` +
-        'Supported formats: MP3, WAV, FLAC, OGG, AAC/M4A. ' +
-        'AIFF-C (compressed) is not supported in most browsers.'
-      );
+      throw new Error(`Failed to parse track format: ${err}`);
+    }
+
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
+
+    setStage('decoding initial chunk');
+
+    const SEGMENT_DURATION = 300; // 5 minutes
+    const initialDuration = Math.min(streamingBuffer.duration, SEGMENT_DURATION);
+    let buffer: AudioBuffer;
+    try {
+      buffer = await streamingBuffer.decodeSegment(0, initialDuration);
+    } catch (err) {
+      setStage(null);
+      throw new Error(`Failed to decode initial chunk: ${err}`);
     }
 
     // BUG-21: If another load or eject happened while we were decoding, bail.
     if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
 
     const transport = this.transports[deck];
-    const wasPlaying = !!transport.source;
-
     this.stopSource(deck);
 
     // Edge-case #18: Explicitly release previous buffer for GC.
     transport.buffer = null;
 
+    transport.streamingBuffer = streamingBuffer;
+    transport.currentSegmentStart = 0;
+    transport.currentSegmentDuration = initialDuration;
+    transport.totalDuration = streamingBuffer.duration;
     transport.buffer = buffer;
     transport.offset = 0;
     transport.startedAt = 0;
@@ -491,7 +533,7 @@ export class MixiEngine {
         setTimeout(() => reject(new Error('analyzeWaveform timeout')), ANALYSIS_TIMEOUT_MS),
       );
       try {
-        analysis = await Promise.race([analyzeWaveform(buffer), timeout]);
+        analysis = await Promise.race([analyzeWaveform(streamingBuffer), timeout]);
       } catch (err) {
         log.warn('Engine', 'Waveform analysis timed out or failed — using safe defaults', err);
         analysis = {
@@ -507,7 +549,7 @@ export class MixiEngine {
     setStage('detecting BPM & key');
 
     const store = useMixiStore.getState();
-    store.setDeckWaveform(deck, analysis.waveform, buffer.duration);
+    store.setDeckWaveform(deck, analysis.waveform, transport.totalDuration);
     store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset, analysis.bpmConfidence);
     store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
 
@@ -625,7 +667,8 @@ export class MixiEngine {
       }
     };
 
-    source.start(0, transport.offset);
+    const relativeOffset = Math.max(0, transport.offset - transport.currentSegmentStart);
+    source.start(0, relativeOffset);
     transport.source = source;
     transport.startedAt = this.ctx.currentTime;
   }
@@ -729,11 +772,16 @@ export class MixiEngine {
     const now = this.ctx.currentTime;
     const durationSec = durationMs / 1000;
 
-    // Ramp playbackRate to near-zero using exponential curve
-    transport.source.playbackRate.cancelScheduledValues(now);
-    transport.source.playbackRate.setValueAtTime(startRate, now);
-    // exponentialRampToValueAtTime can't reach 0, so ramp to 0.001
-    transport.source.playbackRate.exponentialRampToValueAtTime(0.001, now + durationSec);
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      shifter.port.postMessage({ type: 'brake', durationMs });
+    } else {
+      // Ramp playbackRate to near-zero using exponential curve (fallback)
+      transport.source.playbackRate.cancelScheduledValues(now);
+      transport.source.playbackRate.setValueAtTime(startRate, now);
+      // exponentialRampToValueAtTime can't reach 0, so ramp to 0.001
+      transport.source.playbackRate.exponentialRampToValueAtTime(0.001, now + durationSec);
+    }
 
     // After the ramp completes, pause and restore original rate
     this._brakeTimers[deck] = setTimeout(() => {
@@ -741,7 +789,9 @@ export class MixiEngine {
       this.pause(deck);
       // Restore original playback rate so next play is normal
       transport.playbackRate = startRate;
-      if (transport.source) {
+      if (shifter) {
+        shifter.port.postMessage({ type: 'setBaseRate', value: startRate });
+      } else if (transport.source) {
         transport.source.playbackRate.value = startRate;
       }
       useMixiStore.getState().setDeckPlaying(deck, false);
@@ -755,7 +805,10 @@ export class MixiEngine {
       this._brakeTimers[deck] = null;
       // Restore playback rate
       const transport = this.transports[deck];
-      if (transport.source) {
+      const shifter = this.pitchShifters[deck];
+      if (shifter) {
+        shifter.port.postMessage({ type: 'cancelBrake' });
+      } else if (transport.source) {
         transport.source.playbackRate.cancelScheduledValues(this.ctx.currentTime);
         transport.source.playbackRate.value = transport.playbackRate;
       }
@@ -830,14 +883,16 @@ export class MixiEngine {
 
     transport.playbackRate = rate;
 
-    if (transport.source) {
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      shifter.port.postMessage({ type: 'setBaseRate', value: rate });
+    } else if (transport.source) {
       // Apply rate + any active nudge offset so nudge isn't lost on fader move
       const effectiveRate = rate + this._nudge[deck];
       smoothParam(transport.source.playbackRate, effectiveRate, this.ctx);
     }
 
     // When Key Lock is ON, update the pitch compensation ratio.
-    const shifter = this.pitchShifters[deck];
     if (shifter && useMixiStore.getState().decks[deck].keyLock) {
       shifter.port.postMessage({ type: 'setPitchRatio', value: 1 / rate });
     }
@@ -866,7 +921,10 @@ export class MixiEngine {
     this._nudge[deck] = direction * amount;
 
     const transport = this.transports[deck];
-    if (transport.source) {
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      shifter.port.postMessage({ type: 'setNudge', value: this._nudge[deck] });
+    } else if (transport.source) {
       const effectiveRate = transport.playbackRate + this._nudge[deck];
       // Fast attack: 8 ms for instant feel
       smoothParam(transport.source.playbackRate, effectiveRate, this.ctx, 0.008);
@@ -884,7 +942,10 @@ export class MixiEngine {
     phaseLockLoop.unfreeze(deck);
 
     const transport = this.transports[deck];
-    if (transport.source) {
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      shifter.port.postMessage({ type: 'setNudge', value: 0 });
+    } else if (transport.source) {
       // Smooth release back to base rate
       smoothParam(transport.source.playbackRate, transport.playbackRate, this.ctx, 0.040);
     }
@@ -897,7 +958,11 @@ export class MixiEngine {
   applyPllRate(deck: DeckId, rate: number): void {
     if (!this.initialized) return;
     const transport = this.transports[deck];
-    if (transport.source) {
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      // With relocated PLL, micro-corrections are calculated inside the worklet itself.
+      // We do not need to call applyPllRate for the worklet, as the worklet control signal handles it.
+    } else if (transport.source) {
       // Very gentle smoothing for PLL: 20ms time constant
       smoothParam(transport.source.playbackRate, rate, this.ctx, 0.020);
     }
@@ -1151,16 +1216,26 @@ export class MixiEngine {
 
   // ── Seeking (Hot Cue jumps) ────────────────────────────────
 
-  seek(deck: DeckId, time: number): void {
+  async seek(deck: DeckId, time: number): Promise<void> {
     this.assertReady();
     // A2: Cancel vinyl brake if in progress (prevents delayed pause overwriting seek)
     this.cancelBrake(deck);
     // PLL: Reset on seek (discontinuity protection layer 3)
     phaseLockLoop.reset(deck);
     const transport = this.transports[deck];
-    if (!transport.buffer) return;
+    if (!transport.streamingBuffer) return;
 
-    const clampedTime = Math.max(0, Math.min(time, transport.buffer.duration));
+    const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
+
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.ensureSegment(deck, clampedTime);
+    } catch (err) {
+      log.error('Engine', 'Failed to seek (load segment):', err);
+      return;
+    }
+
+    const relativeOffset = clampedTime - transport.currentSegmentStart;
 
     if (!transport.source) {
       transport.offset = clampedTime;
@@ -1185,7 +1260,7 @@ export class MixiEngine {
     this.stopSource(deck);
 
     const source = this.ctx.createBufferSource();
-    source.buffer = transport.buffer;
+    source.buffer = buffer;
     source.playbackRate.value = transport.playbackRate;
 
     const loopState = useMixiStore.getState().decks[deck].activeLoop;
@@ -1206,7 +1281,7 @@ export class MixiEngine {
     };
 
     // Schedule the new source to start exactly when the fade-out finishes.
-    source.start(startAt, clampedTime);
+    source.start(startAt, relativeOffset);
     transport.source = source;
     transport.offset = clampedTime;
     transport.startedAt = startAt;
@@ -1230,37 +1305,42 @@ export class MixiEngine {
    *
    * Falls back to normal seek() if deck is not playing.
    */
-  crossfadeSeek(deck: DeckId, time: number): void {
+  async crossfadeSeek(deck: DeckId, time: number): Promise<void> {
     this.assertReady();
     const transport = this.transports[deck];
 
     // If not playing, just do a normal seek
-    if (!transport.source || !transport.buffer) {
-      this.seek(deck, time);
+    if (!transport.source || !transport.buffer || !transport.streamingBuffer) {
+      await this.seek(deck, time);
       return;
     }
 
     this.cancelBrake(deck);
     phaseLockLoop.reset(deck);
 
-    const clampedTime = Math.max(0, Math.min(time, transport.buffer.duration));
+    const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
+
+    let nextBuffer: AudioBuffer;
+    try {
+      nextBuffer = await this.ensureSegment(deck, clampedTime);
+    } catch (err) {
+      log.error('Engine', 'Failed to crossfadeSeek (load segment):', err);
+      return;
+    }
+
+    if (!transport.source) {
+      transport.offset = clampedTime;
+      return;
+    }
+
     const now = this.ctx.currentTime;
     const XFADE = 0.050; // 50ms crossfade
 
-    // ── Old source: fade out ────────────────────────────────
     const oldSource = transport.source;
-    const trim = this.channels[deck].trimGain.gain;
-    const userDb = useMixiStore.getState().decks[deck].gain;
-    const userLinear = Math.pow(10, userDb / 20);
-    const trimTarget = this.autoGain[deck] * userLinear;
+    const oldGain = transport.gain;
 
-    trim.cancelScheduledValues(now);
-    trim.setValueAtTime(trim.value, now);
-    trim.linearRampToValueAtTime(0, now + XFADE);
-
-    // ── New source: create, connect, fade in ────────────────
     const newSource = this.ctx.createBufferSource();
-    newSource.buffer = transport.buffer;
+    newSource.buffer = nextBuffer;
     newSource.playbackRate.value = transport.playbackRate + this._nudge[deck];
 
     const loopState = useMixiStore.getState().decks[deck].activeLoop;
@@ -1270,26 +1350,36 @@ export class MixiEngine {
       newSource.loopEnd = loopState.end;
     }
 
-    this.connectSource(deck, newSource);
-    newSource.start(now, clampedTime);
+    oldSource.onended = null;
 
-    // Crossfade: new source fades in as old fades out
-    // We use trim gain for both (same node), so we schedule:
-    // now → now+XFADE: fade to 0 (old dies)
-    // now+XFADE: jump to 0, ramp to trimTarget (new starts)
-    trim.setValueAtTime(0, now + XFADE);
-    trim.linearRampToValueAtTime(trimTarget, now + XFADE + 0.005);
+    this.connectSource(deck, newSource);
+    const newGain = transport.gain!;
+
+    newGain.gain.setValueAtTime(0, now);
+    newGain.gain.linearRampToValueAtTime(1.0, now + XFADE);
+
+    if (oldGain) {
+      oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+      oldGain.gain.linearRampToValueAtTime(0, now + XFADE);
+    }
+
+    const relativeOffset = clampedTime - transport.currentSegmentStart;
+    newSource.start(now, relativeOffset);
 
     // ── Cleanup old source after crossfade ──────────────────
     setTimeout(() => {
       try {
         oldSource.stop();
         oldSource.disconnect();
+        if (oldGain) {
+          oldGain.disconnect();
+        }
       } catch { /* already stopped */ }
     }, (XFADE + 0.010) * 1000);
 
     // Update transport to new source
     transport.source = newSource;
+    transport.gain = newGain;
     transport.offset = clampedTime;
     transport.startedAt = now;
 
@@ -1344,6 +1434,7 @@ export class MixiEngine {
     transport.source.loop = true;
     transport.source.loopStart = loopStart;
     transport.source.loopEnd = loopEnd;
+    this.updateWorkletLoopState(deck);
 
     const currentPos = this.getCurrentTime(deck);
     if (currentPos > endTime || currentPos < startTime) {
@@ -1356,6 +1447,7 @@ export class MixiEngine {
     const transport = this.transports[deck];
     if (!transport.source) return;
     transport.source.loop = false;
+    this.updateWorkletLoopState(deck);
   }
 
   // ── Playback Position ──────────────────────────────────────
@@ -1381,7 +1473,8 @@ export class MixiEngine {
           pos = loopStart + ((pos - loopStart) % loopLen);
         }
       } else {
-        pos = pos % transport.buffer.duration;
+        const wrapDur = transport.totalDuration > 0 ? transport.totalDuration : transport.buffer.duration;
+        pos = pos % wrapDur;
       }
 
       return pos;
@@ -1407,6 +1500,14 @@ export class MixiEngine {
       transport.source.buffer = null; // Hard wipe buffer reference
       transport.source = null;
     }
+    if (transport.gain) {
+      try {
+        transport.gain.disconnect();
+      } catch {
+        // ignore
+      }
+      transport.gain = null;
+    }
   }
 
   // ── Pitch Shift / Key Lock ────────────────────────────────
@@ -1431,11 +1532,24 @@ export class MixiEngine {
       for (const deck of ['A', 'B'] as const) {
         const node = new AudioWorkletNode(this.ctx, 'pitch-shift-wasm-processor', {
           numberOfInputs: 1,
-          numberOfOutputs: 1,
-          outputChannelCount: [2],
+          numberOfOutputs: 2,
+          outputChannelCount: [2, 1],
         });
         node.port.postMessage({ type: 'wasm-module', module: wasmModule });
-        node.connect(this.channels[deck].input);
+        node.port.onmessage = (e) => {
+          if (e.data && e.data.type === 'glitch') {
+            telemetry.reportEvent({
+              type: 'GLITCH',
+              deck,
+              details: {
+                durationMs: e.data.durationMs,
+                frames: e.data.frames,
+                type: e.data.typeDetail || 'cpu_overload',
+              },
+            });
+          }
+        };
+        node.connect(this.channels[deck].input, 0, 0);
         this.pitchShifters[deck] = node;
       }
       useWasm = true;
@@ -1453,10 +1567,23 @@ export class MixiEngine {
         for (const deck of ['A', 'B'] as const) {
           const node = new AudioWorkletNode(this.ctx, 'pitch-shift-processor', {
             numberOfInputs: 1,
-            numberOfOutputs: 1,
-            outputChannelCount: [2],
+            numberOfOutputs: 2,
+            outputChannelCount: [2, 1],
           });
-          node.connect(this.channels[deck].input);
+          node.port.onmessage = (e) => {
+            if (e.data && e.data.type === 'glitch') {
+              telemetry.reportEvent({
+                type: 'GLITCH',
+                deck,
+                details: {
+                  durationMs: e.data.durationMs,
+                  frames: e.data.frames,
+                  type: e.data.typeDetail || 'cpu_overload',
+                },
+              });
+            }
+          };
+          node.connect(this.channels[deck].input, 0, 0);
           this.pitchShifters[deck] = node;
         }
         log.info('Engine', 'JS pitch shift processor loaded (fallback)');
@@ -1471,11 +1598,186 @@ export class MixiEngine {
    * the pitch shifter when available.
    */
   private connectSource(deck: DeckId, source: AudioBufferSourceNode): void {
+    const transport = this.transports[deck];
+
+    // Clean up previous gain if any
+    if (transport.gain) {
+      try {
+        transport.gain.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+
+    const gain = this.ctx.createGain();
+    source.connect(gain);
+    transport.gain = gain;
+
     const shifter = this.pitchShifters[deck];
     if (shifter) {
-      source.connect(shifter);
+      gain.connect(shifter);
+      shifter.connect(source.playbackRate, 1);
+      source.playbackRate.value = 0;
+      this.updateWorkletLoopState(deck);
     } else {
-      source.connect(this.channels[deck].input);
+      gain.connect(this.channels[deck].input);
+    }
+  }
+
+  private async ensureSegment(deck: DeckId, time: number): Promise<AudioBuffer> {
+    const transport = this.transports[deck];
+    if (!transport.streamingBuffer) {
+      throw new Error("No streaming buffer initialized");
+    }
+
+    const segmentStart = transport.currentSegmentStart;
+    const segmentEnd = segmentStart + transport.currentSegmentDuration;
+
+    // If the time is within the loaded segment and at least 2 seconds before the end, use it
+    if (time >= segmentStart && time < segmentEnd - 2 && transport.buffer) {
+      return transport.buffer;
+    }
+
+    const startSec = Math.max(0, Math.floor(time));
+    const SEGMENT_DURATION = 300; // 5 minutes
+    const durationSec = Math.min(transport.totalDuration - startSec, SEGMENT_DURATION);
+
+    const newBuffer = await transport.streamingBuffer.decodeSegment(startSec, durationSec);
+
+    transport.buffer = newBuffer;
+    transport.currentSegmentStart = startSec;
+    transport.currentSegmentDuration = durationSec;
+
+    return newBuffer;
+  }
+
+  private async checkSegmentTransition(deck: DeckId): Promise<void> {
+    const transport = this.transports[deck];
+    if (!transport.streamingBuffer || !transport.source || !transport.buffer) return;
+    if (transport.isTransitioning) return;
+
+    const currentTime = this.getCurrentTime(deck);
+    const segmentEnd = transport.currentSegmentStart + transport.currentSegmentDuration;
+
+    // Within 8 seconds of segment end, and we have more audio remaining
+    if (currentTime > segmentEnd - 8 && segmentEnd < transport.totalDuration) {
+      transport.isTransitioning = true;
+      try {
+        const overlapSec = 1;
+        const nextSegmentStart = segmentEnd - overlapSec;
+        const nextSegmentDuration = Math.min(transport.totalDuration - nextSegmentStart, 300);
+
+        const nextBuffer = await transport.streamingBuffer.decodeSegment(nextSegmentStart, nextSegmentDuration);
+
+        // Double-check if we are still playing and playhead is in the expected range
+        if (!transport.source || Math.abs(this.getCurrentTime(deck) - currentTime) > 5) {
+          transport.isTransitioning = false;
+          return;
+        }
+
+        const now = this.ctx.currentTime;
+        const currentPlayhead = this.getCurrentTime(deck);
+        const remainingTime = nextSegmentStart - currentPlayhead;
+        const transitionContextTime = now + (remainingTime / transport.playbackRate);
+        const startAt = Math.max(now, transitionContextTime);
+
+        const newSource = this.ctx.createBufferSource();
+        newSource.buffer = nextBuffer;
+        newSource.playbackRate.value = transport.playbackRate + this._nudge[deck];
+
+        const loopState = useMixiStore.getState().decks[deck].activeLoop;
+        if (loopState) {
+          newSource.loop = true;
+          newSource.loopStart = loopState.start;
+          newSource.loopEnd = loopState.end;
+        }
+
+        const oldSource = transport.source;
+        const oldGain = transport.gain;
+
+        oldSource.onended = null;
+
+        this.connectSource(deck, newSource);
+        const newGain = transport.gain!;
+
+        newGain.gain.setValueAtTime(0, startAt);
+        newGain.gain.linearRampToValueAtTime(1.0, startAt + 0.050);
+
+        if (oldGain) {
+          oldGain.gain.setValueAtTime(oldGain.gain.value, startAt);
+          oldGain.gain.linearRampToValueAtTime(0, startAt + 0.050);
+        }
+
+        newSource.start(startAt, 0);
+
+        setTimeout(() => {
+          try {
+            oldSource.stop();
+            oldSource.disconnect();
+            if (oldGain) {
+              oldGain.disconnect();
+            }
+          } catch {
+            // ignore
+          }
+        }, ((startAt - now) + 0.060) * 1000);
+
+        transport.source = newSource;
+        transport.gain = newGain;
+        transport.buffer = nextBuffer;
+        transport.currentSegmentStart = nextSegmentStart;
+        transport.currentSegmentDuration = nextSegmentDuration;
+        transport.startedAt = startAt;
+        transport.offset = nextSegmentStart;
+
+        newSource.onended = () => {
+          if (transport.source === newSource) {
+            transport.source = null;
+            transport.offset = 0;
+            transport.startedAt = 0;
+          }
+        };
+
+        log.info('Engine', `Segment transition complete on deck ${deck}. New segment start: ${nextSegmentStart}`);
+      } catch (err) {
+        log.error('Engine', `Segment transition failed on deck ${deck}:`, err);
+      } finally {
+        transport.isTransitioning = false;
+      }
+    }
+  }
+
+  /**
+   * Helper to send a message to a deck's worklet if loaded.
+   */
+  postWorkletMessage(deck: DeckId, message: any): void {
+    const shifter = this.pitchShifters[deck];
+    if (shifter) {
+      shifter.port.postMessage(message);
+    }
+  }
+
+  /**
+   * Helper to synchronize loop parameters to the AudioWorklet.
+   */
+  private updateWorkletLoopState(deck: DeckId): void {
+    const shifter = this.pitchShifters[deck];
+    if (!shifter) return;
+    const source = this.transports[deck].source;
+    if (source) {
+      shifter.port.postMessage({
+        type: 'setLoop',
+        enabled: source.loop,
+        start: source.loopStart,
+        end: source.loopEnd,
+      });
+    } else {
+      shifter.port.postMessage({
+        type: 'setLoop',
+        enabled: false,
+        start: 0,
+        end: 0,
+      });
     }
   }
 

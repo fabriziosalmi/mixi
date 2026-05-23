@@ -26,6 +26,7 @@ import { useState, useCallback, useRef, type FC, type PointerEvent } from 'react
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import type { DeckId } from '../../types';
+import { doubleBpm as doubleBpmHelper, halveBpm as halveBpmHelper } from '../../audio/utils/mathUtils';
 
 // Waveform constants (must match WaveformDisplay.tsx)
 const BAR_STEP = 3;
@@ -126,8 +127,9 @@ const GridPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => 
   const halveBpm = useCallback(() => {
     const s = useMixiStore.getState();
     const d = s.decks[deckId];
-    if (d.bpm > 60) {
-      const newRate = (d.bpm / 2) / d.originalBpm;
+    const newBpm = halveBpmHelper(d.bpm);
+    if (newBpm !== null) {
+      const newRate = newBpm / d.originalBpm;
       s.setDeckPlaybackRate(deckId, newRate);
     }
   }, [deckId]);
@@ -135,8 +137,9 @@ const GridPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, color }) => 
   const doubleBpm = useCallback(() => {
     const s = useMixiStore.getState();
     const d = s.decks[deckId];
-    if (d.bpm < 300) {
-      const newRate = (d.bpm * 2) / d.originalBpm;
+    const newBpm = doubleBpmHelper(d.bpm);
+    if (newBpm !== null) {
+      const newRate = newBpm / d.originalBpm;
       s.setDeckPlaybackRate(deckId, newRate);
     }
   }, [deckId]);

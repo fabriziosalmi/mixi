@@ -27,6 +27,7 @@ import { BeatgridEditor } from './BeatgridEditor';
 import type { DeckId } from '../../types';
 import { CAMELOT_KEY_COLORS } from '../../theme';
 import { deckRegistry } from '../../decks/registry';
+import { doubleBpm as doubleBpmHelper, halveBpm as halveBpmHelper } from '../../audio/utils/mathUtils';
 
 interface DeckSectionProps {
   deckId: DeckId;
@@ -99,13 +100,15 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   const doubleBpm = useCallback(() => {
     const store = useMixiStore.getState();
     const d = store.decks[deckId];
-    if (d.bpm > 0 && d.bpm * 2 <= 300) store.setDeckBpm(deckId, d.bpm * 2, d.firstBeatOffset);
+    const newBpm = doubleBpmHelper(d.bpm);
+    if (newBpm !== null) store.setDeckBpm(deckId, newBpm, d.firstBeatOffset);
   }, [deckId]);
 
   const halveBpm = useCallback(() => {
     const store = useMixiStore.getState();
     const d = store.decks[deckId];
-    if (d.bpm > 0 && d.bpm / 2 >= 30) store.setDeckBpm(deckId, d.bpm / 2, d.firstBeatOffset);
+    const newBpm = halveBpmHelper(d.bpm);
+    if (newBpm !== null) store.setDeckBpm(deckId, newBpm, d.firstBeatOffset);
   }, [deckId]);
 
   const startBpmEdit = useCallback(() => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dbToGain, crossfaderGains, logFrequency, clamp } from '../../src/audio/utils/mathUtils';
+import { dbToGain, crossfaderGains, logFrequency, clamp, doubleBpm, halveBpm } from '../../src/audio/utils/mathUtils';
 
 describe('mathUtils', () => {
   // ── dbToGain ──────────────────────────────────────────────
@@ -120,6 +120,42 @@ describe('mathUtils', () => {
 
     it('handles equal min/max', () => {
       expect(clamp(5, 3, 3)).toBe(3);
+    });
+  });
+
+  // ── doubleBpm & halveBpm ──────────────────────────────────
+
+  describe('doubleBpm', () => {
+    it('doubles within range', () => {
+      expect(doubleBpm(120)).toBe(240);
+      expect(doubleBpm(75)).toBe(150);
+    });
+
+    it('returns null if doubling exceeds MAX_BPM (300)', () => {
+      expect(doubleBpm(151)).toBeNull();
+      expect(doubleBpm(200)).toBeNull();
+    });
+
+    it('returns null for negative or zero BPM', () => {
+      expect(doubleBpm(0)).toBeNull();
+      expect(doubleBpm(-10)).toBeNull();
+    });
+  });
+
+  describe('halveBpm', () => {
+    it('halves within range', () => {
+      expect(halveBpm(120)).toBe(60);
+      expect(halveBpm(80)).toBe(40);
+    });
+
+    it('returns null if halving goes below MIN_BPM (30)', () => {
+      expect(halveBpm(58)).toBeNull();
+      expect(halveBpm(50)).toBeNull();
+    });
+
+    it('returns null for negative or zero BPM', () => {
+      expect(halveBpm(0)).toBeNull();
+      expect(halveBpm(-10)).toBeNull();
     });
   });
 });

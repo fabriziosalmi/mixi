@@ -236,6 +236,68 @@ Each deck tracks: transport (`isPlaying`, `playbackRate`, `isSynced`, `syncMode`
 | TurboKick | `turbokick` | TURBOKICK | `#ef4444` | `TurboKickDeck` (lazy) |
 | TurboBass | `js303` | TURBOBASS | `#00ff88` | `JS303Deck` (lazy) |
 
+## Thread Architecture & Data Flow
+
+MIXI utilizes a multi-threaded architecture to decouple heavy visual rendering and real-time DSP operations from React's main UI thread, ensuring glitch-free audio performance and ultra-smooth interface visuals.
+
+```mermaid
+graph TD
+    %% Define Threads/Contexts
+    subgraph MainThread ["React Main Thread (UI & State)"]
+        ReactUI["React Components <br> (DeckSection, Controls)"]
+        Store["Zustand Store <br> (mixiStore, settingsStore)"]
+        Engine["MixiEngine (Web Audio API)"]
+        Ticker["Main rAF Loop <br> (Time Poller)"]
+        CanvasElement["HTMLCanvasElement <br> (Input Target)"]
+    end
+
+    subgraph WorkerThread ["Web Worker Thread (Waveform Renderer)"]
+        Worker["Waveform Web Worker <br> (waveform.worker.ts)"]
+        Offscreen["OffscreenCanvas <br> (Drawing Context)"]
+        Interpolator["Time Interpolator <br> (performance.now)"]
+    end
+
+    subgraph AudioThread ["AudioWorklet Thread (Real-Time DSP)"]
+        WorkletNode["AudioWorkletProcessor <br> (Rust/Wasm DSP Engine)"]
+        RingBuffer["SharedArrayBuffer <br> (Lock-Free Ring Buffer)"]
+        ParamBus["SharedArrayBuffer <br> (Parameter / VU Bus)"]
+    end
+
+    %% Communication Flows
+    CanvasElement -- "1. transferControlToOffscreen()" --> Offscreen
+    ReactUI -- "2. Drag/Scroll Events" --> Store
+    Store -- "3. State Update (Structured Clone)" --> Worker
+    Ticker -- "4. Ticks & Zoom (Structured Clone)" --> Worker
+    
+    Worker --> Interpolator
+    Interpolator --> Offscreen
+    
+    Engine -- "5. Audio Node Controls" --> WorkletNode
+    ReactUI -- "6. Lock-Free Params" --> ParamBus
+    ParamBus -- "7. Real-Time VU Meters" --> ReactUI
+    Engine -- "8. Stream PCM Data" --> RingBuffer
+    RingBuffer -- "9. DSP Block Processing (128 samples)" --> WorkletNode
+```
+
+### Execution Contexts & Thread Boundaries
+
+1. **React Main Thread**:
+   - **Responsibility**: Handles user interactions (pointer drags, scroll zooms, context menus), React layout rendering, application state via Zustand stores, and general lifecycle coordination of the `MixiEngine`.
+   - **Waveform Interface**: Relays mouse/drag events to coordinates conversion and manages a lightweight `requestAnimationFrame` ticking loop that forwards the deck playhead states to the worker.
+
+2. **Waveform Web Worker Thread (`waveform.worker.ts`)**:
+   - **Responsibility**: Conducts all canvas operations for waveform rendering (additive RGB bands, beatgrid lines, loop overlays, cue markers, drops, playheads, and downbeat flashes).
+   - **Time Interpolation**: Runs its own requestAnimationFrame loop. It calculates elapsed time via `performance.now()` since the last received main thread playhead tick, ensuring continuous scroll updates at up to 60fps even if React is performing heavy render operations on the main thread.
+   - **Communication/Serialization**:
+     - Canvas rendering is offloaded by calling `canvas.transferControlToOffscreen()` and passing the `OffscreenCanvas` container during initialization.
+     - Parameter states and tick coordinates are passed via `postMessage()`, serialized using the browser's built-in **Structured Clone Algorithm** (zero-copy for canvas and optimized object cloning).
+
+3. **AudioWorklet Thread**:
+   - **Responsibility**: Executes real-time digital signal processing (DSP) loops for mixers, filters, and deck channels at high-priority thread levels in the browser's audio subsystem.
+   - **Communication/Serialization**:
+     - Uses **SharedArrayBuffer** (SAB) containers for lock-free parameter transmission and real-time VU metering, avoiding main-thread message-passing latency and garbage collection interruptions.
+     - Utilizes lock-free ring buffers (built on SAB) to stream decrypted audio PCM blocks from the main thread database to the Wasm DSP engine.
+
 ## Performance Patterns
 
 ### Direct DOM Mutation

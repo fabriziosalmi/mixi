@@ -36,6 +36,7 @@ import { useSettingsStore, BPM_RANGE_PRESETS } from '../store/settingsStore';
 import { detectDrops, type DropMarker } from './DropDetector';
 import { detectKey, type KeyResult } from './KeyDetector';
 import { getWasm } from '../wasm/wasmBridge';
+import { AudioStreamingBuffer } from './AudioStreamingBuffer';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -196,40 +197,196 @@ function sliceBuffer(buf: AudioBuffer, maxSeconds: number): AudioBuffer {
   return sliced;
 }
 
+function getWavSample(
+  view: DataView,
+  frameIndex: number,
+  channel: number,
+  numChannels: number,
+  bitsPerSample: number,
+  dataOffset: number
+): number {
+  const bytesPerSample = bitsPerSample / 8;
+  const sampleIndex = frameIndex * numChannels + channel;
+  const byteOffset = dataOffset + sampleIndex * bytesPerSample;
+  if (byteOffset + bytesPerSample > view.byteLength) return 0;
+  if (bitsPerSample === 16) {
+    return view.getInt16(byteOffset, true) / 32768;
+  } else if (bitsPerSample === 24) {
+    const b0 = view.getUint8(byteOffset);
+    const b1 = view.getUint8(byteOffset + 1);
+    const b2 = view.getUint8(byteOffset + 2);
+    const val = (b2 << 16) | (b1 << 8) | b0;
+    const signedVal = val & 0x800000 ? val | ~0xffffff : val;
+    return signedVal / 8388608;
+  } else if (bitsPerSample === 32) {
+    return view.getFloat32(byteOffset, true);
+  }
+  return 0;
+}
+
+function generateWavWaveformDirect(streamingBuffer: AudioStreamingBuffer): WaveformPoint[] {
+  const view = new DataView(streamingBuffer.rawData);
+  const totalFrames = Math.floor(streamingBuffer.duration * streamingBuffer.sampleRate);
+  const numPoints = Math.max(1, Math.floor(streamingBuffer.duration * POINTS_PER_SECOND));
+  const framesPerPoint = Math.floor(totalFrames / numPoints);
+  const waveform: WaveformPoint[] = [];
+  const channels = streamingBuffer.channels;
+  const bitsPerSample = streamingBuffer.bitsPerSample;
+  const dataOffset = streamingBuffer.dataOffset;
+  for (let p = 0; p < numPoints; p++) {
+    const startFrame = p * framesPerPoint;
+    const endFrame = Math.min(totalFrames, startFrame + framesPerPoint);
+    let sumLow = 0;
+    let sumMid = 0;
+    let sumHigh = 0;
+    let count = 0;
+    const step = Math.max(1, Math.floor((endFrame - startFrame) / 100));
+    for (let f = startFrame; f < endFrame - 1; f += step) {
+      let s0 = 0;
+      let s1 = 0;
+      for (let ch = 0; ch < channels; ch++) {
+        s0 += getWavSample(view, f, ch, channels, bitsPerSample, dataOffset);
+        s1 += getWavSample(view, f + 1, ch, channels, bitsPerSample, dataOffset);
+      }
+      s0 /= channels;
+      s1 /= channels;
+      const low = (s0 + s1) * 0.5;
+      const high = (s0 - s1) * 0.5;
+      const mid = s0 - low - high;
+      sumLow += low * low;
+      sumHigh += high * high;
+      sumMid += mid * mid;
+      count++;
+    }
+    if (count > 0) {
+      waveform.push({
+        low: Math.sqrt(sumLow / count),
+        mid: Math.sqrt(sumMid / count),
+        high: Math.sqrt(sumHigh / count),
+      });
+    } else {
+      waveform.push({ low: 0, mid: 0, high: 0 });
+    }
+  }
+  return waveform;
+}
+
+async function analyzeWaveformSegment(segment: AudioBuffer): Promise<WaveformPoint[]> {
+  const [lowBuf, midBuf, highBuf] = await Promise.all([
+    renderBand(segment, 'lowpass', LOW_CUTOFF, 1),
+    renderBand(segment, 'bandpass', Math.sqrt(LOW_CUTOFF * HIGH_CUTOFF), 0.8),
+    renderBand(segment, 'highpass', HIGH_CUTOFF, 1),
+  ]);
+  const chunkSize = Math.floor(segment.sampleRate / POINTS_PER_SECOND);
+  const lowRms = computeRms(lowBuf, chunkSize);
+  const midRms = computeRms(midBuf, chunkSize);
+  const highRms = computeRms(highBuf, chunkSize);
+  normalise(lowRms);
+  normalise(midRms);
+  normalise(highRms);
+  const points: WaveformPoint[] = [];
+  const len = Math.min(lowRms.length, midRms.length, highRms.length);
+  for (let i = 0; i < len; i++) {
+    points.push({
+      low: lowRms[i],
+      mid: midRms[i],
+      high: highRms[i],
+    });
+  }
+  return points;
+}
+
+async function generateDecimatedWaveform(streamingBuffer: AudioStreamingBuffer): Promise<WaveformPoint[]> {
+  const duration = streamingBuffer.duration;
+  const numPoints = Math.max(1, Math.floor(duration * POINTS_PER_SECOND));
+  const waveform: WaveformPoint[] = Array.from({ length: numPoints }, () => ({ low: 0, mid: 0, high: 0 }));
+  const sampleDuration = 0.5;
+  const sampleInterval = 15;
+  const promises: Promise<void>[] = [];
+  for (let t = 0; t < duration; t += sampleInterval) {
+    const startSec = t;
+    const pStart = Math.floor(startSec * POINTS_PER_SECOND);
+    promises.push((async () => {
+      try {
+        const segment = await streamingBuffer.decodeSegment(startSec, sampleDuration);
+        const segmentAnalysis = await analyzeWaveformSegment(segment);
+        for (let i = 0; i < segmentAnalysis.length; i++) {
+          const targetIdx = pStart + i;
+          if (targetIdx < numPoints) {
+            waveform[targetIdx] = segmentAnalysis[i];
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })());
+  }
+  await Promise.all(promises);
+  let lastVal: WaveformPoint = { low: 0.05, mid: 0.05, high: 0.05 };
+  for (let i = 0; i < numPoints; i++) {
+    if (waveform[i].low === 0 && waveform[i].mid === 0 && waveform[i].high === 0) {
+      waveform[i] = { ...lastVal };
+    } else {
+      lastVal = waveform[i];
+    }
+  }
+  return waveform;
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
- * Analyse an AudioBuffer: extract RGB waveform data AND detect
- * the BPM / beatgrid offset.
+ * Analyse an AudioBuffer or AudioStreamingBuffer: extract RGB waveform data
+ * AND detect the BPM / beatgrid offset.
  *
- * @param buffer  – Decoded AudioBuffer from MixiEngine.loadTrack.
+ * @param buffer  – Decoded AudioBuffer or AudioStreamingBuffer.
  * @returns       – { waveform, bpm, firstBeatOffset, bpmConfidence }
  */
 export async function analyzeWaveform(
-  buffer: AudioBuffer,
+  buffer: AudioBuffer | AudioStreamingBuffer,
 ): Promise<AnalysisResult> {
   const t0 = performance.now();
 
-  const chunkSize = Math.floor(buffer.sampleRate / POINTS_PER_SECOND);
+  let targetBuffer: AudioBuffer;
+  let fullWaveform: WaveformPoint[] | null = null;
+  let totalDuration: number;
+  let sampleRate: number;
+
+  if (buffer instanceof AudioStreamingBuffer) {
+    totalDuration = buffer.duration;
+    sampleRate = buffer.sampleRate;
+    const analysisDuration = Math.min(buffer.duration, 180);
+    targetBuffer = await buffer.decodeSegment(0, analysisDuration);
+
+    if (buffer.isWav) {
+      fullWaveform = generateWavWaveformDirect(buffer);
+    } else {
+      fullWaveform = await generateDecimatedWaveform(buffer);
+    }
+  } else {
+    targetBuffer = buffer;
+    totalDuration = buffer.duration;
+    sampleRate = buffer.sampleRate;
+  }
+
+  const chunkSize = Math.floor(sampleRate / POINTS_PER_SECOND);
 
   // ── Peak level detection + band rendering in parallel ──────
   let peakLevelPromise: Promise<number>;
   const wasmModule = getWasm();
   if (wasmModule) {
-    // Rust fast path: scan all channels in one call
-    const flat = new Float32Array(buffer.length * buffer.numberOfChannels);
-    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
-      flat.set(buffer.getChannelData(ch), ch * buffer.length);
+    const flat = new Float32Array(targetBuffer.length * targetBuffer.numberOfChannels);
+    for (let ch = 0; ch < targetBuffer.numberOfChannels; ch++) {
+      flat.set(targetBuffer.getChannelData(ch), ch * targetBuffer.length);
     }
-    const peak = wasmModule.peak_level(flat, buffer.numberOfChannels, buffer.length);
+    const peak = wasmModule.peak_level(flat, targetBuffer.numberOfChannels, targetBuffer.length);
     peakLevelPromise = Promise.resolve(peak);
   } else {
-    // JS fallback (deferred to avoid blocking before Promise.all)
     peakLevelPromise = new Promise<number>((resolve) => {
       setTimeout(() => {
         let peak = 0;
-        for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
-          const data = buffer.getChannelData(ch);
+        for (let ch = 0; ch < targetBuffer.numberOfChannels; ch++) {
+          const data = targetBuffer.getChannelData(ch);
           for (let i = 0; i < data.length; i++) {
             const abs = Math.abs(data[i]);
             if (abs > peak) peak = abs;
@@ -242,34 +399,45 @@ export async function analyzeWaveform(
 
   // Run all 3 band filters + peak scan in parallel.
   const [lowBuf, midBuf, highBuf, peakLevel] = await Promise.all([
-    renderBand(buffer, 'lowpass', LOW_CUTOFF, 1),
-    renderBand(buffer, 'bandpass', Math.sqrt(LOW_CUTOFF * HIGH_CUTOFF), 0.8),
-    renderBand(buffer, 'highpass', HIGH_CUTOFF, 1),
+    renderBand(targetBuffer, 'lowpass', LOW_CUTOFF, 1),
+    renderBand(targetBuffer, 'bandpass', Math.sqrt(LOW_CUTOFF * HIGH_CUTOFF), 0.8),
+    renderBand(targetBuffer, 'highpass', HIGH_CUTOFF, 1),
     peakLevelPromise,
   ]);
 
   // ── BPM detection (runs on the low-band buffer) ────────────
   // Safe mode: limit BPM/key analysis to first 3 min for long files
-  const isLongFile = buffer.duration > SAFE_MODE_THRESHOLD;
-  if (isLongFile) {
-    log.warn('Analyzer', `Long file (${(buffer.duration / 60).toFixed(0)} min) — BPM/key from first ${SAFE_MODE_ANALYSIS_SECONDS}s`);
+  const isLongFile = totalDuration > SAFE_MODE_THRESHOLD;
+  if (isLongFile && !(buffer instanceof AudioStreamingBuffer)) {
+    log.warn(
+      'Analyzer',
+      `Long file (${(totalDuration / 60).toFixed(
+        0
+      )} min) — BPM/key from first ${SAFE_MODE_ANALYSIS_SECONDS}s`
+    );
   }
-  const bpmSource = isLongFile ? sliceBuffer(lowBuf, SAFE_MODE_ANALYSIS_SECONDS) : lowBuf;
-  const keySource = isLongFile ? sliceBuffer(buffer, SAFE_MODE_ANALYSIS_SECONDS) : buffer;
+
+  const bpmSource = (isLongFile && !(buffer instanceof AudioStreamingBuffer))
+    ? sliceBuffer(lowBuf, SAFE_MODE_ANALYSIS_SECONDS)
+    : lowBuf;
+  const keySource = (isLongFile && !(buffer instanceof AudioStreamingBuffer))
+    ? sliceBuffer(targetBuffer, SAFE_MODE_ANALYSIS_SECONDS)
+    : targetBuffer;
 
   const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
-  const bpmResult: BpmResult = detectBpm(bpmSource, { bpmMin: bpmPreset.min, bpmMax: bpmPreset.max });
+  const bpmResult: BpmResult = detectBpm(bpmSource, {
+    bpmMin: bpmPreset.min,
+    bpmMax: bpmPreset.max,
+  });
 
-  // Yield to main thread between heavy sync operations to avoid
-  // 500ms+ continuous main-thread block (detectBpm + detectKey + 3x computeRms).
   await new Promise<void>((r) => setTimeout(r, 0));
 
-  // ── Key detection (runs on the original or sliced buffer) ──
+  // ── Key detection ──
   const keyResult: KeyResult = detectKey(keySource);
 
   await new Promise<void>((r) => setTimeout(r, 0));
 
-  // ── RMS waveform ───────────────────────────────────────────
+  // ── RMS waveform ──
   const lowRms = computeRms(lowBuf, chunkSize);
   const midRms = computeRms(midBuf, chunkSize);
   const highRms = computeRms(highBuf, chunkSize);
@@ -279,29 +447,35 @@ export async function analyzeWaveform(
   normalise(highRms);
 
   const numPoints = lowRms.length;
-  const waveform: WaveformPoint[] = new Array(numPoints);
-  for (let i = 0; i < numPoints; i++) {
-    waveform[i] = {
-      low: lowRms[i],
-      mid: midRms[i],
-      high: highRms[i],
-    };
+  let waveform: WaveformPoint[];
+
+  if (fullWaveform) {
+    waveform = fullWaveform;
+  } else {
+    waveform = new Array(numPoints);
+    for (let i = 0; i < numPoints; i++) {
+      waveform[i] = {
+        low: lowRms[i],
+        mid: midRms[i],
+        high: highRms[i],
+      };
+    }
   }
 
-  // ── Drop detection (runs on the waveform + BPM data) ───────
+  // ── Drop detection ──
   const drops: DropMarker[] = detectDrops(
     waveform,
     bpmResult.bpm,
     bpmResult.firstBeatOffset,
-    buffer.duration,
+    totalDuration
   );
 
   const elapsed = (performance.now() - t0).toFixed(0);
   log.success(
     'Analyzer',
-    `Full analysis done in ${elapsed} ms — ${numPoints} points, ` +
-    `${bpmResult.bpm} BPM, key ${keyResult.camelot} (${keyResult.name}), ` +
-    `${drops.length} drops (${buffer.duration.toFixed(1)}s @ ${buffer.sampleRate} Hz)`,
+    `Full analysis done in ${elapsed} ms — ${waveform.length} points, ` +
+      `${bpmResult.bpm} BPM, key ${keyResult.camelot} (${keyResult.name}), ` +
+      `${drops.length} drops (${totalDuration.toFixed(1)}s @ ${sampleRate} Hz)`
   );
 
   return {

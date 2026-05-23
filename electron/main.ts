@@ -249,6 +249,58 @@ function setupSecurityHeaders(): void {
   });
 }
 
+// ── WebContents Security Hardening ──────────────────────────
+
+function setupWebContentsSecurity(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('will-attach-webview', (elEvent) => {
+      console.warn('[mixi-security] Blocked webview attachment');
+      elEvent.preventDefault();
+    });
+
+    contents.on('will-navigate', (elEvent, navigationUrl) => {
+      try {
+        const parsed = new URL(navigationUrl);
+        if (parsed.protocol === 'file:') return;
+        if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return;
+      } catch {
+        // malformed URL
+      }
+      console.warn(`[mixi-security] Blocked will-navigate to: ${navigationUrl}`);
+      elEvent.preventDefault();
+    });
+
+    contents.on('will-redirect', (elEvent, redirectUrl) => {
+      try {
+        const parsed = new URL(redirectUrl);
+        if (parsed.protocol === 'file:') return;
+        if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return;
+      } catch {
+        // malformed URL
+      }
+      console.warn(`[mixi-security] Blocked will-redirect to: ${redirectUrl}`);
+      elEvent.preventDefault();
+    });
+  });
+}
+
+function setupPermissionHandlers(): void {
+  const allowedPermissions = ['midi', 'midiSysex', 'media'];
+
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      console.warn(`[mixi-security] Blocked permission request: ${permission}`);
+      callback(false);
+    }
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return allowedPermissions.includes(permission);
+  });
+}
+
 // ── Window ───────────────────────────────────────────────────
 
 function createWindow(): void {
@@ -409,6 +461,8 @@ app.whenReady().then(async () => {
   try {
     // 0. Setup COOP/COEP headers for SharedArrayBuffer
     setupSecurityHeaders();
+    setupWebContentsSecurity();
+    setupPermissionHandlers();
 
     // 0b. Setup IPC handlers
     setupNativeAudioIPC();
