@@ -143,7 +143,8 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     const WAVE_LOOP = themeVar('wave-loop', '74, 222, 128');
 
     const engine = MixiEngine.getInstance();
-    const playheadX = (width * PLAYHEAD_RATIO) | 0;
+    const barsLeftOfPlayhead = Math.round((width * PLAYHEAD_RATIO) / BAR_STEP);
+    const playheadX = barsLeftOfPlayhead * BAR_STEP;
     const halfHeight = height / 2;
     const totalBars = Math.ceil(width / BAR_STEP);
 
@@ -255,7 +256,6 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
 
       const zoom = zoomRef.current;
       const currentIndex = currentTime * POINTS_PER_SECOND;
-      const barsLeftOfPlayhead = (playheadX / BAR_STEP) | 0;
       const startIndex = currentIndex - barsLeftOfPlayhead * zoom;
       startIndexRef.current = startIndex;
 

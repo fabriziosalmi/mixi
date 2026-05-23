@@ -532,9 +532,17 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
     const result: any = wasmModule.detect_bpm(flat, numCh, spc, sampleRate, bpmMin, bpmMax);
     // v3: detect_bpm returns BpmResult struct { bpm, offset, confidence }
     // Legacy fallback: if result is a Vec/Float32Array (old wasm), access by index
-    const bpm = result.bpm ?? result[0];
+    let bpm = result.bpm ?? result[0];
     const firstBeatOffset = result.offset ?? result[1];
     const confidence = result.confidence ?? result[2];
+
+    // Snap to nearest integer if within 0.25 BPM (very common for electronic tracks)
+    const rounded = Math.round(bpm);
+    if (Math.abs(bpm - rounded) < 0.25) {
+      bpm = rounded;
+    } else {
+      bpm = Math.round(bpm * 10) / 10;
+    }
 
     const elapsed = (performance.now() - t0).toFixed(0);
     log.success(

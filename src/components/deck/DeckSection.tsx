@@ -269,7 +269,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
             <div className="relative">
               <WaveformDisplay deckId={deckId} height={70} externalZoomRef={waveZoomRef} />
               {/* Overlay + panel mount when GRID edit is active */}
-              <BeatgridEditor deckId={deckId} color={color} editMode={gridEditMode} waveformWidth={0} />
+              <BeatgridEditor deckId={deckId} color={color} editMode={gridEditMode} waveformWidth={0} zoomRef={waveZoomRef} />
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               {/* GRID toggle button */}

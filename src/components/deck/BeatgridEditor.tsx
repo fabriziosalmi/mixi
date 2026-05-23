@@ -38,9 +38,11 @@ interface BeatgridEditorProps {
   editMode: boolean;
   /** Waveform container width in px */
   waveformWidth: number;
+  /** Zoom level ref from WaveformDisplay */
+  zoomRef?: React.MutableRefObject<number> | React.RefObject<number>;
 }
 
-export const BeatgridEditor: FC<BeatgridEditorProps> = ({ deckId, color, editMode }) => {
+export const BeatgridEditor: FC<BeatgridEditorProps> = ({ deckId, color, editMode, zoomRef }) => {
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
   const dragStartOffset = useRef(0);
@@ -61,12 +63,13 @@ export const BeatgridEditor: FC<BeatgridEditorProps> = ({ deckId, color, editMod
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!dragging || !editMode) return;
     const deltaPixel = e.clientX - dragStartX.current;
-    // Convert pixels to seconds: deltaSec = deltaPixel / BAR_STEP / POINTS_PER_SECOND
-    const deltaSec = deltaPixel / BAR_STEP / POINTS_PER_SECOND;
+    const zoom = zoomRef?.current ?? 1;
+    // Convert pixels to seconds, accounting for zoom: deltaSec = (deltaPixel / BAR_STEP) * zoom / POINTS_PER_SECOND
+    const deltaSec = (deltaPixel / BAR_STEP) * zoom / POINTS_PER_SECOND;
     const newOffset = Math.max(0, dragStartOffset.current + deltaSec);
     // Apply directly to store (useMixiSync will forward to engine)
     useMixiStore.getState().setFirstBeatOffset(deckId, newOffset);
-  }, [deckId, dragging, editMode]);
+  }, [deckId, dragging, editMode, zoomRef]);
 
   const handlePointerUp = useCallback(() => {
     setDragging(false);

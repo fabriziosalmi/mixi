@@ -327,8 +327,8 @@ class PhaseLockLoop {
     const grooveTarget = grooveMs / beatPeriodMs;  // convert ms to beat fraction
     const target = grooveTarget + s.cancelNudge;   // add emergency nudge if active
 
-    // Error = actual phase delta - desired target
-    const error = phaseDelta - target;
+    // Error = actual phase delta + onset offset - desired target
+    const error = phaseDelta + s.onsetOffset - target;
 
     // Deadzone: ignore tiny errors (inaudible)
     if (Math.abs(error) < DEADZONE) {

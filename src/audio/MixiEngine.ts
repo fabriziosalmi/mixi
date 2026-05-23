@@ -542,6 +542,65 @@ export class MixiEngine {
     if (!transport.buffer) return;
     if (transport.source) return;
 
+    // Real-time phase alignment on Play
+    const store = useMixiStore.getState();
+    const thisDeck = store.decks[deck];
+    const otherDeckId = deck === 'A' ? 'B' : 'A';
+    const other = store.decks[otherDeckId];
+
+    if (thisDeck.isSynced && other.isPlaying) {
+      const masterBpm = other.bpm > 0 ? other.bpm : other.originalBpm;
+      const effectiveBpm = thisDeck.bpm > 0 ? thisDeck.bpm : thisDeck.originalBpm;
+      if (masterBpm > 0 && effectiveBpm > 0) {
+        const masterTime = this.getCurrentTime(otherDeckId);
+        const masterBeatPeriod = 60 / masterBpm;
+        if (masterBeatPeriod > 0 && isFinite(masterBeatPeriod)) {
+          // Master's fractional position within current beat (0-1)
+          const masterFrac = (((masterTime - other.firstBeatOffset) / masterBeatPeriod) % 1 + 1) % 1;
+
+          // This deck's current time (transport.offset because it's paused/starting) and beat period
+          const thisTime = transport.offset;
+          const thisBeatPeriod = 60 / effectiveBpm;
+          const thisFrac = (((thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod) % 1 + 1) % 1;
+
+          // Phase delta
+          let phaseDelta = masterFrac - thisFrac;
+          if (phaseDelta > 0.5) phaseDelta -= 1;
+          if (phaseDelta < -0.5) phaseDelta += 1;
+
+          let seekOffset = phaseDelta * thisBeatPeriod;
+
+          // Bar / phrase alignment if applicable
+          const mode = thisDeck.syncMode;
+          if (mode === 'bar' || mode === 'phrase') {
+            const groupSize = mode === 'phrase' ? 16 : 4;
+            const masterBeat = (masterTime - other.firstBeatOffset) / masterBeatPeriod;
+            const thisBeat = (thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod;
+            const masterPos = ((masterBeat % groupSize) + groupSize) % groupSize;
+            const thisPos = ((thisBeat % groupSize) + groupSize) % groupSize;
+
+            let phraseOffset = Math.round(masterPos - thisPos);
+            if (phraseOffset > groupSize / 2) phraseOffset -= groupSize;
+            if (phraseOffset < -groupSize / 2) phraseOffset += groupSize;
+
+            seekOffset += phraseOffset * thisBeatPeriod;
+          }
+
+          // Apply adjusted offset
+          const targetTime = thisTime + seekOffset;
+          transport.offset = Math.max(0, Math.min(targetTime, transport.buffer.duration));
+
+          // Reset PLL and briefly freeze to avoid windup/fighting
+          phaseLockLoop.reset(deck);
+          phaseLockLoop.start();
+          phaseLockLoop.freeze(deck);
+          setTimeout(() => {
+            phaseLockLoop.unfreeze(deck);
+          }, 200);
+        }
+      }
+    }
+
     const source = this.ctx.createBufferSource();
     source.buffer = transport.buffer;
     source.playbackRate.value = transport.playbackRate;

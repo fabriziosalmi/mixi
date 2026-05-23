@@ -121,7 +121,8 @@ export const MobileWaveform: FC<MobileWaveformProps> = ({
 
       const waveform = waveformRef.current;
       const halfHeight = height / 2;
-      const playheadX = (width * PLAYHEAD_RATIO) | 0;
+      const barsLeftOfPlayhead = Math.round((width * PLAYHEAD_RATIO) / BAR_STEP);
+      const playheadX = barsLeftOfPlayhead * BAR_STEP;
       const totalBars = Math.ceil(width / BAR_STEP);
 
       // Clear
@@ -144,7 +145,6 @@ export const MobileWaveform: FC<MobileWaveformProps> = ({
             : 0;
 
       const currentIndex = currentTime * POINTS_PER_SECOND;
-      const barsLeftOfPlayhead = (playheadX / BAR_STEP) | 0;
       const startIndex = currentIndex - barsLeftOfPlayhead;
 
       // Three-band RGB bars with additive blending
@@ -223,7 +223,8 @@ export const MobileWaveform: FC<MobileWaveformProps> = ({
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const width = rect.width;
-    const playheadX = width * PLAYHEAD_RATIO;
+    const barsLeftOfPlayhead = Math.round((width * PLAYHEAD_RATIO) / BAR_STEP);
+    const playheadX = barsLeftOfPlayhead * BAR_STEP;
 
     const engine = MixiEngine.getInstance();
     const currentTime = engine.isInitialized ? engine.getCurrentTime(deckId) : 0;
