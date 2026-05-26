@@ -395,13 +395,13 @@ class PhaseLockLoop {
     const masterTime = engine.getCurrentTime(masterDeck);
     const slaveTime = engine.getCurrentTime(slaveDeck);
 
-    const masterPeriod = 60 / master.bpm;
+    const masterPeriod = 60 / master.originalBpm;
 
     // Harmonic sync: use virtual beat period if ratio != 1
     const ratio = findBestRatio(master.bpm, slave.originalBpm);
     const slavePeriod = ratio !== 1
-      ? virtualBeatPeriod(slave.bpm, ratio)
-      : 60 / slave.bpm;
+      ? virtualBeatPeriod(slave.originalBpm, ratio)
+      : 60 / slave.originalBpm;
     if (slavePeriod <= 0 || !isFinite(slavePeriod)) return null;
 
     const masterFrac = (((masterTime - master.firstBeatOffset) / masterPeriod) % 1 + 1) % 1;

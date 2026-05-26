@@ -42,7 +42,7 @@ import type {
 import { HOT_CUE_COUNT } from '../types';
 import { clamp } from '../audio/utils/mathUtils';
 import { MixiEngine } from '../audio/MixiEngine';
-import { findBestRatio } from '../audio/harmonicSync';
+import { findBestRatio, virtualBeatPeriod } from '../audio/harmonicSync';
 import { phaseLockLoop } from '../audio/PhaseLockLoop';
 import { saveHotCues, loadHotCues } from './hotCueStorage';
 import { useSettingsStore } from './settingsStore';
@@ -492,14 +492,16 @@ export const useMixiStore = create<MixiStore>()(
         // Use transport.offset as frozen beat position when not playing.
         if (engine.isInitialized) {
           const masterTime = engine.getCurrentTime(otherDeckId);
-          const masterBeatPeriod = 60 / masterBpm;
+          const masterBeatPeriod = 60 / other.originalBpm;
           if (masterBeatPeriod > 0 && isFinite(masterBeatPeriod)) {
             // Master's fractional position within current beat (0–1)
             const masterFrac = (((masterTime - other.firstBeatOffset) / masterBeatPeriod) % 1 + 1) % 1;
 
             // This deck's current time and beat period at new rate
             const thisTime = engine.getCurrentTime(deck);
-            const thisBeatPeriod = 60 / effectiveBpm;
+            const thisBeatPeriod = ratio !== 1
+              ? virtualBeatPeriod(thisDeck.originalBpm, ratio)
+              : 60 / thisDeck.originalBpm;
             const thisFrac = (((thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod) % 1 + 1) % 1;
 
             // Phase delta: how far this deck is from matching master

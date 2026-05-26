@@ -220,8 +220,8 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
         }
 
         // Calculate phase delta
-        const masterPeriod = 60 / this.masterBpm;
-        const slaveBpm = this.slaveOriginalBpm * this.baseRate;
+        const masterPeriod = 60 / this.masterOriginalBpm;
+        const slaveBpm = this.slaveOriginalBpm;
         const ratio = findBestRatio(this.masterBpm, this.slaveOriginalBpm);
         const slavePeriod = ratio !== 1
           ? virtualBeatPeriod(slaveBpm, ratio)
