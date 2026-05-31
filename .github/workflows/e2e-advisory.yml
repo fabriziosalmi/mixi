@@ -1,0 +1,58 @@
+name: E2E (advisory)
+
+# E2E Playwright run. NON-BLOCKING by design — runs in its own workflow so it
+# never gates merges into main. Headless browser flakes (rAF throttling, Vite
+# OOM under parallel workers, splash/wasm init timing) make it unsuitable as a
+# hard gate at the moment. Treat failures as a signal to investigate, not a stop.
+# When the suite is reliably green, fold it back into Test Gate as a required job.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  e2e:
+    name: E2E (advisory — non-blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Install Rust + wasm-pack
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build Wasm module
+        run: |
+          cargo install wasm-pack --locked || true
+          cd mixi-core && wasm-pack build --target web --out-dir pkg
+
+      - name: Build for preview
+        run: npx vite build --mode test
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npx playwright test
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
