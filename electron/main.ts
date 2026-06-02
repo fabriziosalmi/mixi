@@ -472,22 +472,30 @@ app.whenReady().then(async () => {
     setupMixiSyncIPC();
     ipcMain.handle('app:check-for-updates', () => checkForUpdates());
 
-    // 1. Try to start Python backend (OPTIONAL — app works without it)
+    // 1. Start the Python backend (OPTIONAL — the app works fully without it).
+    //    Do NOT block window creation on it, and do NOT kill it if it is slow to
+    //    boot. The ~40MB PyInstaller engine cold-starts in ~13s (onefile
+    //    extraction + Python + uvicorn), and a first-run macOS security scan can
+    //    add more — longer than any short timeout. The renderer's MixiBridge
+    //    retries with backoff and connects whenever the engine becomes ready, so
+    //    we just let it come up in the background.
+    //    (Previously `await waitForEngine(…, 10_000)` blocked startup and, on
+    //    timeout, `killEngine()` killed the still-booting engine — leaving the
+    //    bridge to fail forever against a dead port.)
     try {
       apiPort = await findFreePort();
       console.log(`[mixi] API port: ${apiPort}`);
       pythonProcess = spawnEngine(apiPort);
-      await waitForEngine(apiPort, 10_000);
-      console.log('[mixi] Engine is ready');
+      // Non-blocking readiness log only — never kills the engine on timeout.
+      waitForEngine(apiPort, 60_000)
+        .then(() => console.log('[mixi] Engine is ready'))
+        .catch(() => console.warn('[mixi] Engine not ready after 60s — bridge will keep retrying'));
     } catch (engineErr) {
-      // Backend is optional — the DJ app works fully without it.
-      // The backend provides MCP bridge and advanced API features only.
-      console.warn('[mixi] Backend engine not available (optional):', engineErr);
-      killEngine();
-      pythonProcess = null as any;
+      // Could not even spawn it — still fine, the app runs without the backend.
+      console.warn('[mixi] Backend engine could not be started (optional):', engineErr);
     }
 
-    // 2. Create window (always — even without backend)
+    // 2. Create window immediately — do not wait for the backend.
     createWindow();
 
     // 3. Check for updates (non-blocking, after window is shown)
