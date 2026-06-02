@@ -1,4 +1,4 @@
-import { useEffect, useState, type FC, type ReactNode } from 'react';
+import { useEffect, useState, type FC, type ReactNode, type CSSProperties } from 'react';
 
 // ─────────────────────────────────────────────────────────────
 // MobileScaleWrapper — Adaptive virtual resolution
@@ -52,14 +52,18 @@ export const MobileScaleWrapper: FC<{ children: ReactNode }> = ({ children }) =>
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (!needsScaling) {
-    return <>{children}</>;
-  }
-
-  return (
-    <div
-      className={isCompact ? 'mixi-compact' : ''}
-      style={{
+  // IMPORTANT: render an IDENTICAL element structure (div > div > children) in
+  // both the scaled and unscaled states. Previously the unscaled case returned
+  // `<>{children}</>` while the scaled case wrapped children in two <div>s — so
+  // toggling `needsScaling` (e.g. a window resize crossing the 1100×700 / 540
+  // threshold) changed the element path around <App/>, forcing React to UNMOUNT
+  // and REMOUNT the entire app. That destroyed/recreated the AudioContext and
+  // tore the WebSocket bridge down mid-connect on every toggle. Keeping the tree
+  // shape constant and toggling only styles preserves <App/>'s instance.
+  // When not scaling, both wrappers use `display: contents` so they generate no
+  // box and the desktop layout is exactly as if children were rendered directly.
+  const outerStyle: CSSProperties = needsScaling
+    ? {
         width: '100vw',
         height: '100vh',
         overflow: 'hidden',
@@ -67,19 +71,22 @@ export const MobileScaleWrapper: FC<{ children: ReactNode }> = ({ children }) =>
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#000',
-      }}
-    >
-      <div
-        style={{
-          width: DESKTOP_W,
-          height: isCompact ? COMPACT_H : DESKTOP_H,
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
-          position: 'relative',
-        }}
-      >
-        {children}
-      </div>
+      }
+    : { display: 'contents' };
+
+  const innerStyle: CSSProperties = needsScaling
+    ? {
+        width: DESKTOP_W,
+        height: isCompact ? COMPACT_H : DESKTOP_H,
+        transform: `scale(${scale})`,
+        transformOrigin: 'center center',
+        position: 'relative',
+      }
+    : { display: 'contents' };
+
+  return (
+    <div className={isCompact ? 'mixi-compact' : ''} style={outerStyle}>
+      <div style={innerStyle}>{children}</div>
     </div>
   );
 };

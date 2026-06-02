@@ -15,7 +15,7 @@
 // forwards every state change to the audio engine.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { useMixiStore } from '../store/mixiStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { MixiEngine } from '../audio/MixiEngine';
@@ -27,7 +27,12 @@ const EQ_BANDS: EqBand[] = ['low', 'mid', 'high'];
 
 export function useMixiSync() {
   const isReady = useRef(false);
-  const engine = MixiEngine.getInstance();
+  // Stabilise the engine reference for the component's lifetime. getInstance()
+  // is an idempotent singleton, but capturing it once via useMemo guarantees the
+  // identity never changes across re-renders, so the [engine]-keyed effects below
+  // (subscriptions + the unmount cleanup that destroys the AudioContext) do not
+  // re-run on every render — and never spuriously tear down the engine.
+  const engine = useMemo(() => MixiEngine.getInstance(), []);
 
   // ── Engine initialisation ──────────────────────────────────
 
