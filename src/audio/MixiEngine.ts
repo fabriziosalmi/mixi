@@ -1724,6 +1724,10 @@ export class MixiEngine {
             });
           }
         };
+        // If the processor throws, the node stops driving source.playbackRate
+        // (pinned to 0 in connectSource) → the deck would freeze silent forever.
+        // Fail over to the native playbackRate path instead.
+        node.onprocessorerror = () => this.failoverPitchShifter(deck);
         node.connect(this.channels[deck].input, 0, 0);
         this.pitchShifters[deck] = node;
       }
@@ -1758,6 +1762,7 @@ export class MixiEngine {
               });
             }
           };
+          node.onprocessorerror = () => this.failoverPitchShifter(deck);
           node.connect(this.channels[deck].input, 0, 0);
           this.pitchShifters[deck] = node;
         }
@@ -1797,6 +1802,50 @@ export class MixiEngine {
     } else {
       gain.connect(this.channels[deck].input);
     }
+  }
+
+  /**
+   * #6: A pitch-shifter worklet died at runtime (processor threw). With the
+   * shifter gone, source.playbackRate stays pinned at 0 from connectSource and
+   * the deck would be silent forever. Tear the shifter out of the graph, rewire
+   * the live source straight to the channel input, and hand transport back to
+   * the native playbackRate (key lock / time-stretch is simply lost until
+   * reload). All the rate/brake setters already branch on a null shifter.
+   */
+  private failoverPitchShifter(deck: DeckId): void {
+    const shifter = this.pitchShifters[deck];
+    if (!shifter) return; // already failed over
+    log.warn('Engine', `Pitch shifter on deck ${deck} crashed — falling back to native playbackRate`);
+    this.pitchShifters[deck] = null;
+
+    // Disconnecting the shifter also severs its drive of source.playbackRate.
+    try { shifter.disconnect(); } catch { /* already gone */ }
+    try { shifter.onprocessorerror = null; } catch { /* ignore */ }
+
+    const transport = this.transports[deck];
+    // Rewire the currently-playing source: gain → channel input (was gain →
+    // shifter), and restore the real playback rate the param was pinned off of.
+    const gain = transport.gain;
+    if (gain) {
+      try { gain.disconnect(); } catch { /* ignore */ }
+      try { gain.connect(this.channels[deck].input); } catch { /* ignore */ }
+    }
+    const source = transport.source;
+    if (source) {
+      try {
+        source.playbackRate.cancelScheduledValues(this.ctx.currentTime);
+        source.playbackRate.value = transport.playbackRate + this._nudge[deck];
+      } catch { /* ignore */ }
+    }
+
+    // Key lock can no longer be honoured without the shifter.
+    try {
+      if (useMixiStore.getState().decks[deck].keyLock) {
+        useMixiStore.getState().setKeyLock(deck, false);
+      }
+    } catch { /* store may not expose it */ }
+
+    telemetry.reportEvent({ type: 'GLITCH', deck, details: { type: 'shifter_failover' } });
   }
 
   private async ensureSegment(deck: DeckId, time: number): Promise<AudioBuffer> {
