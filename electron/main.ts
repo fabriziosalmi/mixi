@@ -323,7 +323,12 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: [`--mixi-api-port=${apiPort}`],
+      additionalArguments: [
+        `--mixi-api-port=${apiPort}`,
+        // E2E test hooks (window.__MIXI_ENGINE__/__STORE__) — default OFF;
+        // only enabled when the app is launched with MIXI_E2E=1.
+        `--mixi-e2e=${process.env.MIXI_E2E === '1' ? '1' : '0'}`,
+      ],
       // Performance: disable spellcheck and autofill
       spellcheck: false,
       // Enable WebGL 2 for waveform rendering

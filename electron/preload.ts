@@ -21,10 +21,16 @@ import { contextBridge, ipcRenderer } from 'electron';
 const portArg = process.argv.find((arg) => arg.startsWith('--mixi-api-port='));
 const apiPort = portArg ? portArg.split('=')[1] : '8000';
 
+// E2E test-hook flag — main passes --mixi-e2e=1 only when launched with MIXI_E2E=1.
+const e2eArg = process.argv.find((arg) => arg.startsWith('--mixi-e2e='));
+const e2eEnabled = e2eArg?.split('=')[1] === '1';
+
 contextBridge.exposeInMainWorld('mixi', {
   apiPort: Number(apiPort),
   apiBase: `http://127.0.0.1:${apiPort}`,
   wsBase: `ws://127.0.0.1:${apiPort}`,
+  /** When true, the renderer exposes __MIXI_ENGINE__/__MIXI_STORE__ for e2e. */
+  e2e: e2eEnabled,
 
   /** Trigger a manual update check (shows native dialog if update available) */
   checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),

@@ -44,8 +44,13 @@ if ('serviceWorker' in navigator && isMobile) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-// ── Expose stores for E2E tests (dev/test only) ───────────
-if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+// ── Expose stores for E2E tests (dev/test, or a packaged app launched with
+//    MIXI_E2E=1 → preload sets window.mixi.e2e). Default OFF in normal DMGs. ──
+if (
+  import.meta.env.DEV ||
+  import.meta.env.MODE === 'test' ||
+  (window as unknown as { mixi?: { e2e?: boolean } }).mixi?.e2e
+) {
   import('./store/mixiStore').then(m => {
     (window as any).__MIXI_STORE__ = m.useMixiStore;
   });

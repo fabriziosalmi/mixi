@@ -126,6 +126,8 @@ export class MixiEngine {
 
   /** DSP Parameter Writer — populates the shared param bus for Wasm DSP. */
   private _paramWriter: DspParamWriter | null = null;
+  /** Unsubscribe for the store→param-bus flush subscription (live updates). */
+  private _paramFlushUnsub: (() => void) | null = null;
   /** Wasm DSP bridge — manages AudioWorklet lifecycle. */
   private _wasmBridge: WasmDspBridge | null = null;
 
@@ -164,6 +166,69 @@ export class MixiEngine {
   }
 
   private constructor() {}
+
+  /** Port of DeckChannel.setColorFx → (freq Hz, Q) for the Wasm color filter.
+   *  CRITICAL: colorFx===0 must map to 20000 Hz (open), NOT 0 — the Rust engine
+   *  only (re)applies the lowpass when freq>20, so writing 0 would leave a stale
+   *  narrow filter engaged and muffle/kill the signal. */
+  private colorFxToFilter(cf: number): { freq: number; q: number } {
+    if (cf === 0) return { freq: 20000, q: 0.707 };
+    const t = cf < 0 ? 1 + cf : cf;
+    const freq = 20 * Math.pow(1000, t);
+    const norm = Math.log(Math.max(20, freq) / 20) / Math.log(1000);
+    const taper = 1 - 0.6 * Math.pow(2 * Math.abs(norm - 0.5), 2);
+    return { freq, q: 1.5 * Math.max(0.3, taper) };
+  }
+
+  /**
+   * Write the ENTIRE current mixer state into the DSP param bus via the param
+   * writer. The Wasm worklet reads this bus every quantum; without it every gain
+   * is 0 and the Rust engine smooths to SILENCE (the param bus was never wired —
+   * the DspParamWriter setters were dead code). Units are matched to the Rust
+   * engine: FADER is RAW volume (Rust cubes it), EQ is in dB, COLOR_FREQ is Hz,
+   * per-deck XFADER_GAIN is the crossfader gain. Called once when the Wasm
+   * SharedParamBus is created, and on every store change for live updates.
+   */
+  private flushParamStateFromStore(): void {
+    const w = this._paramWriter;
+    if (!w) return;
+    const s = useMixiStore.getState();
+
+    // ── Master ──
+    w.setMasterGain(s.master.volume);
+    w.setMasterFilter(s.master.filter);
+    w.setMasterDistortion(s.master.distortion, s.master.distortion > 0.01);
+    w.setMasterPunch(s.master.punch, s.master.punch > 0.01);
+    w.setMasterLimiter(true, -0.5);
+
+    // ── Crossfader → per-deck gains (CRITICAL: 0 = silence) ──
+    const curve = s.crossfaderCurve;
+    const { gainA, gainB } = crossfaderGains(s.crossfader, curve);
+    w.setCrossfader(s.crossfader);
+    w.setCrossfaderCurve(curve === 'sharp' ? 1 : 0);
+    w.setDeckXfaderGain('A', gainA);
+    w.setDeckXfaderGain('B', gainB);
+
+    // ── Per-deck ──
+    for (const deck of ['A', 'B'] as const) {
+      const d = s.decks[deck];
+      w.setDeckFader(deck, d.volume);                                   // CRITICAL — Rust cubes it
+      w.setDeckTrim(deck, this.autoGain[deck] * Math.pow(10, d.gain / 20));
+      w.setDeckEq(deck, 'low', d.eq.low);                              // dB, NOT linear
+      w.setDeckEq(deck, 'mid', d.eq.mid);
+      w.setDeckEq(deck, 'high', d.eq.high);
+      const { freq, q } = this.colorFxToFilter(d.colorFx);
+      w.setDeckColorFreq(deck, freq);
+      w.setDeckColorRes(deck, q);
+      w.setDeckPlaybackRate(deck, d.playbackRate);
+      w.setDeckCue(deck, d.cueActive);
+      w.setDeckAutoGain(deck, this.autoGain[deck]);
+    }
+
+    // ── Headphones ──
+    w.setHeadphoneMix(s.headphones.mix);
+    w.setHeadphoneLevel(s.headphones.level);
+  }
 
   // ── Lifecycle ──────────────────────────────────────────────
 
@@ -237,6 +302,13 @@ export class MixiEngine {
     this._paramWriter.setDspBackend(false); // native mode
     log.info('Engine', 'DSP param bus initialised (512 bytes)');
 
+    // Keep the param bus in sync with the store so the Wasm worklet always
+    // reads the current mixer state (live EQ/volume/crossfader/etc.). Cheap
+    // (~30 float writes) and a no-op until the param writer exists. The initial
+    // population for the Wasm SharedParamBus is done explicitly on activation.
+    this.flushParamStateFromStore();
+    this._paramFlushUnsub = useMixiStore.subscribe(() => this.flushParamStateFromStore());
+
     // ── Wasm DSP Bridge (conditional) ──────────────────────
     // When active, routes audio through Rust DSP engine in AudioWorklet:
     //   Source A → trimGain A → worklet input[0]
@@ -264,6 +336,14 @@ export class MixiEngine {
             });
           }
           this._paramWriter?.setDspBackend(true);
+
+          // CRITICAL: the SharedParamBus above is created asynchronously, AFTER
+          // useMixiSync's initial full-state push ran against the previous
+          // (native) bus. Without re-pushing, this fresh bus carries only the
+          // layout version + sample rate — every gain/volume/EQ/crossfader param
+          // is 0, so the Rust DSP applies zero gain and the master is SILENT.
+          // Re-apply the full current mixer state so the worklet hears real values.
+          this.flushParamStateFromStore();
 
           // Disconnect WebAudio deck→master chain
           this.channels.A.output.disconnect();
@@ -389,6 +469,11 @@ export class MixiEngine {
 
   async destroy(): Promise<void> {
     if (!this.initialized) return;
+
+    if (this._paramFlushUnsub) {
+      this._paramFlushUnsub();
+      this._paramFlushUnsub = null;
+    }
 
     if (this._gateTimer) {
       clearInterval(this._gateTimer);
@@ -1060,6 +1145,33 @@ export class MixiEngine {
     return level;
   }
 
+  /**
+   * E2E diagnostic snapshot. Only reachable via the env-gated
+   * `window.__MIXI_ENGINE__` (see main.tsx). A single call both asserts
+   * non-silence (masterRms / levelL / levelR from the post-limiter analyser,
+   * which both the WebAudio and Wasm-DSP paths feed) AND pinpoints the failure
+   * mode: rateA===0 ⇒ the pitch-shifter never un-froze the source;
+   * wasmActive≠expected ⇒ Wasm DSP path; ctxState!=='running' ⇒ suspended.
+   */
+  __e2eAudioProbe(): Record<string, unknown> {
+    const tA = this.transports?.A;
+    const tB = this.transports?.B;
+    return {
+      initialized: this.initialized,
+      ctxState: this.initialized ? this.ctx.state : 'uninit',
+      wasmActive: this.wasmDspActive,
+      masterRms: this.getMasterLevel(),
+      levelL: this.getMasterLevelL(),
+      levelR: this.getMasterLevelR(),
+      srcA: !!tA?.source,
+      srcB: !!tB?.source,
+      rateA: tA?.source?.playbackRate.value ?? null,
+      rateB: tB?.source?.playbackRate.value ?? null,
+      shifterA: !!this.pitchShifters.A,
+      shifterB: !!this.pitchShifters.B,
+    };
+  }
+
   /** Read RMS level from the left master analyser (0–1). */
   getMasterLevelL(): number {
     if (!this.initialized) return 0;
@@ -1164,7 +1276,11 @@ export class MixiEngine {
   /** Set a per-deck FX amount and active state. */
   setDeckFx(deck: DeckId, fxId: string, amount: number, active: boolean): void {
     if (!this.initialized) return;
-    this.channels[deck].setFx(fxId as import('./nodes/DeckFx').FxId, amount, active, this.ctx);
+    const fx = fxId as import('./nodes/DeckFx').FxId;
+    this.channels[deck].setFx(fx, amount, active, this.ctx);
+    // FX state isn't in the store, so the flush can't carry it — write the bus
+    // directly so the Wasm DSP path applies FX live too (no-op for WebAudio-only FX).
+    this._paramWriter?.setDeckFx(deck, fx, amount, active);
   }
 
   /** BUG-13/19: Reset all FX on a deck (used by ejectDeck). */
