@@ -783,6 +783,45 @@ let syncSocket: DgramSocket | null = null;
 let syncAnnounceTimer: ReturnType<typeof setInterval> | null = null;
 const syncPeers = new Map<string, { ip: string; port: number; lastSeen: number }>();
 
+// LAN-sync packet wire constants — must match src/sync/protocol.ts.
+const MIXI_SYNC_MAGIC = 0x0053584d; // "MXS\0" as u32 LE
+const MIXI_SYNC_PACKET_SIZE = 64;
+
+// Per-IP token bucket so a flood of UDP packets can't pin the renderer's
+// IPC channel (the old `>100/sec` comment was never enforced).
+const SYNC_RATE_PER_SEC = 120;
+const syncRate = new Map<string, { tokens: number; last: number }>();
+function syncRateLimitOk(ip: string): boolean {
+  const now = Date.now();
+  let b = syncRate.get(ip);
+  if (!b) {
+    b = { tokens: SYNC_RATE_PER_SEC, last: now };
+    syncRate.set(ip, b);
+  }
+  b.tokens = Math.min(SYNC_RATE_PER_SEC, b.tokens + ((now - b.last) / 1000) * SYNC_RATE_PER_SEC);
+  b.last = now;
+  if (b.tokens < 1) return false;
+  b.tokens -= 1;
+  return true;
+}
+
+// Only forward to peers on private / link-local / loopback ranges. Blocks the
+// renderer from being tricked into firing UDP at an arbitrary public host.
+function isPrivateSyncTarget(ip: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (!m) return false;
+  const o = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+  if (o.some((x) => x > 255)) return false;
+  const [a, b] = o;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    a === 127
+  );
+}
+
 function setupMixiSyncIPC(): void {
   // Start sync (publisher or subscriber)
   ipcMain.handle('mixi-sync:start', (_event, _args: { broadcastIp?: string }) => {
@@ -800,8 +839,14 @@ function setupMixiSyncIPC(): void {
 
       // Listen for incoming packets → forward to renderer
       syncSocket.on('message', (msg, rinfo) => {
-        if (msg.length < 64) return;
-        // Rate limit: drop if we already have >100 packets this second from this IP
+        // Exact wire size — reject runts and oversized junk outright.
+        if (msg.length !== MIXI_SYNC_PACKET_SIZE) return;
+        // Drop anything that isn't a real MIXI sync packet before it ever
+        // reaches the renderer (cheap magic check at offset 0).
+        if (msg.readUInt32LE(0) !== MIXI_SYNC_MAGIC) return;
+        // Real per-IP rate limit (token bucket) — floods are dropped here.
+        if (!syncRateLimitOk(rinfo.address)) return;
+
         const key = rinfo.address;
         const peer = syncPeers.get(key);
         if (peer) peer.lastSeen = Date.now();
@@ -820,6 +865,10 @@ function setupMixiSyncIPC(): void {
         for (const [k, v] of syncPeers) {
           if (now - v.lastSeen > 5000) syncPeers.delete(k);
         }
+        // Drop idle rate-limit buckets so the map can't grow without bound.
+        for (const [k, v] of syncRate) {
+          if (now - v.last > 10000) syncRate.delete(k);
+        }
       }, 1000);
 
       return { ok: true };
@@ -837,16 +886,19 @@ function setupMixiSyncIPC(): void {
   }) => {
     if (!syncSocket) return;
     const buf = Buffer.from(args.data);
+    // Never emit anything that isn't a well-formed sync packet.
+    if (buf.length !== MIXI_SYNC_PACKET_SIZE || buf.readUInt32LE(0) !== MIXI_SYNC_MAGIC) return;
 
     try {
       if (args.broadcast) {
         // Broadcast (ANNOUNCE only)
         syncSocket.send(buf, 0, buf.length, 4303, '255.255.255.255');
       } else if (args.targetIp) {
-        // Unicast to specific peer
+        // Unicast to specific peer — only to private/link-local/loopback hosts.
+        if (!isPrivateSyncTarget(args.targetIp)) return;
         syncSocket.send(buf, 0, buf.length, 4303, args.targetIp);
       } else {
-        // Unicast to all known peers
+        // Unicast to all known peers (their IPs were already vetted on receive).
         for (const [, peer] of syncPeers) {
           syncSocket.send(buf, 0, buf.length, 4303, peer.ip);
         }
@@ -868,6 +920,7 @@ function setupMixiSyncIPC(): void {
     if (syncAnnounceTimer) { clearInterval(syncAnnounceTimer); syncAnnounceTimer = null; }
     if (syncSocket) { syncSocket.close(); syncSocket = null; }
     syncPeers.clear();
+    syncRate.clear();
     console.log('[mixi-sync] Stopped');
   });
 }

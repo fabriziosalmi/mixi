@@ -318,6 +318,9 @@ export const useMixiStore = create<MixiStore>()(
       })),
 
     setDeckEq: (deck, band, v) => {
+      // Whitelist the band — `[band]: …` with an attacker-supplied key such as
+      // '__proto__' or 'constructor' would corrupt Object.prototype.
+      if (band !== 'low' && band !== 'mid' && band !== 'high') return;
       // Clamp to the widest possible EQ range (techno: -32/+12).
       // Individual presets further constrain via UI min/max.
       const clamped = clamp(v, -32, 12);
@@ -602,6 +605,11 @@ export const useMixiStore = create<MixiStore>()(
      */
     setHotCue: (deck, index, time) =>
       set((s) => {
+        // Bounds-guard index + time: an out-of-range/non-integer index builds a
+        // huge sparse array (synchronous JSON.stringify freeze). Defense-in-depth —
+        // the AI bridge validates too, but this protects every caller.
+        if (!Number.isInteger(index) || index < 0 || index >= HOT_CUE_COUNT) return s;
+        if (!Number.isFinite(time) || time < 0) return s;
         const d = s.decks[deck];
         // #43: Guard — no cue setting on empty deck.
         if (!d.isTrackLoaded) return s;
@@ -623,6 +631,7 @@ export const useMixiStore = create<MixiStore>()(
      * Calls engine.seek() directly for zero-latency response.
      */
     triggerHotCue: (deck, index) => {
+      if (!Number.isInteger(index) || index < 0 || index >= HOT_CUE_COUNT) return;
       // Edge-case #8: Throttle hot cue spam — ignore triggers within 30ms.
       const key = `${deck}:${index}`;
       const now = performance.now();
@@ -654,6 +663,7 @@ export const useMixiStore = create<MixiStore>()(
     /** Remove a hot cue from the given slot (with undo support). */
     deleteHotCue: (deck, index) =>
       set((s) => {
+        if (!Number.isInteger(index) || index < 0 || index >= HOT_CUE_COUNT) return s;
         const d = s.decks[deck];
         const oldValue = d.hotCues[index];
         const newCues = [...d.hotCues];
@@ -785,6 +795,9 @@ export const useMixiStore = create<MixiStore>()(
     },
 
     setAutoLoop: (deck, beats) => {
+      // Reject non-finite/out-of-range beat counts: beats=Infinity → loopEnd=Infinity
+      // (out-of-spec WebAudio loop bounds).
+      if (!Number.isFinite(beats) || beats <= 0 || beats > 64) return;
       const s = get();
       const d = s.decks[deck];
       // #43: Guard — no transport on empty deck.

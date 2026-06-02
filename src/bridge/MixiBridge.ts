@@ -37,6 +37,7 @@ import type {
   SerializableDeckState,
 } from './protocol';
 import type { DeckId } from '../types';
+import { HOT_CUE_COUNT } from '../types';
 import { WS_BASE } from '../utils/apiBase';
 
 // ── Config ───────────────────────────────────────────────────
@@ -58,46 +59,66 @@ const RECONNECT_MAX = 10_000;
 /** Throttle interval for state pushes (ms). */
 const PUSH_THROTTLE_MS = 50;
 
-// ── Actions whitelist ────────────────────────────────────────
+// ── Action whitelist + per-argument validation ──────────────
 //
-// Only these store actions can be called remotely.
-// This prevents the AI from calling internal-only mutations
-// like setDeckWaveform or setDeckBpm.
+// Only these store actions can be invoked remotely, AND every argument is
+// type/range-checked before it reaches the store mutator. Without this, a
+// malicious/compromised backend could call e.g. setHotCue('A', 1e9, 0) (builds a
+// giant sparse array and freezes the tab), setDeckEq('A', '__proto__', 12)
+// (prototype pollution), or setAutoLoop('A', 1e308) (Infinity loop bounds).
+type ArgCheck = (v: unknown) => boolean;
+const isDeck: ArgCheck = (v) => v === 'A' || v === 'B';
+const isBool: ArgCheck = (v) => typeof v === 'boolean';
+const isBand: ArgCheck = (v) => v === 'low' || v === 'mid' || v === 'high';
+const num = (min: number, max: number): ArgCheck =>
+  (v) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+const int = (min: number, max: number): ArgCheck =>
+  (v) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 
-const ALLOWED_ACTIONS: ReadonlySet<string> = new Set([
+/** action → ordered per-argument validators. Keys ARE the whitelist. */
+const ARG_SCHEMAS: Record<string, ArgCheck[]> = {
   // Master
-  'setMasterVolume',
-  'setMasterFilter',
-  'setMasterDistortion',
-  'setMasterPunch',
-  'setCrossfader',
+  setMasterVolume: [num(0, 1)],
+  setMasterFilter: [num(-1, 1)],
+  setMasterDistortion: [num(0, 1)],
+  setMasterPunch: [num(0, 1)],
+  setCrossfader: [num(0, 1)],
   // Deck transport
-  'setDeckPlaying',
-  'setDeckVolume',
-  'setDeckGain',
-  'setDeckEq',
-  'setDeckColorFx',
-  'setDeckPlaybackRate',
-  'setKeyLock',
+  setDeckPlaying: [isDeck, isBool],
+  setDeckVolume: [isDeck, num(0, 1)],
+  setDeckGain: [isDeck, num(-24, 24)],
+  setDeckEq: [isDeck, isBand, num(-40, 40)],
+  setDeckColorFx: [isDeck, num(-1, 1)],
+  setDeckPlaybackRate: [isDeck, num(0.25, 4)],
+  setKeyLock: [isDeck, isBool],
   // BPM / Sync
-  'syncDeck',
-  'unsyncDeck',
-  // Hot Cues
-  'setHotCue',
-  'triggerHotCue',
-  'deleteHotCue',
+  syncDeck: [isDeck],
+  unsyncDeck: [isDeck],
+  // Hot cues
+  setHotCue: [isDeck, int(0, HOT_CUE_COUNT - 1), num(0, 86_400)],
+  triggerHotCue: [isDeck, int(0, HOT_CUE_COUNT - 1)],
+  deleteHotCue: [isDeck, int(0, HOT_CUE_COUNT - 1)],
   // Loops
-  'setAutoLoop',
-  'exitLoop',
+  setAutoLoop: [isDeck, num(1 / 16, 64)],
+  exitLoop: [isDeck],
   // PFL
-  'toggleCue',
+  toggleCue: [isDeck],
   // Headphones
-  'setHeadphoneLevel',
-  'setHeadphoneMix',
-  'toggleSplitMode',
+  setHeadphoneLevel: [num(0, 1)],
+  setHeadphoneMix: [num(0, 1)],
+  toggleSplitMode: [],
   // Quantize
-  'setQuantize',
-]);
+  setQuantize: [isDeck, isBool],
+};
+
+/** Exact-arity + per-arg validation. Uses hasOwnProperty so attacker-supplied
+ *  action names like "constructor"/"__proto__" can never resolve a schema. */
+function validateArgs(action: string, args: unknown[]): boolean {
+  if (!Object.prototype.hasOwnProperty.call(ARG_SCHEMAS, action)) return false;
+  if (!Array.isArray(args)) return false;
+  const schema = ARG_SCHEMAS[action];
+  return args.length === schema.length && schema.every((check, i) => check(args[i]));
+}
 
 // ── Bridge Class ─────────────────────────────────────────────
 
@@ -211,9 +232,14 @@ export class MixiBridge {
   // ── Command execution ──────────────────────────────────────
 
   private executeCommand(id: string, action: string, args: unknown[]): void {
-    // Security: only allow whitelisted actions.
-    if (!ALLOWED_ACTIONS.has(action)) {
+    // Security: whitelist the action AND validate every argument (type + range)
+    // before it reaches the store mutator — see ARG_SCHEMAS.
+    if (!Object.prototype.hasOwnProperty.call(ARG_SCHEMAS, action)) {
       this.sendResponse(id, false, `Action "${action}" is not allowed`);
+      return;
+    }
+    if (!validateArgs(action, args)) {
+      this.sendResponse(id, false, `Invalid arguments for "${action}"`);
       return;
     }
 
