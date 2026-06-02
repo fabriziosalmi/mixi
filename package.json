@@ -36,7 +36,8 @@
     "dist:mac": "npm run build:all && cross-env EXEC_EXT= electron-builder --mac",
     "dist:win": "npm run build:all && cross-env EXEC_EXT=.exe electron-builder --win",
     "dist:linux": "npm run build:all && cross-env EXEC_EXT= electron-builder --linux",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:audio": "node scripts/e2e-audio.mjs"
   },
   "dependencies": {
     "music-metadata": "^11.12.3",
