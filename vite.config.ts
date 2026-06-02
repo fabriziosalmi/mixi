@@ -29,6 +29,13 @@ export default defineConfig({
   },
   base: './',
   build: {
+    // Vite 7's default baseline (chrome87/es2020) makes esbuild attempt to
+    // downlevel destructuring it can't ("Transforming destructuring to the
+    // configured target environment is not supported yet") inside the
+    // vite-plugin-top-level-await pass, breaking the build. Mixi targets modern
+    // engines only (Electron/Chromium + SharedArrayBuffer/AudioWorklet/top-level
+    // await), so es2022 is a safe, accurate baseline that avoids the downlevel.
+    target: 'es2022',
     rollupOptions: {
       output: {
         // Pin React + zustand into one synchronous vendor chunk.
