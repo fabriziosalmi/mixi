@@ -32,10 +32,10 @@
     "build:electron": "tsc -p electron/tsconfig.json && node scripts/rename-electron-cjs.mjs",
     "build:all": "npm run build && npm run build:electron",
     "build:engine": "cd api && pyinstaller --onefile --name mixi-engine main.py",
-    "dist": "npm run build:all && EXEC_EXT= electron-builder",
-    "dist:mac": "npm run build:all && EXEC_EXT= electron-builder --mac",
-    "dist:win": "npm run build:all && EXEC_EXT=.exe electron-builder --win",
-    "dist:linux": "npm run build:all && EXEC_EXT= electron-builder --linux",
+    "dist": "npm run build:all && cross-env EXEC_EXT= electron-builder",
+    "dist:mac": "npm run build:all && cross-env EXEC_EXT= electron-builder --mac",
+    "dist:win": "npm run build:all && cross-env EXEC_EXT=.exe electron-builder --win",
+    "dist:linux": "npm run build:all && cross-env EXEC_EXT= electron-builder --linux",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -58,6 +58,7 @@
     "@webgpu/types": "^0.1.69",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
     "eslint": "^9.39.4",

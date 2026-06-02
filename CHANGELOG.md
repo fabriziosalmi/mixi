@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/build-wasm.mjs` builds both wasm artifacts and **fails the build** if the lean DSP wasm ever gains an import or loses a required export (regression guard).
 - `WasmDspBridge` resolves the worklet/wasm URLs via `document.baseURI` (correct under the Electron `file://` origin) and transfers the wasm **bytes** to the worklet instead of a `WebAssembly.Module`.
 
+### Build/CI
+- Set the Vite build `target` to `es2022` — Vite 7 / esbuild 0.27 (locked since the dependency bumps) otherwise fail `vite build` trying to downlevel destructuring inside the top-level-await pass (broke Test Gate, Docs, Docker, and the release build).
+- `dist:*` scripts use `cross-env` for `EXEC_EXT`, fixing the Windows release build (the bare `EXEC_EXT=…` prefix isn't valid in cmd.exe).
+- CI builds + verifies the lean DSP wasm (`mixi-dsp`), and runs its native tests.
+
 > `useWasmDsp` remains **opt-in (default off)**. The Rust DSP path is verified working but unchanged audio behaviour for existing users; flip the default once it's been exercised across sample rates/devices in real use.
 
 ## [0.5.11] - 2026-06-02
