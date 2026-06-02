@@ -55,6 +55,20 @@ function virtualBeatPeriod(slaveBpm, ratio) {
 }
 
 /**
+ * Monotonic millisecond clock that works inside AudioWorkletGlobalScope.
+ * `performance` is not guaranteed to exist in the worklet realm (it throws
+ * "performance is not defined" in some Chromium/Electron builds), so fall back
+ * to the worklet's `currentTime` global (seconds → ms). Note: `currentTime` is
+ * fixed within a single render quantum, so intra-process() CPU-duration deltas
+ * degrade to ~0 on the fallback — but cross-quantum scheduling detection and,
+ * above all, "no crash", are preserved.
+ */
+const nowMs = () =>
+  (typeof performance !== 'undefined' && performance.now)
+    ? performance.now()
+    : currentTime * 1000;
+
+/**
  * Resource Acquisition Is Initialization (RAII) wrapper for the raw Wasm pitch shifter pointer.
  * Ensures the pointer is freed via FinalizationRegistry when garbage-collected or explicitly destroyed.
  */
@@ -257,21 +271,12 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs, outputs) {
-    const now = performance.now();
-    if (this._lastProcessTime) {
-      const schedulingDelta = now - this._lastProcessTime;
-      if (schedulingDelta > 4.5) { // 4.5ms exceeds normal block budget (2.9ms) significantly
-        this.port.postMessage({
-          type: 'glitch',
-          durationMs: schedulingDelta,
-          typeDetail: 'scheduling_delay',
-          frames: inputs[0] && inputs[0][0] ? inputs[0][0].length : 128
-        });
-      }
-    }
-    this._lastProcessTime = now;
-
-    const startCpu = performance.now();
+    // NOTE: A wall-clock "scheduling delay" detector used to live here, comparing
+    // the time between consecutive process() calls. AudioWorklets render quanta in
+    // bursts, so that gap is not a real audio metric — it produced constant false
+    // "scheduling_delay" glitch telemetry under normal load. Removed. Genuine
+    // overload is still caught by the in-call CPU-duration check below.
+    const startCpu = nowMs();
     const input = inputs[0];
     const output = outputs[0];
 
@@ -402,7 +407,7 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
       output[1].set(output[0]);
     }
 
-    const cpuDuration = performance.now() - startCpu;
+    const cpuDuration = nowMs() - startCpu;
     if (cpuDuration > 2.0) {
       this.port.postMessage({
         type: 'glitch',
