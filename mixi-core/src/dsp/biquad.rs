@@ -61,6 +61,11 @@ impl Biquad {
         for s in samples.iter_mut() {
             *s = self.tick(*s);
         }
+        // Flush denormal state: once the input decays into the subnormal range
+        // the DfII-T memories recirculate it and pin the CPU on every silent
+        // block. One flush per block costs nothing and self-heals NaN/Inf too.
+        self.z1 = super::flush_denorm(self.z1);
+        self.z2 = super::flush_denorm(self.z2);
     }
 
     /// Reset filter state (zero delay memories).

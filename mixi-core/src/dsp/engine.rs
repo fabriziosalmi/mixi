@@ -225,6 +225,11 @@ impl DeckDsp {
             self.gate.process_block(samples, 0.01); // ~120 BPM default
         }
 
+        // Denormal kill after the recursive FX chain (delay/reverb/phaser/
+        // flanger) and before the fader, so subnormals from one effect don't
+        // bleed into the next deck block or the master sum.
+        denormal_kill(samples);
+
         // Smoothed fader × crossfader (click-free)
         // Exponential fader curve: val³ gives fine precision at low volumes
         // and matches human loudness perception (logarithmic hearing)
@@ -323,6 +328,10 @@ impl MasterDsp {
             self.dc_x_prev = x;
             *s = self.dc_y_prev;
         }
+        // Flush the DC blocker's recursive memory — it's a one-pole IIR that
+        // decays toward subnormals when the master goes silent.
+        self.dc_y_prev = super::flush_denorm(self.dc_y_prev);
+        self.dc_x_prev = super::flush_denorm(self.dc_x_prev);
 
         // Final denormal kill
         denormal_kill(samples);

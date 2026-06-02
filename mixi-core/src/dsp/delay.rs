@@ -69,8 +69,11 @@ impl Delay {
             let frac = read_back.fract();
             let delayed = self.buffer[read_pos_int] * (1.0 - frac) + self.buffer[idx1] * frac;
 
-            // Write input + feedback into delay line
-            self.buffer[self.write_pos] = *s + delayed * self.feedback;
+            // Write input + feedback into delay line. Flush the written value:
+            // the feedback term recirculates through the whole ring, so a
+            // block-end flush wouldn't clear it — left alone it fills the buffer
+            // with subnormals that pin the CPU for the life of the echo tail.
+            self.buffer[self.write_pos] = super::flush_denorm(*s + delayed * self.feedback);
 
             // Output: dry + wet mix
             *s = *s * dry + delayed * self.wet;

@@ -71,8 +71,8 @@ impl Flanger {
             let frac = read_pos.fract();
             let delayed = self.buffer[idx0] * (1.0 - frac) + self.buffer[idx1] * frac;
 
-            // Write with feedback
-            self.buffer[self.write_pos] = *s + delayed * self.feedback;
+            // Write with feedback — flush the recirculating value (see Delay).
+            self.buffer[self.write_pos] = super::flush_denorm(*s + delayed * self.feedback);
 
             // Output
             *s = *s * dry + delayed * self.wet;

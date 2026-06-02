@@ -154,6 +154,13 @@ impl Phaser {
         // Advance LFO phase
         self.lfo_phase = phase_end;
         if self.lfo_phase >= 1.0 { self.lfo_phase -= self.lfo_phase.floor(); }
+
+        // Flush denormal feedback state (last_out + each allpass memory) so a
+        // silent deck with the phaser on doesn't pin the CPU on subnormals.
+        self.last_out = super::flush_denorm(self.last_out);
+        for stage in &mut self.stages {
+            stage.z1 = super::flush_denorm(stage.z1);
+        }
     }
 
     pub fn reset(&mut self) {
