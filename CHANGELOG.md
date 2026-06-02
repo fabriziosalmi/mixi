@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.11] - 2026-06-02
+
+### Fixed
+- **Fatal "Vs is not a function" crash on launch (P0)** — `vite-plugin-wasm` emits a top-level `await`, so `vite-plugin-top-level-await` rewrites every chunk that transitively contains it into an async-initialised chunk whose exports are assigned inside a deferred `.then()`. zustand's `create`/`persist` were co-bundled into such a chunk, but the lazily-loaded `DesktopRoot` chunk builds a store at module-eval time (`sessionStore`) without awaiting that init promise — so `create` was still `undefined` → `TypeError` caught by the ErrorBoundary on every open. Fixed by pinning `react` + `react-dom` + `scheduler` + `zustand` into one synchronous `react-vendor` chunk (none use top-level await), so those exports are assigned eagerly before any consumer runs. zustand is grouped *with* React to keep a single React instance.
+- **Fatal "Failed to construct 'WebSocket'" crash on launch (P0)** — `MixiBridge` computed `const WS_URL = \`${WS_BASE}/ws/mixer\`` at module-eval, reading the top-level-await-deferred `WS_BASE` before it was assigned → `undefined/ws/mixer`, which under Electron's `file://` origin throws `SyntaxError: scheme must be ws/wss`. The URL is now resolved lazily at `connect()` time (after mount, once the chunk has initialised), and WebSocket construction is wrapped in try/catch so the optional AI-bridge feature can never crash the UI.
+- **`electron-builder` "env EXEC_EXT is not defined"** — electron-builder 26.x rejects the undefined env var in the `extraResources` pattern `mixi-engine${env.EXEC_EXT}`. The `dist*` scripts now set `EXEC_EXT` explicitly (empty for mac/linux, `.exe` for win).
+
+### Internal
+- `vite preview` now sends the same COOP/COEP headers as the dev server, so the CI e2e run (which serves the production build) and local preview have SharedArrayBuffer for the Wasm audio engine.
+
 ## [0.5.6] - 2026-05-09
 
 ### Security

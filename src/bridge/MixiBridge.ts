@@ -41,7 +41,18 @@ import { WS_BASE } from '../utils/apiBase';
 
 // ── Config ───────────────────────────────────────────────────
 
-const WS_URL = `${WS_BASE}/ws/mixer`;
+/**
+ * Resolve the mixer WebSocket URL. Computed lazily (not as a module-level
+ * const) because WS_BASE comes from apiBase.ts, which can be bundled into a
+ * top-level-await chunk: reading it at module-eval time captures the binding
+ * *before* it is assigned → `undefined/ws/mixer`, which then fails to
+ * construct under the Electron `file://` origin ("scheme must be ws/wss").
+ * Reading it at connect() time — after mount, once that chunk has initialised —
+ * always yields the real `ws://…` base (or the `ws://localhost:8000` fallback).
+ */
+function wsUrl(): string {
+  return `${WS_BASE}/ws/mixer`;
+}
 const RECONNECT_BASE = 1000;
 const RECONNECT_MAX = 10_000;
 /** Throttle interval for state pushes (ms). */
@@ -111,10 +122,22 @@ export class MixiBridge {
     if (this.destroyed) return;
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
 
+    const url = wsUrl();
     if (this.reconnectAttempts === 0) {
-      log.info('Bridge', `Connecting to ${WS_URL}…`);
+      log.info('Bridge', `Connecting to ${url}…`);
     }
-    this.ws = new WebSocket(WS_URL);
+
+    // `new WebSocket()` throws synchronously on a malformed URL (e.g. a bad
+    // scheme under file://). The bridge is an optional AI-backend feature —
+    // a construction failure must never propagate into React and crash the UI.
+    try {
+      this.ws = new WebSocket(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn('Bridge', `WebSocket unavailable (${msg}) — AI bridge disabled`);
+      this.ws = null;
+      return;
+    }
 
     this.ws.onopen = () => {
       log.success('Bridge', 'Connected to MCP backend');

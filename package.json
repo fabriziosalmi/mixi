@@ -1,6 +1,6 @@
 {
   "name": "mixi",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "author": "Fabrizio Salmi <fabrizio.salmi@gmail.com>",
   "description": "Deterministic Audio Workstation",
   "homepage": "https://github.com/fabriziosalmi/mixi",
@@ -32,10 +32,10 @@
     "build:electron": "tsc -p electron/tsconfig.json && node scripts/rename-electron-cjs.mjs",
     "build:all": "npm run build && npm run build:electron",
     "build:engine": "cd api && pyinstaller --onefile --name mixi-engine main.py",
-    "dist": "npm run build:all && electron-builder",
-    "dist:mac": "npm run build:all && electron-builder --mac",
-    "dist:win": "npm run build:all && electron-builder --win",
-    "dist:linux": "npm run build:all && electron-builder --linux",
+    "dist": "npm run build:all && EXEC_EXT= electron-builder",
+    "dist:mac": "npm run build:all && EXEC_EXT= electron-builder --mac",
+    "dist:win": "npm run build:all && EXEC_EXT=.exe electron-builder --win",
+    "dist:linux": "npm run build:all && EXEC_EXT= electron-builder --linux",
     "preview": "vite preview"
   },
   "dependencies": {
