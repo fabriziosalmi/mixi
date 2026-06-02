@@ -99,6 +99,12 @@ jobs:
         env:
           RUSTFLAGS: '-C target-feature=+simd128'
 
+      - name: Build lean DSP wasm (zero-import AudioWorklet build)
+        run: cargo build --release --target wasm32-unknown-unknown
+        working-directory: mixi-dsp
+        env:
+          RUSTFLAGS: '-C target-feature=+simd128'
+
       - name: Install ALSA dev headers (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.12] - 2026-06-02
+
+### Fixed
+- **Rust/Wasm DSP worklet now actually engages (was always falling back).** The AudioWorklet was fed the full wasm-bindgen `mixi_core_bg.wasm`, which requires per-build hashed `__wbindgen_*` imports an AudioWorklet cannot satisfy — so it timed out after 5s and silently fell back to the WebAudio path. The DSP is now built as a **dedicated, zero-import wasm** (new `mixi-dsp` crate, `extern "C"` ABI, owned I/O buffers) that the worklet instantiates with an empty import object. With `useWasmDsp` enabled, audio now flows through the Rust DSP (verified in-Electron: *"Wasm DSP path ACTIVE — Rust processing audio"*, no fallback, no warnings).
+
+### Changed
+- `DspEngine` (`mixi-core/src/dsp`) is now wasm-bindgen-free and shared by both `mixi-core` (analysis) and `mixi-dsp` (lean worklet wasm) via `#[path]` — single source of truth. The unused bindgen `DspEngine`/`processRaw` exports were removed from the analysis wasm.
+- `scripts/build-wasm.mjs` builds both wasm artifacts and **fails the build** if the lean DSP wasm ever gains an import or loses a required export (regression guard).
+- `WasmDspBridge` resolves the worklet/wasm URLs via `document.baseURI` (correct under the Electron `file://` origin) and transfers the wasm **bytes** to the worklet instead of a `WebAssembly.Module`.
+
+> `useWasmDsp` remains **opt-in (default off)**. The Rust DSP path is verified working but unchanged audio behaviour for existing users; flip the default once it's been exercised across sample rates/devices in real use.
+
 ## [0.5.11] - 2026-06-02
 
 ### Fixed

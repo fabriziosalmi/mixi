@@ -1,0 +1,28 @@
+[package]
+name = "mixi-dsp"
+version = "0.1.0"
+edition = "2021"
+description = "Mixi DAW — lean, zero-import DSP wasm for the AudioWorklet"
+license = "PolyForm-Noncommercial-1.0.0"
+
+# cdylib → the wasm artifact loaded by mixi-dsp-worklet.js.
+# rlib   → lets `cargo test` build a native test harness for the parity test.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Intentionally NO dependencies: no wasm-bindgen, no js-sys, no open-bpm.
+# The DSP source is shared from ../mixi-core/src/dsp via #[path] includes
+# (see src/lib.rs). The resulting wasm has ZERO imports — the AudioWorklet
+# instantiates it with an empty import object.
+
+[profile.release]
+opt-level = 3          # fastest DSP processing
+lto = true             # link-time optimization
+strip = true           # strip symbols
+codegen-units = 1      # max optimization
+panic = "abort"        # no unwinding tables (smaller, no unwind imports)
+
+# wasm-opt disabled for the same reason as mixi-core: the version bundled with
+# wasm-pack 0.14 doesn't support bulk-memory ops emitted by recent Rust.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

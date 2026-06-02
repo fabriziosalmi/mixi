@@ -51,9 +51,11 @@ export class WasmDspBridge {
     }
 
     try {
-      // 1. Register the worklet processor
-      // C4 fix: resolve worklet path relative to deployment base
-      const workletUrl = new URL('/worklets/mixi-dsp-worklet.js', import.meta.url);
+      // 1. Register the worklet processor.
+      // Resolve relative to the document base URL so the path is correct under
+      // the Electron file:// origin as well as the dev/preview http origin
+      // (an absolute "/worklets/..." resolves to the filesystem root under file://).
+      const workletUrl = new URL('worklets/mixi-dsp-worklet.js', document.baseURI);
       await ctx.audioWorklet.addModule(workletUrl.href);
       log.info('WasmDsp', 'AudioWorklet processor registered');
 
@@ -71,18 +73,21 @@ export class WasmDspBridge {
       // 4. Send buffers to worklet
       sendBuffersToWorklet(this.node, this.buffers);
 
-      // 5. Fetch and compile the Wasm module
-      // C3 fix: resolve wasm path via import.meta.url for correct hashing in prod
-      const wasmUrl = new URL('/mixi-core/pkg/mixi_core_bg.wasm', import.meta.url);
+      // 5. Fetch the lean DSP wasm bytes (the zero-import mixi-dsp build).
+      // Resolve relative to the document base for file:// (Electron) correctness.
+      const wasmUrl = new URL('mixi_dsp.wasm', document.baseURI);
       const response = await fetch(wasmUrl.href);
       if (!response.ok) {
-        throw new Error(`Failed to fetch wasm: ${response.status}`);
+        throw new Error(`Failed to fetch DSP wasm: ${response.status}`);
       }
       const wasmBytes = await response.arrayBuffer();
-      const wasmModule = await WebAssembly.compile(wasmBytes);
-      log.info('WasmDsp', `Wasm module compiled (${(wasmBytes.byteLength / 1024).toFixed(0)} KB)`);
+      log.info('WasmDsp', `DSP wasm fetched (${(wasmBytes.byteLength / 1024).toFixed(0)} KB)`);
 
-      // 6. Send compiled module to worklet and wait for ready
+      // 6. Send the wasm BYTES to the worklet and wait for ready.
+      // We transfer the ArrayBuffer (not a WebAssembly.Module): structured-cloning
+      // a Module into an AudioWorklet realm is unreliable and previously caused a
+      // silent init timeout. The worklet compiles + instantiates the bytes with an
+      // empty import object (the lean wasm has zero imports).
       const ready = await new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => {
           log.warn('WasmDsp', 'Worklet init timeout (5s)');
@@ -101,10 +106,7 @@ export class WasmDspBridge {
           }
         };
 
-        this.node!.port.postMessage({
-          type: 'wasm-module',
-          module: wasmModule,
-        });
+        this.node!.port.postMessage({ type: 'wasm-bytes', bytes: wasmBytes }, [wasmBytes]);
       });
 
       if (!ready) {

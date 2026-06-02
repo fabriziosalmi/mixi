@@ -20,17 +20,17 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     this.paramView = null;     // Uint8Array on SharedArrayBuffer
     this.meteringView = null;  // Float32Array on SharedArrayBuffer
 
-    // Wasm state (set after module instantiation)
-    this._exports = null;      // Wasm instance exports
-    this._enginePtr = 0;       // Pointer to DspEngine in Wasm memory
-    this._memory = null;       // Wasm linear memory (ArrayBuffer)
+    // Wasm state (set after instantiation of the lean mixi-dsp wasm)
+    this._exports = null;      // Wasm instance exports (stable C ABI)
+    this._engine = 0;          // Handle from dsp_engine_new()
+    this._memory = null;       // Wasm linear memory
 
-    // Pre-allocated buffer offsets in Wasm linear memory
-    this._inL = 0;    // 128 × f32 = 512 bytes
+    // Engine-owned buffer byte-offsets (from the dsp_*_ptr accessors)
+    this._inL = 0;
     this._inR = 0;
     this._outL = 0;
     this._outR = 0;
-    this._params = 0; // 512 bytes
+    this._paramPtr = 0;
 
     this.port.onmessage = (e) => this._handleMessage(e.data);
   }
@@ -43,63 +43,46 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       if (data.meteringBus) {
         this.meteringView = new Float32Array(data.meteringBus);
       }
+      return;
     }
 
-    if (data.type === 'wasm-module') {
+    if (data.type === 'wasm-bytes') {
       try {
-        const { module } = data;
+        // The lean mixi-dsp wasm has ZERO imports — instantiate with {}.
+        // (We receive raw bytes, not a WebAssembly.Module: cloning a Module into
+        // an AudioWorklet realm is unreliable and previously caused a silent
+        // init timeout.)
+        const { instance } = await WebAssembly.instantiate(data.bytes, {});
+        const ex = instance.exports;
 
-        // Minimal import object — processRaw uses direct memory, no wasm-bindgen glue
-        const self = this;
-        const importObject = {
-          wbg: {
-            // H4 fix: Extract actual panic message from Wasm memory
-            __wbindgen_throw: (ptr, len) => {
-              try {
-                const bytes = new Uint8Array(self._memory.buffer, ptr, len);
-                const message = new TextDecoder().decode(bytes);
-                console.error('[mixi-dsp] Wasm panic:', message);
-                self.port.postMessage({ type: 'error', message: 'Wasm panic: ' + message });
-              } catch {
-                console.error('[mixi-dsp] Wasm panic (could not read message)');
-              }
-            },
-          },
-        };
-
-        const instance = await WebAssembly.instantiate(module, importObject);
-        this._exports = instance.exports;
-        this._memory = instance.exports.memory;
-
-        // M4 fix: Create DspEngine — explicit error if export not found
-        const engineNew = this._exports.dspengine_new || this._exports.__wbg_dspengine_new;
-        if (!engineNew) {
-          this.port.postMessage({ type: 'error', message: 'dspengine_new export not found — wasm-bindgen ABI mismatch. Available: ' + Object.keys(this._exports).join(', ') });
-          return;
-        }
-        this._enginePtr = engineNew(sampleRate);
-
-        // H5 fix: Allocate buffers — explicit error if malloc not found
-        const malloc = this._exports.__wbindgen_export_0 || this._exports.__wbindgen_malloc || this._exports.wasm_malloc;
-        if (!malloc) {
-          this.port.postMessage({ type: 'error', message: 'Wasm malloc export not found — wasm-bindgen version mismatch? Available: ' + Object.keys(this._exports).filter(k => k.includes('export') || k.includes('malloc')).join(', ') });
+        if (typeof ex.dsp_engine_new !== 'function' || typeof ex.dsp_process !== 'function') {
+          this.port.postMessage({
+            type: 'error',
+            message: 'lean DSP exports missing (dsp_engine_new / dsp_process). Available: ' +
+              Object.keys(ex).filter(k => k.startsWith('dsp_')).join(', '),
+          });
           return;
         }
 
-        if (this._enginePtr) {
-          // 4 audio buffers × 128 samples × 4 bytes = 2048 bytes
-          // 1 param buffer × 512 bytes
-          this._inL = malloc(512, 4);    // 128 f32
-          this._inR = malloc(512, 4);
-          this._outL = malloc(512, 4);
-          this._outR = malloc(512, 4);
-          this._params = malloc(512, 1); // 512 u8
+        this._exports = ex;
+        this._memory = ex.memory;
 
-          this.wasmReady = true;
-          this.port.postMessage({ type: 'ready' });
-        } else {
-          this.port.postMessage({ type: 'error', message: 'Missing malloc or engine constructor' });
+        // Create the engine; cache its owned I/O buffer byte-offsets.
+        // `sampleRate` is a global in AudioWorkletGlobalScope.
+        this._engine = ex.dsp_engine_new(sampleRate);
+        this._inL = ex.dsp_in_l_ptr(this._engine);
+        this._inR = ex.dsp_in_r_ptr(this._engine);
+        this._outL = ex.dsp_out_l_ptr(this._engine);
+        this._outR = ex.dsp_out_r_ptr(this._engine);
+        this._paramPtr = ex.dsp_param_ptr(this._engine);
+
+        if (!this._engine) {
+          this.port.postMessage({ type: 'error', message: 'dsp_engine_new returned null' });
+          return;
         }
+
+        this.wasmReady = true;
+        this.port.postMessage({ type: 'ready' });
       } catch (err) {
         this.port.postMessage({ type: 'error', message: String(err) });
       }
@@ -121,17 +104,17 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     const inBL = deckB && deckB[0] ? deckB[0] : null;
 
     // ── Wasm DSP Processing ─────────────────────────────────
-    if (this.wasmReady && this._exports && this._enginePtr) {
+    if (this.wasmReady && this._exports && this._engine) {
       const mem = new Float32Array(this._memory.buffer);
       const memU8 = new Uint8Array(this._memory.buffer);
 
-      // Copy deck inputs into Wasm memory
-      const inLOff = this._inL / 4; // byte offset → f32 index
+      // Engine-owned buffer offsets (bytes → f32 index; ptrs are 4-aligned).
+      const inLOff = this._inL / 4;
       const inROff = this._inR / 4;
       const outLOff = this._outL / 4;
       const outROff = this._outR / 4;
 
-      // Deck A → inL, Deck B → inR
+      // Deck A → in_l, Deck B → in_r.
       if (inAL) {
         mem.set(inAL, inLOff);
       } else {
@@ -143,26 +126,15 @@ class MixiDspProcessor extends AudioWorkletProcessor {
         mem.fill(0, inROff, inROff + len);
       }
 
-      // Copy param bus from SharedArrayBuffer into Wasm memory
+      // Param bus (SharedArrayBuffer snapshot) → engine param buffer.
       if (this.paramView) {
-        memU8.set(this.paramView, this._params);
+        memU8.set(this.paramView, this._paramPtr);
       }
 
-      // Call Rust DSP engine via raw memory offsets
-      // M7 fix: cache export lookup once, log if missing
-      if (!this._processRaw) {
-        this._processRaw = this._exports.processRaw || this._exports.dspengine_processRaw;
-        if (!this._processRaw) {
-          console.error('[mixi-dsp] processRaw export not found — Wasm DSP disabled');
-          this.wasmReady = false;
-          return true;
-        }
-      }
-      this._processRaw(this._enginePtr,
-        this._inL, this._inR, this._outL, this._outR,
-        this._params, len);
+      // Run the Rust DSP engine on its owned buffers (stable C ABI).
+      this._exports.dsp_process(this._engine, len);
 
-      // Copy processed output from Wasm memory to JS output buffers
+      // Copy processed output back to the worklet output.
       outputL.set(mem.subarray(outLOff, outLOff + len));
       outputR.set(mem.subarray(outROff, outROff + len));
 

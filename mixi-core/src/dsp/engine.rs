@@ -10,8 +10,10 @@
 //! Master chain:
 //!   Sum → Filter → Distortion → Punch → Limiter
 
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+// NOTE: This engine is intentionally free of wasm-bindgen / js-sys so it can be
+// compiled into the lean, zero-import DSP wasm (the `mixi-dsp` crate) that the
+// AudioWorklet loads, as well as run as plain Rust in native tests. The worklet
+// boundary is provided by `extern "C"` wrappers in mixi-dsp's `lean_dsp`, not here.
 
 use crate::dsp::biquad::{Biquad, ThreeBandEq};
 use crate::dsp::dynamics::{Gain, Limiter, Compressor};
@@ -329,7 +331,6 @@ impl MasterDsp {
 
 // ── Top-level DspEngine (exported to JS) ────────────────────
 
-#[wasm_bindgen]
 pub struct DspEngine {
     deck_a: DeckDsp,
     deck_b: DeckDsp,
@@ -352,10 +353,8 @@ pub struct DspEngine {
 /// Maximum block size supported (AudioWorklet standard = 128).
 const MAX_BLOCK: usize = 1024;
 
-#[wasm_bindgen]
 impl DspEngine {
     /// Create a new DSP engine for the given sample rate.
-    #[wasm_bindgen(constructor)]
     pub fn new(sample_rate: f32) -> Self {
         Self {
             deck_a: DeckDsp::new(sample_rate),
@@ -379,7 +378,6 @@ impl DspEngine {
     /// * `params` — flat parameter bus (512 bytes, read-only)
     ///
     /// Called once per AudioWorklet quantum (128 frames).
-    #[wasm_bindgen]
     pub fn process(
         &mut self,
         input_l: &mut [f32],
@@ -443,7 +441,6 @@ impl DspEngine {
     /// Get the current limiter gain reduction in dB (for metering).
     /// Returns 0.0 when idle, negative values when limiting.
     /// Use this to drive the LIM badge intensity in the UI.
-    #[wasm_bindgen(js_name = "getLimiterGainReduction")]
     pub fn get_limiter_gain_reduction(&self) -> f32 {
         // Return the max GR across both channels
         self.master_l.predictive.gain_reduction_db()
@@ -451,7 +448,6 @@ impl DspEngine {
     }
 
     /// Reset all DSP state (on track change, etc.)
-    #[wasm_bindgen]
     pub fn reset(&mut self) {
         self.deck_a.eq.reset();
         self.deck_a.color.reset();
@@ -485,46 +481,10 @@ impl DspEngine {
         self.sidechain_b_to_a.reset();
     }
 
-    /// Process audio via raw memory offsets (for AudioWorklet direct access).
-    ///
-    /// The worklet pre-allocates buffers in Wasm linear memory and passes
-    /// their byte offsets. This avoids wasm-bindgen's heap object machinery.
-    ///
-    /// * `mem_in_l`  — byte offset of input L buffer (128 × f32)
-    /// * `mem_in_r`  — byte offset of input R buffer (128 × f32)
-    /// * `mem_out_l` — byte offset of output L buffer (128 × f32)
-    /// * `mem_out_r` — byte offset of output R buffer (128 × f32)
-    /// * `mem_params` — byte offset of param bus (512 bytes)
-    /// * `len`       — number of samples per channel (typically 128)
-    #[wasm_bindgen(js_name = "processRaw")]
-    pub fn process_raw(&mut self, mem_in_l: u32, mem_in_r: u32,
-        mem_out_l: u32, mem_out_r: u32, mem_params: u32, len: u32,
-    ) {
-        let len = (len as usize).min(MAX_BLOCK);
-
-        // H1 fix: Validate all offsets fit within Wasm linear memory.
-        let mem_size = wasm_bindgen::memory().unchecked_ref::<js_sys::WebAssembly::Memory>()
-            .buffer().unchecked_ref::<js_sys::ArrayBuffer>().byte_length() as usize;
-        let audio_bytes = len * 4; // f32 = 4 bytes
-
-        if mem_in_l as usize + audio_bytes > mem_size
-            || mem_in_r as usize + audio_bytes > mem_size
-            || mem_out_l as usize + audio_bytes > mem_size
-            || mem_out_r as usize + audio_bytes > mem_size
-            || mem_params as usize + 512 > mem_size
-        {
-            return; // Silently skip — JS will get silence, not corruption
-        }
-
-        unsafe {
-            let base = 0 as *mut u8;
-            let in_l = std::slice::from_raw_parts_mut(base.add(mem_in_l as usize) as *mut f32, len);
-            let in_r = std::slice::from_raw_parts_mut(base.add(mem_in_r as usize) as *mut f32, len);
-            let out_l = std::slice::from_raw_parts_mut(base.add(mem_out_l as usize) as *mut f32, len);
-            let out_r = std::slice::from_raw_parts_mut(base.add(mem_out_r as usize) as *mut f32, len);
-            let params = std::slice::from_raw_parts(base.add(mem_params as usize), 512);
-
-            self.process(in_l, in_r, out_l, out_r, params);
-        }
-    }
+    // NOTE: The previous `processRaw` (raw byte-offset) entry point lived here.
+    // It depended on `wasm_bindgen::memory()` / js-sys for a bounds check, which
+    // forced wasm-bindgen imports into the worklet wasm. The AudioWorklet boundary
+    // now lives in the mixi-dsp crate's `lean_dsp`, which owns its I/O buffers and
+    // calls the safe slice-based `process()` above — no raw pointers, no js-sys,
+    // zero wasm imports.
 }

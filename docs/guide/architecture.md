@@ -48,6 +48,8 @@ When `useWasmDsp` is enabled in Settings, audio routes through a Rust AudioWorkl
 - Parameter bus: 512-byte SharedArrayBuffer
 - Metering bus: 28-byte SharedArrayBuffer for VU output
 
+The worklet loads a **dedicated lean wasm** (the `mixi-dsp` crate → `public/mixi_dsp.wasm`), separate from the wasm-bindgen analysis module (`mixi-core`). It is compiled with no wasm-bindgen and a stable `extern "C"` ABI (`dsp_engine_new`, `dsp_process`, `dsp_*_ptr`, …), so it has **zero imports** and the AudioWorklet can instantiate it with an empty import object. The same DSP source is shared by both crates via `#[path]` (single source of truth); `DspEngine` itself is wasm-bindgen-free. `scripts/build-wasm.mjs` builds the lean wasm and fails the build if it ever gains an import. The bridge fetches the wasm **bytes** and transfers the `ArrayBuffer` to the worklet (not a `WebAssembly.Module`, which does not clone reliably into an AudioWorklet realm).
+
 ## Deck Channel
 
 Each deck has a `DeckChannel` with this signal chain:
