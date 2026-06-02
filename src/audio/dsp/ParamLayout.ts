@@ -137,6 +137,14 @@ export const GLOBAL = {
   SAMPLE_RATE:    400,
   /** DSP backend active (0.0 = native, 1.0 = wasm). */
   DSP_BACKEND:    404,
+  /**
+   * Seqlock generation counter (u32). JS/worklet-only — the Rust engine never
+   * reads this offset. The writer bumps it odd before a batch of param writes
+   * and even after; the worklet retries its bulk snapshot copy if it observes
+   * an odd value or a change across the copy, so it never feeds the DSP a
+   * half-written set (e.g. an FX `active` flag without its matching `amount`).
+   */
+  SEQ:            408,
   /** H2: Layout version magic (must match Rust). Written on init, checked by Rust. */
   LAYOUT_VERSION: 508,
 } as const;

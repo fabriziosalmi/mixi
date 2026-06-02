@@ -119,7 +119,12 @@ export class MeteringReader {
     this.view = new Float32Array(meteringBus);
   }
 
-  get peakL(): number { return Atomics.load(new Int32Array(this.view.buffer), 0) as unknown as number; }
+  // The worklet writes plain f32s (meteringView[0..6]); read them as f32.
+  // The old Int32 Atomics.load reinterpreted the float's bit pattern as an
+  // integer, so peakL returned garbage. Metering is display-only and updated
+  // every block, so a rare torn read is a one-frame cosmetic blip — no seqlock
+  // needed here (unlike the param bus, where a torn read drives the DSP).
+  get peakL(): number { return this.view[0]; }
   get rmsL(): number { return this.view[1]; }
   get peakR(): number { return this.view[2]; }
   get rmsR(): number { return this.view[3]; }

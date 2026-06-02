@@ -13,11 +13,19 @@
  *   - meteringBus: VU output (28 bytes, read by main thread)
  */
 
+// Seqlock generation counter byte offset in the param bus
+// (ParamLayout.GLOBAL.SEQ = 408) → i32 index. JS/worklet-only; the Rust
+// engine never reads it. The main thread bumps it odd while writing a batch
+// of params and even when done, so we can copy a consistent snapshot.
+const PARAM_SEQ_I32 = 408 >> 2; // 102
+const PARAM_SEQ_MAX_RETRIES = 8;
+
 class MixiDspProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.wasmReady = false;
     this.paramView = null;     // Uint8Array on SharedArrayBuffer
+    this.paramI32 = null;      // Int32Array on the SAME buffer (seqlock reads)
     this.meteringView = null;  // Float32Array on SharedArrayBuffer
 
     // Wasm state (set after instantiation of the lean mixi-dsp wasm)
@@ -39,6 +47,7 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     if (data.type === 'init') {
       if (data.paramBus) {
         this.paramView = new Uint8Array(data.paramBus);
+        this.paramI32 = new Int32Array(data.paramBus);
       }
       if (data.meteringBus) {
         this.meteringView = new Float32Array(data.meteringBus);
@@ -127,8 +136,23 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       }
 
       // Param bus (SharedArrayBuffer snapshot) → engine param buffer.
+      // Seqlock: if the writer publishes mid-copy (counter is odd or changes
+      // across the copy), retry so the DSP never sees a half-written batch
+      // (e.g. an FX `active` flag without its matching `amount`). If the writer
+      // never bumps the counter it stays 0/even and this copies once.
       if (this.paramView) {
-        memU8.set(this.paramView, this._paramPtr);
+        const i32 = this.paramI32;
+        if (i32) {
+          let s1, s2, attempts = 0;
+          do {
+            s1 = Atomics.load(i32, PARAM_SEQ_I32);
+            if (s1 & 1) continue;                      // write in progress — spin
+            memU8.set(this.paramView, this._paramPtr); // tentative snapshot copy
+            s2 = Atomics.load(i32, PARAM_SEQ_I32);
+          } while (((s1 & 1) || s1 !== s2) && ++attempts < PARAM_SEQ_MAX_RETRIES);
+        } else {
+          memU8.set(this.paramView, this._paramPtr);
+        }
       }
 
       // Run the Rust DSP engine on its owned buffers (stable C ABI).

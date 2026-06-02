@@ -33,6 +33,24 @@ import type { FxId } from '../nodes/DeckFx';
 export class DspParamWriter {
   constructor(private readonly bus: DspParamBus) {}
 
+  // ── Seqlock transactions ─────────────────────────────────
+  // Open/close a write transaction so the worklet never reads a
+  // half-written batch. Nestable (the bus tracks depth), so a setter
+  // wrapped in tx() called inside a beginTransaction()/endTransaction()
+  // span does not prematurely publish.
+
+  /** Begin a multi-write transaction (e.g. a full state flush). */
+  beginTransaction(): void { this.bus.beginWrite(); }
+
+  /** End a multi-write transaction opened with beginTransaction(). */
+  endTransaction(): void { this.bus.endWrite(); }
+
+  /** Wrap a set of coupled writes so they publish atomically. */
+  private tx(fn: () => void): void {
+    this.bus.beginWrite();
+    try { fn(); } finally { this.bus.endWrite(); }
+  }
+
   // ── Deck parameters ──────────────────────────────────────
 
   setDeckTrim(deck: DeckId, gain: number): void {
@@ -88,8 +106,12 @@ export class DspParamWriter {
     };
     const o = offsets[fx];
     if (o) {
-      this.bus.setFloat(deckParam(deck, o.amount), amount);
-      this.bus.setBool(deckParam(deck, o.active), active);
+      // amount + active are a coupled pair — publish together so the worklet
+      // never sees `active` flipped on with a stale amount (or vice versa).
+      this.tx(() => {
+        this.bus.setFloat(deckParam(deck, o.amount), amount);
+        this.bus.setBool(deckParam(deck, o.active), active);
+      });
     }
     // WebAudio-only FX (crush/echo/tape/noise) are handled directly
     // by DeckFx.setFx() and don't need param bus writes.
@@ -106,20 +128,26 @@ export class DspParamWriter {
   }
 
   setMasterDistortion(amount: number, active: boolean): void {
-    this.bus.setFloat(MASTER.DISTORTION, amount);
-    this.bus.setBool(MASTER.DIST_ACTIVE, active);
+    this.tx(() => {
+      this.bus.setFloat(MASTER.DISTORTION, amount);
+      this.bus.setBool(MASTER.DIST_ACTIVE, active);
+    });
   }
 
   setMasterPunch(amount: number, active: boolean): void {
-    this.bus.setFloat(MASTER.PUNCH, amount);
-    this.bus.setBool(MASTER.PUNCH_ACTIVE, active);
+    this.tx(() => {
+      this.bus.setFloat(MASTER.PUNCH, amount);
+      this.bus.setBool(MASTER.PUNCH_ACTIVE, active);
+    });
   }
 
   setMasterLimiter(active: boolean, thresholdDb?: number): void {
-    this.bus.setBool(MASTER.LIMITER_ACTIVE, active);
-    if (thresholdDb !== undefined) {
-      this.bus.setFloat(MASTER.LIMITER_THRESH, thresholdDb);
-    }
+    this.tx(() => {
+      this.bus.setBool(MASTER.LIMITER_ACTIVE, active);
+      if (thresholdDb !== undefined) {
+        this.bus.setFloat(MASTER.LIMITER_THRESH, thresholdDb);
+      }
+    });
   }
 
   // ── Global parameters ────────────────────────────────────
@@ -141,9 +169,11 @@ export class DspParamWriter {
   }
 
   setSampleRate(sr: number): void {
-    this.bus.setFloat(GLOBAL.SAMPLE_RATE, sr);
-    // H2: Write layout version so Rust can verify offset parity
-    this.bus.setFloat(GLOBAL.LAYOUT_VERSION, PARAM_LAYOUT_VERSION);
+    this.tx(() => {
+      this.bus.setFloat(GLOBAL.SAMPLE_RATE, sr);
+      // H2: Write layout version so Rust can verify offset parity
+      this.bus.setFloat(GLOBAL.LAYOUT_VERSION, PARAM_LAYOUT_VERSION);
+    });
   }
 
   setDspBackend(isWasm: boolean): void {

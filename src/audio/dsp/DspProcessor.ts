@@ -26,6 +26,8 @@
 //
 // ─────────────────────────────────────────────────────────────
 
+import { GLOBAL } from './ParamLayout';
+
 /**
  * A view into the shared parameter memory.
  *
@@ -46,6 +48,15 @@ export interface DspParamBus {
 
   /** Write a boolean flag. */
   setBool(byteOffset: number, value: boolean): void;
+
+  /**
+   * Open a seqlock write transaction. Nestable — only the outermost
+   * begin/end pair bumps the generation counter. No-op in non-shared mode.
+   */
+  beginWrite(): void;
+
+  /** Close a seqlock write transaction (see beginWrite). */
+  endWrite(): void;
 
   /** The underlying buffer (SharedArrayBuffer in Wasm mode). */
   readonly buffer: ArrayBuffer | SharedArrayBuffer;
@@ -161,6 +172,10 @@ export class LocalParamBus implements DspParamBus {
   setBool(byteOffset: number, value: boolean): void {
     this.view.setFloat32(byteOffset, value ? 1.0 : 0.0, true);
   }
+
+  // No cross-thread reader in native mode — the seqlock is a no-op.
+  beginWrite(): void { /* no-op */ }
+  endWrite(): void { /* no-op */ }
 }
 
 /**
@@ -171,9 +186,26 @@ export class SharedParamBus implements DspParamBus {
   private readonly i32View: Int32Array;
   readonly buffer: SharedArrayBuffer;
 
+  /** Seqlock generation slot (i32 index) and nesting depth. */
+  private readonly seqIdx = GLOBAL.SEQ >> 2;
+  private writeDepth = 0;
+
   constructor(sizeBytes: number) {
     this.buffer = new SharedArrayBuffer(sizeBytes);
     this.i32View = new Int32Array(this.buffer);
+  }
+
+  beginWrite(): void {
+    // Only the outermost transaction flips the counter odd (write in progress).
+    if (this.writeDepth++ === 0) {
+      Atomics.add(this.i32View, this.seqIdx, 1);
+    }
+  }
+
+  endWrite(): void {
+    if (this.writeDepth > 0 && --this.writeDepth === 0) {
+      Atomics.add(this.i32View, this.seqIdx, 1); // back to even — snapshot stable
+    }
   }
 
   getFloat(byteOffset: number): number {

@@ -128,6 +128,11 @@ export class MixiEngine {
   private _paramWriter: DspParamWriter | null = null;
   /** Unsubscribe for the store→param-bus flush subscription (live updates). */
   private _paramFlushUnsub: (() => void) | null = null;
+  /** Coalesce param-bus flushes to one per frame (#20). The store fires on
+   *  every change — including non-DSP UI state — so flushing the full ~40-param
+   *  snapshot synchronously each time is wasteful; one rAF-paced flush is plenty
+   *  given Rust smooths the params anyway. */
+  private _flushScheduled = false;
   /** Gain-0 tap that keeps the per-deck WebAudio chains rendering (for VU
    *  analysers) while the Wasm DSP worklet carries the actual audio. */
   private _meterKeepAlive: GainNode | null = null;
@@ -197,6 +202,10 @@ export class MixiEngine {
     if (!w) return;
     const s = useMixiStore.getState();
 
+    // Publish the whole snapshot as one seqlock transaction so the worklet
+    // never copies a half-written set.
+    w.beginTransaction();
+    try {
     // ── Master ──
     w.setMasterGain(s.master.volume);
     w.setMasterFilter(s.master.filter);
@@ -231,6 +240,30 @@ export class MixiEngine {
     // ── Headphones ──
     w.setHeadphoneMix(s.headphones.mix);
     w.setHeadphoneLevel(s.headphones.level);
+    } finally {
+      w.endTransaction();
+    }
+  }
+
+  /**
+   * #20: Coalesce store-driven flushes to at most one per animation frame.
+   * Many store updates (UI flags, waveform progress, playhead) carry no DSP
+   * params; collapsing the burst avoids hammering the param bus with redundant
+   * full-snapshot writes. Falls back to a 16ms timer where rAF is unavailable
+   * (headless/tests). The first flush is still done synchronously on init.
+   */
+  private scheduleParamFlush(): void {
+    if (this._flushScheduled) return;
+    this._flushScheduled = true;
+    const run = () => {
+      this._flushScheduled = false;
+      if (this.initialized) this.flushParamStateFromStore();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 16);
+    }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────
@@ -310,7 +343,7 @@ export class MixiEngine {
     // (~30 float writes) and a no-op until the param writer exists. The initial
     // population for the Wasm SharedParamBus is done explicitly on activation.
     this.flushParamStateFromStore();
-    this._paramFlushUnsub = useMixiStore.subscribe(() => this.flushParamStateFromStore());
+    this._paramFlushUnsub = useMixiStore.subscribe(() => this.scheduleParamFlush());
 
     // ── Wasm DSP Bridge (conditional) ──────────────────────
     // When active, routes audio through Rust DSP engine in AudioWorklet:
