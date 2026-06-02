@@ -85,8 +85,10 @@ app.commandLine.appendSwitch('disable-site-isolation-trials');
 // disabling it weakens defense-in-depth for the renderer process.
 app.commandLine.appendSwitch('disable-features', 'MediaRouter');
 
-// V8 optimization: Wasm SIMD and tiering
-app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff --experimental-wasm-simd');
+// V8 optimization: Wasm tiering. (Wasm SIMD is stable in modern V8/Electron, so
+// the old `--experimental-wasm-simd` flag is gone — passing it logs
+// "Error: unrecognized flag --experimental-wasm-simd" at startup.)
+app.commandLine.appendSwitch('js-flags', '--wasm-opt --liftoff');
 
 // ── Globals ──────────────────────────────────────────────────
 
