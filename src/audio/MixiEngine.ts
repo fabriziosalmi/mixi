@@ -291,7 +291,7 @@ export class MixiEngine {
     this._streamingLookAheadTimer = setInterval(() => {
       if (!this.initialized) return;
       for (const deck of ['A', 'B'] as const) {
-        this.checkSegmentTransition(deck);
+        void this.checkSegmentTransition(deck).catch(() => {});
       }
     }, 1000);
 
@@ -1010,6 +1010,29 @@ export class MixiEngine {
   /** Active nudge amounts per deck (0 = no nudge). */
   private _nudge: Record<DeckId, number> = { A: 0, B: 0 };
 
+  /**
+   * Per-deck serialization chain. seek / crossfadeSeek / segment-transition all
+   * `await` a decode between reading and mutating `transport.source`; without a
+   * mutex two of them can interleave and leave an orphan source playing (doubled
+   * audio) or an offset that points at a different segment than the live buffer.
+   * Every source-swapping async op runs through runDeckExclusive().
+   */
+  private _deckOpChain: Record<DeckId, Promise<unknown>> = {
+    A: Promise.resolve(),
+    B: Promise.resolve(),
+  };
+
+  /** Run `fn` after any in-flight source-swap on this deck completes. */
+  private runDeckExclusive<T>(deck: DeckId, fn: () => Promise<T>): Promise<T> {
+    const run = this._deckOpChain[deck].then(fn, fn);
+    // Keep the chain alive but swallow errors so one failure can't poison it.
+    this._deckOpChain[deck] = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   /** Standard nudge: ±4 %. Fine nudge (Shift): ±1 %. */
   static readonly NUDGE_AMOUNT = 0.04;
   static readonly FINE_NUDGE = 0.01;
@@ -1360,6 +1383,10 @@ export class MixiEngine {
 
   async seek(deck: DeckId, time: number): Promise<void> {
     this.assertReady();
+    return this.runDeckExclusive(deck, () => this._seekLocked(deck, time));
+  }
+
+  private async _seekLocked(deck: DeckId, time: number): Promise<void> {
     // A2: Cancel vinyl brake if in progress (prevents delayed pause overwriting seek)
     this.cancelBrake(deck);
     // PLL: Reset on seek (discontinuity protection layer 3)
@@ -1449,11 +1476,17 @@ export class MixiEngine {
    */
   async crossfadeSeek(deck: DeckId, time: number): Promise<void> {
     this.assertReady();
+    return this.runDeckExclusive(deck, () => this._crossfadeSeekLocked(deck, time));
+  }
+
+  private async _crossfadeSeekLocked(deck: DeckId, time: number): Promise<void> {
     const transport = this.transports[deck];
 
-    // If not playing, just do a normal seek
+    // If not playing, just do a normal seek. Call the locked impl directly —
+    // we already hold this deck's exclusive lock, so re-entering seek() would
+    // deadlock on the chain.
     if (!transport.source || !transport.buffer || !transport.streamingBuffer) {
-      await this.seek(deck, time);
+      await this._seekLocked(deck, time);
       return;
     }
 
@@ -1795,15 +1828,33 @@ export class MixiEngine {
 
   private async checkSegmentTransition(deck: DeckId): Promise<void> {
     const transport = this.transports[deck];
+    // Cheap pre-gate OUTSIDE the lock — most ticks bail here, so we never queue
+    // a no-op behind an in-flight seek.
     if (!transport.streamingBuffer || !transport.source || !transport.buffer) return;
     if (transport.isTransitioning) return;
+    const segmentEnd0 = transport.currentSegmentStart + transport.currentSegmentDuration;
+    if (!(this.getCurrentTime(deck) > segmentEnd0 - 8 && segmentEnd0 < transport.totalDuration)) return;
+
+    // Claim the transition slot before awaiting the lock so concurrent ticks
+    // don't stack; the actual swap runs serialized against seek/crossfadeSeek.
+    transport.isTransitioning = true;
+    try {
+      await this.runDeckExclusive(deck, () => this._segmentTransitionLocked(deck));
+    } finally {
+      transport.isTransitioning = false;
+    }
+  }
+
+  private async _segmentTransitionLocked(deck: DeckId): Promise<void> {
+    const transport = this.transports[deck];
+    if (!transport.streamingBuffer || !transport.source || !transport.buffer) return;
 
     const currentTime = this.getCurrentTime(deck);
     const segmentEnd = transport.currentSegmentStart + transport.currentSegmentDuration;
 
-    // Within 8 seconds of segment end, and we have more audio remaining
+    // Re-validate after acquiring the lock — a seek may have moved the playhead
+    // out of the transition window while we waited.
     if (currentTime > segmentEnd - 8 && segmentEnd < transport.totalDuration) {
-      transport.isTransitioning = true;
       try {
         const overlapSec = 1;
         const nextSegmentStart = segmentEnd - overlapSec;
@@ -1813,7 +1864,6 @@ export class MixiEngine {
 
         // Double-check if we are still playing and playhead is in the expected range
         if (!transport.source || Math.abs(this.getCurrentTime(deck) - currentTime) > 5) {
-          transport.isTransitioning = false;
           return;
         }
 
@@ -1882,9 +1932,9 @@ export class MixiEngine {
 
         log.info('Engine', `Segment transition complete on deck ${deck}. New segment start: ${nextSegmentStart}`);
       } catch (err) {
+        // Swallow here so the fire-and-forget caller never sees an unhandled
+        // rejection; the transition slot is released by checkSegmentTransition.
         log.error('Engine', `Segment transition failed on deck ${deck}:`, err);
-      } finally {
-        transport.isTransitioning = false;
       }
     }
   }
