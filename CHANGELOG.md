@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.13] - 2026-06-03
+
+### Fixed
+- **Wasm DSP produced NO audio (silent).** The shared DSP param bus was never populated — the `DspParamWriter` setters were dead code, so the Rust engine read every gain as 0 and smoothed to silence (deck `FADER`/`XFADER_GAIN` have no zero-guard: `total_gain = fader³ × xfader`). `MixiEngine.flushParamStateFromStore()` now writes the full mixer state to the bus with units matched to the Rust engine (FADER raw, EQ in dB, COLOR_FREQ in Hz, per-deck xfader gains, master gain/filter/dist/punch/limiter), kept live via a store subscription. With `useWasmDsp` on, audio now flows through the Rust DSP.
+- **Channel VU meters were dark in Wasm DSP mode.** With the deck's WebAudio output detached (the worklet carries the audio), the per-deck analyser branch had no path to the destination, so Web Audio stopped rendering it. A gain-0 keep-alive now keeps the meter branch live (no added audio).
+- **Pitch-shift worklet `ReferenceError: performance is not defined`** on every quantum (`performance` isn't in `AudioWorkletGlobalScope`) — now falls back to `currentTime`. Removed a false-positive `scheduling_delay` glitch telemetry detector (wall-clock between batched `process()` calls isn't a real metric).
+- **App remount loop on launch** (repeated `Destroying AudioContext` + WebSocket churn): `MobileScaleWrapper` rendered children in two different element structures across the `needsScaling` toggle, remounting the whole app on resize; now keeps one structure and toggles styles. `useMixiSync` memoises the engine reference so its effects don't churn.
+- **Backend engine killed on a 10s timeout** though the ~40MB PyInstaller engine cold-starts in ~13s — the bridge then failed forever against a dead port. Startup no longer blocks on or kills the engine; the bridge retries and connects when it's ready.
+- Dropped the obsolete `--experimental-wasm-simd` V8 flag (logged `unrecognized flag` at startup; SIMD is stable).
+
+### Added
+- `npm run test:audio` — a real-app dual-path audio E2E that launches the built Electron app and validates **every** mixer feature (per-deck play/mute/gain/EQ/colorFX/rate/keyLock/all FX, crossfader, master FX, hot cues, loops, quantize, sync/beatmatch, headphones/PFL, load/unload, VU meters, beat clock) against actual master-analyser RMS on **both** the WebAudio and Wasm DSP paths. 81/81 pass in both modes.
+
 ## [0.5.12] - 2026-06-02
 
 ### Fixed
