@@ -128,6 +128,9 @@ export class MixiEngine {
   private _paramWriter: DspParamWriter | null = null;
   /** Unsubscribe for the store→param-bus flush subscription (live updates). */
   private _paramFlushUnsub: (() => void) | null = null;
+  /** Gain-0 tap that keeps the per-deck WebAudio chains rendering (for VU
+   *  analysers) while the Wasm DSP worklet carries the actual audio. */
+  private _meterKeepAlive: GainNode | null = null;
   /** Wasm DSP bridge — manages AudioWorklet lifecycle. */
   private _wasmBridge: WasmDspBridge | null = null;
 
@@ -345,9 +348,23 @@ export class MixiEngine {
           // Re-apply the full current mixer state so the worklet hears real values.
           this.flushParamStateFromStore();
 
-          // Disconnect WebAudio deck→master chain
+          // Disconnect WebAudio deck→master chain (the worklet carries the audio now)
           this.channels.A.output.disconnect();
           this.channels.B.output.disconnect();
+
+          // Keep the per-deck WebAudio chains RENDERING so their VU analysers
+          // still produce data in Wasm mode. Web Audio only processes nodes with
+          // a path to the destination; once the deck output is detached, the
+          // analyser branch goes dead and the channel meters freeze at 0. Route
+          // the (now silent) outputs through a gain-0 tap to the master so the
+          // graph stays live without adding any audio.
+          if (!this._meterKeepAlive) {
+            this._meterKeepAlive = this.ctx.createGain();
+            this._meterKeepAlive.gain.value = 0;
+            this._meterKeepAlive.connect(this.master.output);
+          }
+          this.channels.A.output.connect(this._meterKeepAlive);
+          this.channels.B.output.connect(this._meterKeepAlive);
 
           // Connect deck trims → worklet inputs (0=A, 1=B)
           this._wasmBridge.connectDeckA(this.channels.A.input);
@@ -473,6 +490,11 @@ export class MixiEngine {
     if (this._paramFlushUnsub) {
       this._paramFlushUnsub();
       this._paramFlushUnsub = null;
+    }
+
+    if (this._meterKeepAlive) {
+      try { this._meterKeepAlive.disconnect(); } catch { /* ok */ }
+      this._meterKeepAlive = null;
     }
 
     if (this._gateTimer) {
@@ -1163,6 +1185,10 @@ export class MixiEngine {
       masterRms: this.getMasterLevel(),
       levelL: this.getMasterLevelL(),
       levelR: this.getMasterLevelR(),
+      deckLevelA: this.getLevel('A'),
+      deckLevelB: this.getLevel('B'),
+      currentTimeA: this.getCurrentTime('A'),
+      currentTimeB: this.getCurrentTime('B'),
       srcA: !!tA?.source,
       srcB: !!tB?.source,
       rateA: tA?.source?.playbackRate.value ?? null,

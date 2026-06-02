@@ -95,6 +95,7 @@ async function run(useWasm) {
     ok(`[${D}] playing → audible`, (await maxRms(page, 1400)) > GATE);
     const pr = await probe(page);
     ok(`[${D}] stereo L&R`, pr.levelL > 0.005 && pr.levelR > 0.005, `L=${pr.levelL.toFixed(3)} R=${pr.levelR.toFixed(3)}`);
+    ok(`[${D}] channel VU meter lit`, (pr['deckLevel' + D] ?? 0) > 0.01, `deckLevel=${(pr['deckLevel' + D] ?? 0).toFixed(3)}`);
     await call(page, 'setDeckVolume', D, 0); await wait(page, 300);
     ok(`[${D}] volume 0 → silent`, (await maxRms(page, 600)) < GATE);
     await call(page, 'setDeckVolume', D, 1); await wait(page, 300);
@@ -159,6 +160,15 @@ async function run(useWasm) {
   ok('sync: B isSynced', await get(page, 'decks.B.isSynced') === true);
   ok('sync: B still audible', (await maxRms(page, 900)) > GATE);
   await call(page, 'unsyncDeck', 'B'); ok('unsync: B not synced', await get(page, 'decks.B.isSynced') === false);
+
+  // ── Beat-phase HUD data (PhaseMeter): both decks playing → getCurrentTime advances ──
+  await call(page, 'setDeckPlaying', 'A', true); await call(page, 'setDeckPlaying', 'B', true);
+  await call(page, 'setCrossfader', 0.5); await wait(page, 250);
+  const ph1 = await probe(page); await wait(page, 500); const ph2 = await probe(page);
+  ok('beat clock A advances', ph2.currentTimeA > ph1.currentTimeA, `${ph1.currentTimeA.toFixed(2)}→${ph2.currentTimeA.toFixed(2)}`);
+  ok('beat clock B advances', ph2.currentTimeB > ph1.currentTimeB, `${ph1.currentTimeB.toFixed(2)}→${ph2.currentTimeB.toFixed(2)}`);
+  ok('PhaseMeter active (both playing + bpm)', (await get(page, 'decks.A.isPlaying')) && (await get(page, 'decks.B.isPlaying')) && (await get(page, 'decks.A.bpm')) > 0 && (await get(page, 'decks.B.bpm')) > 0);
+  ok('both deck VU meters lit', (ph2.deckLevelA > 0.01) && (ph2.deckLevelB > 0.01), `A=${ph2.deckLevelA.toFixed(3)} B=${ph2.deckLevelB.toFixed(3)}`);
   await call(page, 'setDeckPlaying', 'B', false);
 
   // ── Headphones / PFL (must not affect master) ──
