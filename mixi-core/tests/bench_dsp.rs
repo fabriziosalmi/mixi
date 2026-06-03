@@ -106,7 +106,7 @@ fn bench_all_dsp() {
     {
         let mut eq = ThreeBandEq::new(SR);
         eq.set_gains(-3.0, 2.0, -6.0, SR);
-        results.push(bench("ThreeBandEq", |buf| eq.process_block(buf)));
+        results.push(bench("ThreeBandEq", |buf| eq.process_block(buf, SR)));
     }
 
     // 3. Gain
@@ -213,7 +213,7 @@ fn bench_all_dsp() {
 
         results.push(bench("Full Deck Chain", |buf| {
             trim.process_block(buf);
-            eq.process_block(buf);
+            eq.process_block(buf, SR);
             color.process_block(buf);
             fader.process_block(buf);
             limiter.process_block(buf);
@@ -261,13 +261,13 @@ fn bench_all_dsp() {
             // Deck A
             let mut a = buf.to_vec();
             trim_a.process_block(&mut a);
-            eq_a.process_block(&mut a);
+            eq_a.process_block(&mut a, SR);
             fader_a.process_block(&mut a);
 
             // Deck B
             let mut b = buf.to_vec();
             trim_b.process_block(&mut b);
-            eq_b.process_block(&mut b);
+            eq_b.process_block(&mut b, SR);
             fader_b.process_block(&mut b);
 
             // Mix

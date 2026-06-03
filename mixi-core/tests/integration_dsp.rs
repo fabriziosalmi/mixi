@@ -270,7 +270,7 @@ mod engine_tests {
 
         let mut buf = [0.0f32; 128];
         g.process_block(&mut buf);
-        eq.process_block(&mut buf);
+        eq.process_block(&mut buf, 44100.0);
         lim.process_block(&mut buf);
 
         let energy: f32 = buf.iter().map(|s| s * s).sum();
@@ -286,7 +286,7 @@ mod engine_tests {
 
         let mut buf = [0.8f32; 128];
         g.process_block(&mut buf);
-        eq.process_block(&mut buf);
+        eq.process_block(&mut buf, 44100.0);
         lim.process_block(&mut buf);
 
         for s in &buf {
@@ -323,7 +323,7 @@ mod engine_tests {
         }).collect();
 
         g.process_block(&mut buf);
-        eq.process_block(&mut buf);
+        eq.process_block(&mut buf, 44100.0);
         color.process_block(&mut buf);
         dly.process_block(&mut buf);
         rev.process_block(&mut buf);
