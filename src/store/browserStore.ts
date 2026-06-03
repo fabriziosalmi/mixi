@@ -64,6 +64,14 @@ interface BrowserActions {
   removeTrack: (id: string) => void;
   /** Re-create object URLs from IndexedDB after page reload. */
   hydrateAudioUrls: () => Promise<void>;
+  /**
+   * Resolve a guaranteed-playable blob URL for a track, recovering it from
+   * IndexedDB on demand if the in-memory URL is missing (e.g. clicked before
+   * hydration finished). Returns null AND removes the track if its audio blob
+   * no longer exists — those are unplayable phantoms that would otherwise make
+   * the loader fetch('') (which resolves to the app's own HTML).
+   */
+  resolvePlayableUrl: (id: string) => Promise<string | null>;
   /** Set star rating (0–5) for a track. */
   setTrackRating: (id: string, rating: number) => void;
   /** Set color tag (hex string or '' to clear). */
@@ -142,6 +150,22 @@ export const useBrowserStore = create<BrowserStore>()(
         set((s) => ({
           tracks: s.tracks.map((t) => t.id === id ? { ...t, bpm, key, analyzedAt: Date.now() } : t),
         })),
+      resolvePlayableUrl: async (id) => {
+        const track = get().tracks.find((t) => t.id === id);
+        if (!track) return null;
+        if (track.audioUrl && track.audioUrl.startsWith('blob:')) return track.audioUrl;
+        try {
+          const blob = await getTrackBlob(id);
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            set((s) => ({ tracks: s.tracks.map((t) => t.id === id ? { ...t, audioUrl: url } : t) }));
+            return url;
+          }
+        } catch { /* fall through to phantom removal */ }
+        // No blob in IndexedDB → unplayable phantom. Drop it (cascades playlists).
+        get().removeTrack(id);
+        return null;
+      },
       hydrateAudioUrls: async () => {
         const { tracks } = get();
         if (!tracks.length) return;

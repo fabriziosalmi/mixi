@@ -247,7 +247,14 @@ export const TrackBrowser: FC = () => {
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized) return;
 
-      const res = await fetch(track.audioUrl);
+      // Resolve a real blob URL (recovers from IndexedDB / drops phantoms) so
+      // we never fetch('') — that would resolve to the app's own HTML.
+      const url = await useBrowserStore.getState().resolvePlayableUrl(track.id);
+      if (!url) {
+        log.warn('TrackBrowser', `Track ${track.id} has no recoverable audio — removed`);
+        return;
+      }
+      const res = await fetch(url);
       const buf = await res.arrayBuffer();
       await engine.loadTrack(deck, buf);
       useMixiStore.getState().setDeckTrackName(deck, `${track.artist ? track.artist + ' - ' : ''}${track.title}`);
