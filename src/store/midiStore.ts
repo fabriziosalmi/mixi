@@ -23,6 +23,9 @@ interface MidiState {
 
   setLearning: (learning: boolean) => void;
   setLearningAction: (action: MidiAction | null) => void;
+  /** Cancel learn mode and clear its auto-timeout — call on MidiTab unmount so
+   *  the 10s timer can't fire (and mutate state) after the panel is gone. */
+  cancelLearn: () => void;
   addMapping: (mapping: MidiMapping) => void;
   removeMapping: (actionType: MidiAction['type'], deck?: 'A'|'B') => void;
   clearMappings: () => void;
@@ -52,9 +55,16 @@ export const useMidiStore = create<MidiState>()(
         set({ isLearning: learning, learningAction: null });
       },
       setLearningAction: (action) => set({ learningAction: action }),
-      
+
+      cancelLearn: () => {
+        if (_learnTimer) { clearTimeout(_learnTimer); _learnTimer = null; }
+        set({ isLearning: false, learningAction: null });
+      },
+
       addMapping: (mapping) =>
         set((state) => {
+          // Learn succeeded — stop the auto-cancel timer so it can't fire later.
+          if (_learnTimer) { clearTimeout(_learnTimer); _learnTimer = null; }
           const filtered = state.mappings.filter(
             (m) => !(m.action.type === mapping.action.type && (m.action as any).deck === (mapping.action as any).deck)
           );

@@ -396,6 +396,9 @@ class PhaseLockLoop {
     const slaveTime = engine.getCurrentTime(slaveDeck);
 
     const masterPeriod = 60 / master.originalBpm;
+    // Guard a missing/zero master BPM (un-analyzed track): masterPeriod would
+    // be Infinity/NaN and propagate a NaN delta into the PID controller.
+    if (masterPeriod <= 0 || !isFinite(masterPeriod)) return null;
 
     // Harmonic sync: use virtual beat period if ratio != 1
     const ratio = findBestRatio(master.bpm, slave.originalBpm);

@@ -384,6 +384,11 @@ const MidiTab: FC = () => {
   const setLearning = useMidiStore((s) => s.setLearning);
   const setLearningAction = useMidiStore((s) => s.setLearningAction);
   const removeMapping = useMidiStore((s) => s.removeMapping);
+  const cancelLearnStore = useMidiStore((s) => s.cancelLearn);
+
+  // #21: if the panel closes mid-learn, clear the 10s auto-cancel timer so it
+  // can't fire and mutate store state after this component is gone.
+  useEffect(() => cancelLearnStore, [cancelLearnStore]);
 
   const handlePreset = (presetId: string) => {
     const preset = MIDI_CONTROLLER_PRESETS.find((p) => p.id === presetId);
@@ -400,8 +405,7 @@ const MidiTab: FC = () => {
   };
 
   const cancelLearn = () => {
-    setLearning(false);
-    setLearningAction(null);
+    cancelLearnStore(); // clears the auto-cancel timer too
   };
 
   const isWaiting = (action: MidiAction) =>

@@ -152,8 +152,13 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e) => {
       const { type } = e.data;
 
-      if (type === 'wasm-module') {
-        this._initWasm(e.data.module);
+      if (type === 'wasm-bytes') {
+        // Preferred: raw bytes compiled inside the worklet realm. Cloning a
+        // WebAssembly.Module across realms via postMessage is unreliable and
+        // previously caused silent init failures.
+        this._initWasm(e.data.bytes);
+      } else if (type === 'wasm-module') {
+        this._initWasm(e.data.module); // legacy path
       } else if (type === 'setPitchRatio') {
         this.pitchRatio = e.data.value;
         if (this.wasmReady && this._shifterL && this._shifterR) {
@@ -220,9 +225,11 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
     };
   }
 
-  async _initWasm(module) {
+  async _initWasm(source) {
     try {
-      const instance = await WebAssembly.instantiate(module, {
+      // `source` may be raw bytes (ArrayBuffer) or a precompiled Module.
+      // instantiate(bytes) → {module, instance}; instantiate(module) → instance.
+      const result = await WebAssembly.instantiate(source, {
         env: {},
         wasi_snapshot_preview1: {
           proc_exit: () => {},
@@ -231,6 +238,7 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
           fd_close: () => 0,
         },
       });
+      const instance = result.instance || result;
       this._exports = instance.exports;
       this._memory = instance.exports.memory;
 

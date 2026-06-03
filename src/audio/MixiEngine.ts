@@ -1732,39 +1732,65 @@ export class MixiEngine {
       const wasmWorkletUrl = new URL('/worklets/pitch-shift-wasm-processor.js', import.meta.url);
       await this.ctx.audioWorklet.addModule(wasmWorkletUrl.href);
 
-      // Compile the Wasm module
+      // Fetch the Wasm bytes. We send raw bytes (not a compiled Module): cloning
+      // a WebAssembly.Module across realms via postMessage is unreliable and
+      // could leave the worklet never-ready → source.playbackRate pinned at 0.
       const wasmUrl = new URL('../../mixi-core/pkg/mixi_core_bg.wasm', import.meta.url);
       const wasmResp = await fetch(wasmUrl.href);
-      const wasmModule = await WebAssembly.compile(await wasmResp.arrayBuffer());
+      const wasmBytes = await wasmResp.arrayBuffer();
 
+      const readyWaits: Promise<void>[] = [];
       for (const deck of ['A', 'B'] as const) {
         const node = new AudioWorkletNode(this.ctx, 'pitch-shift-wasm-processor', {
           numberOfInputs: 1,
           numberOfOutputs: 2,
           outputChannelCount: [2, 1],
         });
-        node.port.postMessage({ type: 'wasm-module', module: wasmModule });
-        node.port.onmessage = (e) => {
-          if (e.data && e.data.type === 'glitch') {
-            telemetry.reportEvent({
-              type: 'GLITCH',
-              deck,
-              details: {
-                durationMs: e.data.durationMs,
-                frames: e.data.frames,
-                type: e.data.typeDetail || 'cpu_overload',
-              },
-            });
-          }
-        };
-        // If the processor throws, the node stops driving source.playbackRate
+
+        // #19: wait for the worklet to report 'ready' (or fail/time out). A
+        // shifter that never inits would otherwise sit in the graph pinning
+        // playbackRate=0 with no audio. On timeout/error we fail it over to the
+        // native path.
+        const ready = new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('pitch worklet init timeout (5s)')), 5_000);
+          node.port.onmessage = (e) => {
+            const d = e.data;
+            if (!d) return;
+            if (d.type === 'glitch') {
+              telemetry.reportEvent({
+                type: 'GLITCH',
+                deck,
+                details: {
+                  durationMs: d.durationMs,
+                  frames: d.frames,
+                  type: d.typeDetail || 'cpu_overload',
+                },
+              });
+              return;
+            }
+            if (d.type === 'ready') { clearTimeout(timeout); resolve(); return; }
+            if (d.type === 'error') { clearTimeout(timeout); reject(new Error(d.message)); return; }
+          };
+        });
+        readyWaits.push(
+          ready.catch((err) => {
+            log.warn('Engine', `Pitch shifter ${deck} init failed: ${err} — using native rate`);
+            this.failoverPitchShifter(deck);
+          }),
+        );
+
+        // If the processor throws later, it stops driving source.playbackRate
         // (pinned to 0 in connectSource) → the deck would freeze silent forever.
         // Fail over to the native playbackRate path instead.
         node.onprocessorerror = () => this.failoverPitchShifter(deck);
         node.connect(this.channels[deck].input, 0, 0);
         this.pitchShifters[deck] = node;
+        // Structured-clone the bytes to each node (no transfer — a transferred
+        // buffer would be detached before the second deck could receive it).
+        node.port.postMessage({ type: 'wasm-bytes', bytes: wasmBytes });
       }
       useWasm = true;
+      await Promise.all(readyWaits);
       log.info('Engine', 'Wasm pitch shift processor loaded');
     } catch {
       // Wasm pitch shift not available — fall back to JS
