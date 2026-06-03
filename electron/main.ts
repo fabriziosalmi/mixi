@@ -96,6 +96,15 @@ let mainWindow: BrowserWindow | null = null;
 let pythonProcess: ChildProcess | null = null;
 let apiPort = 0;
 
+// #12: Python engine crash-respawn state. The engine carries no audio (the
+// renderer does), but the MCP bridge / API depend on it, so a crash must
+// self-heal rather than leave the app talking to a dead port.
+let engineQuitting = false;              // true once the app is shutting down
+let engineRestartCount = 0;              // consecutive unexpected exits
+let engineRestartTimer: ReturnType<typeof setTimeout> | null = null;
+const ENGINE_MAX_RESTARTS = 5;           // give up after this many in a burst
+const ENGINE_RESTART_RESET_MS = 60_000;  // a clean minute resets the counter
+
 // ── Native Audio I/O (cpal via N-API) ────────────────────────
 // Load the mixi-native addon for direct hardware audio output.
 // Falls back gracefully if the addon is not available.
@@ -218,15 +227,42 @@ function spawnEngine(port: number): ChildProcess {
   child.stderr?.on('data', (d: Buffer) => {
     process.stderr.write(`[mixi-engine] ${d}`);
   });
-  child.on('exit', (code) => {
-    console.log(`[mixi-engine] exited with code ${code}`);
+  child.on('exit', (code, signal) => {
+    console.log(`[mixi-engine] exited with code ${code} (signal ${signal})`);
     pythonProcess = null;
+    // Don't respawn during shutdown or after a clean exit we requested.
+    if (engineQuitting) return;
+
+    if (engineRestartCount >= ENGINE_MAX_RESTARTS) {
+      console.error(`[mixi-engine] crashed ${engineRestartCount}× — giving up auto-restart`);
+      return;
+    }
+    engineRestartCount += 1;
+    // Exponential backoff: 0.5s, 1s, 2s, 4s, 8s.
+    const delay = 500 * 2 ** (engineRestartCount - 1);
+    console.warn(`[mixi-engine] respawning in ${delay}ms (attempt ${engineRestartCount}/${ENGINE_MAX_RESTARTS})`);
+    if (engineRestartTimer) clearTimeout(engineRestartTimer);
+    engineRestartTimer = setTimeout(() => {
+      engineRestartTimer = null;
+      if (engineQuitting || apiPort === 0) return;
+      pythonProcess = spawnEngine(apiPort);
+      // A process that then survives a clean minute clears the burst counter.
+      setTimeout(() => {
+        if (pythonProcess && !engineQuitting) engineRestartCount = 0;
+      }, ENGINE_RESTART_RESET_MS);
+    }, delay);
   });
 
   return child;
 }
 
 function killEngine(): void {
+  // Mark shutdown so the exit handler doesn't respawn the engine we're killing.
+  engineQuitting = true;
+  if (engineRestartTimer) {
+    clearTimeout(engineRestartTimer);
+    engineRestartTimer = null;
+  }
   if (!pythonProcess) return;
 
   if (process.platform === 'win32') {

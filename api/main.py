@@ -32,10 +32,13 @@ import time
 from typing import AsyncGenerator
 
 import asyncio
+import ipaddress
 import json
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import yt_dlp
@@ -117,6 +120,10 @@ _browser_ws: WebSocket | None = None
 _latest_state: dict | None = None
 _pending_responses: dict[str, asyncio.Future] = {}
 
+# #14: cap inbound WS frames. State snapshots are a few KB; anything far larger
+# is abuse. Also enforced at the transport via uvicorn ws_max_size below.
+MAX_WS_MESSAGE_BYTES = 512 * 1024
+
 
 @app.websocket("/ws/mixer")
 async def mixer_websocket(ws: WebSocket):
@@ -140,6 +147,10 @@ async def mixer_websocket(ws: WebSocket):
     try:
         while True:
             raw = await ws.receive_text()
+            if len(raw) > MAX_WS_MESSAGE_BYTES:
+                logger.warning("[error]WS message too large (%d bytes) — closing[/error]", len(raw))
+                await ws.close(code=1009)  # 1009 = message too big
+                break
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
@@ -458,6 +469,43 @@ async def stream_file(path: Path) -> AsyncGenerator[bytes, None]:
         path.unlink(missing_ok=True)
 
 
+# ── SSRF guard ────────────────────────────────────────────────
+
+
+def _resolves_to_public_ip(raw_url: str) -> bool:
+    """Return True only if every IP the URL's host resolves to is public.
+
+    Blocks the stream proxy from being pointed at private / loopback /
+    link-local / reserved ranges — without this a malicious page (the API is
+    reachable from the renderer) could probe the user's internal network
+    through their own engine. This is a point-in-time DNS check; redirects are
+    disabled on the proxy hop so a later DNS rebind can't bounce the live
+    connection onto an internal host.
+    """
+    p = urlparse(raw_url)
+    if p.scheme not in ("http", "https"):
+        return False
+    host = p.hostname
+    if not host:
+        return False
+    port = p.port or (443 if p.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
 # ── Endpoints ─────────────────────────────────────────────────
 
 
@@ -472,14 +520,15 @@ async def stream_endpoint(
     logger.info("[request]Ricevuta richiesta per URL:[/request] [bold]%s[/bold]", url)
 
     # Validate URL: only allow known audio platforms (prevent open proxy abuse)
-    from urllib.parse import urlparse
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=400, detail="Only http/https URLs are supported")
-    ALLOWED_HOSTS = ("soundcloud.com", "www.soundcloud.com", "youtube.com", "www.youtube.com",
-                     "youtu.be", "m.youtube.com", "music.youtube.com")
-    if parsed.hostname and not any(parsed.hostname.endswith(h) for h in ALLOWED_HOSTS):
-        raise HTTPException(status_code=400, detail=f"Unsupported platform: {parsed.hostname}. Supported: SoundCloud, YouTube.")
+    ALLOWED_HOSTS = ("soundcloud.com", "youtube.com", "youtu.be")
+    host = parsed.hostname or ""
+    # Match the registrable domain on a dot boundary — a bare endswith() would
+    # also accept evilsoundcloud.com.
+    if not any(host == h or host.endswith("." + h) for h in ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail=f"Unsupported platform: {host}. Supported: SoundCloud, YouTube.")
 
     try:
         # 1. Resolve direct CDN URL without downloading
@@ -488,12 +537,21 @@ async def stream_endpoint(
         logger.error(f"[error]Resolve error:[/error] {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+    # 1b. SSRF guard: the resolved CDN URL is attacker-influenced (yt-dlp output
+    # / could be crafted), so refuse to proxy anything that resolves to a
+    # private/internal address.
+    if not await asyncio.to_thread(_resolves_to_public_ip, direct_url):
+        logger.error("[error]Refusing to proxy non-public resolved URL[/error]")
+        raise HTTPException(status_code=400, detail="Resolved stream URL is not allowed")
+
     # 2. Proxy the stream chunk by chunk
     client = await get_http_client()
-    
+
     async def proxy_stream():
         try:
-            async with client.stream("GET", direct_url) as response:
+            # follow_redirects=False: a redirect could bounce us to an internal
+            # host after the IP check above (SSRF). Direct CDN URLs don't redirect.
+            async with client.stream("GET", direct_url, follow_redirects=False) as response:
                 if response.status_code != 200:
                     logger.error(f"[error]Rifiutato dal CDN originario ({response.status_code})[/error]")
                     return
@@ -538,4 +596,12 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind to")
     args = parser.parse_args()
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    # ws_max_size caps frames at the transport so an oversized message is
+    # rejected before it's fully buffered (the app-level check is a backstop).
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        ws_max_size=MAX_WS_MESSAGE_BYTES,
+    )
