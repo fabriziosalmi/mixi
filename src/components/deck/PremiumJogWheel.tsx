@@ -122,14 +122,15 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
     let frameSkip = 0;
 
     // ── Cached store fields via subscription (avoid getState per frame) ──
+    // #15: subscribe with a selector on THIS deck only — the old no-selector
+    // subscribe ran syncCache on every store mutation (any deck / master / UI).
     let cachedIsPlaying = false, cachedPlaybackRate = 1, cachedBpm = 0, cachedFirstBeatOffset = 0;
-    const syncCache = () => {
-      const d = useMixiStore.getState().decks[deckId];
+    const syncCache = (d: { isPlaying: boolean; playbackRate: number; bpm: number; firstBeatOffset: number }) => {
       cachedIsPlaying = d.isPlaying; cachedPlaybackRate = d.playbackRate;
       cachedBpm = d.bpm; cachedFirstBeatOffset = d.firstBeatOffset;
     };
-    syncCache();
-    const unsub = useMixiStore.subscribe(syncCache);
+    syncCache(useMixiStore.getState().decks[deckId]);
+    const unsub = useMixiStore.subscribe((s) => s.decks[deckId], syncCache);
 
     function tick() {
       const deck = { isPlaying: cachedIsPlaying, playbackRate: cachedPlaybackRate, bpm: cachedBpm, firstBeatOffset: cachedFirstBeatOffset };

@@ -923,18 +923,20 @@ export const useMixiStore = create<MixiStore>()(
      * ASSIST mode: any touch pauses the AI temporarily.
      *              It resumes after `assistResumeDelay` seconds of inactivity.
      */
-    registerUserInteraction: () =>
+    registerUserInteraction: () => {
+      // #15: when the AI is OFF, nothing reactive consumes lastInteractionTime,
+      // so don't fire a store-wide fan-out (to every subscriber) on every
+      // pointer-down / drag tick. Only write when the AI actually cares.
+      if (get().ai.mode === 'OFF') return;
       set((s) => {
         const now = Date.now();
-        if (s.ai.mode === 'OFF') {
-          return { ai: { ...s.ai, lastInteractionTime: now } };
-        }
         if (s.ai.mode === 'CRUISE') {
           return { ai: { ...s.ai, mode: 'OFF', lastInteractionTime: now } };
         }
         // ASSIST: pause the AI.
         return { ai: { ...s.ai, isPaused: true, lastInteractionTime: now } };
-      }),
+      });
+    },
 
     // ── Deck mode ──────────────────────────────────────────
     setDeckMode: (deck, mode) =>

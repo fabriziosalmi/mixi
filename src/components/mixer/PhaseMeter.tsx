@@ -59,7 +59,9 @@ export const PhaseMeter: FC = () => {
       cachedOffsetA = s.decks.A.firstBeatOffset; cachedOffsetB = s.decks.B.firstBeatOffset;
     };
     syncCache();
-    const unsub = useMixiStore.subscribe(syncCache);
+    // #15: selector on decks only — was a no-selector subscribe firing on every
+    // store mutation (master / crossfader / UI / AI ticks included).
+    const unsub = useMixiStore.subscribe((s) => s.decks, syncCache);
 
     // Change guards
     let prevZone = -1;

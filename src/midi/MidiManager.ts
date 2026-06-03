@@ -43,6 +43,12 @@ export class MidiManager {
   private midiAccess: MIDIAccess | null = null;
   public static onStatusChange: ((connected: boolean) => void) | null = null;
 
+  // #15: coalesce continuous CC streams (a hardware knob sweep fires 200-400
+  // msgs/sec) to one store write per control per animation frame. Keyed by
+  // action identity so the newest value per control wins.
+  private _pendingCC = new Map<string, { action: MidiAction; value: number }>();
+  private _ccRaf = 0;
+
   // ── MIDI Clock Out ────────────────────────────────────────
   // Sends 24 ppqn clock ticks synced to the active deck's BPM.
   // 0xFA = Start, 0xFC = Stop, 0xF8 = Clock tick (24 per beat).
@@ -167,11 +173,26 @@ export class MidiManager {
       if (map.channel !== channel) continue;
       
       if (isCC && map.type === 'cc' && map.control === data1) {
-        this.executeCCAction(map.action, data2);
+        this.queueCCAction(map.action, data2);
       } else if (isNoteOn && map.type === 'note' && map.control === data1) {
         this.executeNoteAction(map.action, data2);
       }
     }
+  }
+
+  /** Stash the latest CC value per control and apply once per frame (#15). */
+  private queueCCAction(action: MidiAction, value: number) {
+    this._pendingCC.set(`${action.type}:${'deck' in action ? action.deck : ''}`, { action, value });
+    if (this._ccRaf) return;
+    const schedule = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb: FrameRequestCallback) => setTimeout(() => cb(0), 16) as unknown as number;
+    this._ccRaf = schedule(() => {
+      this._ccRaf = 0;
+      const pending = this._pendingCC;
+      this._pendingCC = new Map();
+      for (const { action, value } of pending.values()) this.executeCCAction(action, value);
+    });
   }
 
   private executeCCAction(action: MidiAction, value: number) {
