@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.15] - 2026-06-03
+
+Round-2 audit (latency / performance / concurrency / audio-quality / UX / UI):
+3 severe + 12 moderate clusters fixed and verified (173 Rust + 586 JS tests,
+param-bus layout v3, dual-path audio E2E 81/81 on both WebAudio and Wasm DSP).
+
+### Fixed — severe
+- **Deck stuck "playing" after any seek.** Only play()'s source synced the
+  store on its natural end; seek / crossfadeSeek / segment-transition sources
+  didn't — so play → seek (hot-cue/waveform-click) → track-end left the deck
+  lit and frozen forever. A single onNaturalEnd() now syncs all four sites; a
+  per-deck transport epoch makes in-flight seeks bail when a play/pause races
+  them. (Regression from 0.5.14's mutex work.)
+- **Master fader couldn't mute.** `gain==0` was forced to unity in the Wasm
+  DSP path — dragging master to 0 played at full volume. Removed the guard
+  (the layout-version passthrough already protects an uninitialized bus).
+- **Escape destroyed a live mix.** One Escape hit three listeners (Panic +
+  eject Deck A + VFX) and closed no dialog. Removed eject-on-Escape; App is now
+  the single Escape owner (closes settings→browser→vfx, Panic only when nothing
+  is open); SettingsModal/Onboarding got dialog roles + focus management.
+
+### Fixed — moderate
+- **loadTrack** is serialized against in-flight seeks (no more previous track
+  playing over the new one).
+- **WASM beatmatch PLL** used current-BPM beat periods against original-BPM
+  playheads (~3.2% drift, lock loss) — now uses original-BPM periods.
+- **Silent failures**: load / drag-import / record / audio-init now surface
+  toasts instead of failing silently; audio-init failure keeps the start screen
+  for retry instead of dropping into a broken no-audio app.
+- **Wasm control latency**: param flush is synchronous in Wasm mode (was
+  rAF-gated, adding ~16-33ms to every fader/EQ/crossfader move).
+- **EQ zipper/click**: EQ dB smoothed per band (block-rate coeff recompute);
+  biquads always run (unity at 0 dB) so returning a band to flat can't click.
+- **Key Lock quality**: JS-fallback shifter no longer collapses to mono
+  (independent L/R grains); the granular look-back is ratio-aware and the ratio
+  is clamped so reads never run past write_pos (no warble when slowing).
+- **eject** frees the decoded AudioBuffer (~105MB) + raw bytes immediately.
+- **Master dynamics**: limiter attack is a ~0.15ms one-pole (no bass-transient
+  distortion from instant gain steps); Punch is true parallel dry/wet
+  (continuous knob, no limiter slam); the beat-gate is driven by the deck BPM
+  (new param-bus slot) instead of a hardcoded value that buzzed at ~441 Hz.
+- **Mobile**: consistent dark theme (removed the half-built light override),
+  44px touch targets, home-indicator safe-area inset, and an audio-clock-driven
+  beat pulse (was a drifting setInterval that re-rendered the deck 4x/sec and
+  leaked a timer).
+
+### Performance
+- DSP worklet caches its Wasm-memory TypedArray views (no ~700 allocs/s on the
+  audio thread); master analyser RMS is frame-cached; the waveform tick loop
+  honours fpsLimit; heavy deck components (jog/pads/pitch/overview) are memoised.
+
+### Known deferred
+- Master sum-bus headroom trim (loudness decision) and the WaveformOverview
+  main-thread canvas rewrite + track-list virtualization (need profiling).
+
 ## [0.5.14] - 2026-06-03
 
 Rigorous backend/frontend/audio audit — 21 blocking-to-severe issues fixed and
