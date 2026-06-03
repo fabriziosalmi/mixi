@@ -257,13 +257,19 @@ export class MixiEngine {
   }
 
   /**
-   * #20: Coalesce store-driven flushes to at most one per animation frame.
-   * Many store updates (UI flags, waveform progress, playhead) carry no DSP
-   * params; collapsing the burst avoids hammering the param bus with redundant
-   * full-snapshot writes. Falls back to a 16ms timer where rAF is unavailable
-   * (headless/tests). The first flush is still done synchronously on init.
+   * #20/#7: Coalesce store-driven flushes. In Wasm-DSP mode the param bus IS
+   * the audible path, so flush SYNCHRONOUSLY — an rAF delay would add a frame
+   * (~16-33ms) of control-to-sound latency to every fader/EQ/crossfader move.
+   * In native mode the bus is written but never read (the WebAudio nodes carry
+   * the audio), so coalesce to one rAF-paced flush to avoid hammering it on
+   * unrelated UI/waveform store churn. The full-snapshot flush is ~40 atomic
+   * writes (microseconds), cheap enough to run per change on the audio path.
    */
   private scheduleParamFlush(): void {
+    if (this.wasmDspActive) {
+      if (this.initialized) this.flushParamStateFromStore();
+      return;
+    }
     if (this._flushScheduled) return;
     this._flushScheduled = true;
     const run = () => {
@@ -1302,11 +1308,22 @@ export class MixiEngine {
 
   private _stereoLBuf: Float32Array<ArrayBuffer> | null = null;
   private _stereoRBuf: Float32Array<ArrayBuffer> | null = null;
+  // #16: frame-stamp cache so MeterService + MasterLedScreen don't each pull
+  // getFloatTimeDomainData(512)+RMS for the same channel on the same frame.
+  private _stereoRmsCache = { L: 0, R: 0, frameL: -1, frameR: -1 };
 
   private _readAnalyserRms(analyser: AnalyserNode): number {
+    const isLeft = analyser === this.master.analyserL;
+    const frameNow = (performance.now() | 0);
+    if (isLeft) {
+      if (Math.abs(frameNow - this._stereoRmsCache.frameL) < 8) return this._stereoRmsCache.L;
+    } else if (Math.abs(frameNow - this._stereoRmsCache.frameR) < 8) {
+      return this._stereoRmsCache.R;
+    }
+
     const size = analyser.fftSize;
     let buf: Float32Array<ArrayBuffer>;
-    if (analyser === this.master.analyserL) {
+    if (isLeft) {
       if (!this._stereoLBuf || this._stereoLBuf.length !== size) this._stereoLBuf = new Float32Array(size);
       buf = this._stereoLBuf;
     } else {
@@ -1316,7 +1333,11 @@ export class MixiEngine {
     analyser.getFloatTimeDomainData(buf);
     let sum = 0;
     for (let i = 0; i < size; i++) { const s = buf[i]; sum += s * s; }
-    return Math.min(1, Math.sqrt(sum / size) * 1.414);
+    const level = Math.min(1, Math.sqrt(sum / size) * 1.414);
+
+    if (isLeft) { this._stereoRmsCache.L = level; this._stereoRmsCache.frameL = frameNow; }
+    else { this._stereoRmsCache.R = level; this._stereoRmsCache.frameR = frameNow; }
+    return level;
   }
 
   /**

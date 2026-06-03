@@ -29,6 +29,7 @@ import { injectAllCustomSkins } from './utils/skinLoader';
 import { HudLeft } from './components/topbar/HudLeft';
 import { HudCenter } from './components/topbar/HudCenter';
 import { HudRight } from './components/topbar/HudRight';
+import { notify } from './components/topbar/HudNotifications';
 import { HudStatusBar } from './components/topbar/HudStatusBar';
 import { TrackBrowser } from './components/browser/TrackBrowser';
 import { useBrowserStore } from './store/browserStore';
@@ -156,7 +157,10 @@ const App: FC = () => {
       await initEngine();
     } catch (err) {
       console.error('[mixi] Audio init failed:', err);
-      // Still proceed — some features may work without audio
+      // Don't drop the user into a silently-broken no-audio app — surface the
+      // failure and keep the start screen up so they can retry.
+      notify.error('Audio failed to start. Check your output device and try again.');
+      return;
     }
     setAudioStarted(true);
 

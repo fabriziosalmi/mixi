@@ -29,6 +29,7 @@ import type { DeckId } from '../../types';
 import { log } from '../../utils/logger';
 import { parseTrackMeta } from '../../audio/metadataParser';
 import { API_BASE } from '../../utils/apiBase';
+import { notify } from '../topbar/HudNotifications';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -189,15 +190,23 @@ export const TrackBrowser: FC = () => {
     setDragOver(false);
 
     const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('audio/'));
-    if (!files.length) return;
+    if (!files.length) {
+      notify.warn('Drop audio files only');
+      return;
+    }
 
     const engine = MixiEngine.getInstance();
-    if (!engine.isInitialized) return;
+    if (!engine.isInitialized) {
+      notify.warn('Start audio first, then drop tracks to import');
+      return;
+    }
     const actx = engine.getAudioContext();
 
     // M2: Process files one at a time with yield between each to keep UI responsive.
     // detectBpm/detectKey are CPU-bound — without yielding, dropping 50 files
     // freezes the main thread for the entire batch.
+    let imported = 0;
+    let failed = 0;
     for (const file of files) {
       try {
         const buf = await file.arrayBuffer();
@@ -236,22 +245,29 @@ export const TrackBrowser: FC = () => {
           colorTag: '',
           analyzedAt: Date.now(),
         }, blob);
+        imported++;
       } catch (err) {
+        failed++;
         log.error('TrackBrowser', `Failed to import ${file.name}`, err);
       }
     }
+    if (imported > 0) notify.success(`Imported ${imported} track${imported > 1 ? 's' : ''}${failed ? ` (${failed} failed)` : ''}`);
+    else if (failed > 0) notify.error(`Import failed for ${failed} file${failed > 1 ? 's' : ''}`);
   }, [addTrack]);
 
   const loadToDeck = useCallback(async (track: TrackEntry, deck: DeckId) => {
+    const engine = MixiEngine.getInstance();
+    if (!engine.isInitialized) {
+      notify.warn('Start audio first, then load a track');
+      return;
+    }
     try {
-      const engine = MixiEngine.getInstance();
-      if (!engine.isInitialized) return;
-
       // Resolve a real blob URL (recovers from IndexedDB / drops phantoms) so
       // we never fetch('') — that would resolve to the app's own HTML.
       const url = await useBrowserStore.getState().resolvePlayableUrl(track.id);
       if (!url) {
         log.warn('TrackBrowser', `Track ${track.id} has no recoverable audio — removed`);
+        notify.error(`"${track.title}" is missing its audio — removed from library`);
         return;
       }
       const res = await fetch(url);
@@ -259,8 +275,10 @@ export const TrackBrowser: FC = () => {
       await engine.loadTrack(deck, buf);
       useMixiStore.getState().setDeckTrackName(deck, `${track.artist ? track.artist + ' - ' : ''}${track.title}`);
       useMixiStore.getState().setDeckTrackLoaded(deck, true);
+      notify.success(`Deck ${deck}: ${track.artist ? track.artist + ' - ' : ''}${track.title}`);
     } catch (err) {
       log.error('TrackBrowser', `Failed to load to deck ${deck}`, err);
+      notify.error(`Failed to load "${track.title}" to Deck ${deck}`);
     }
   }, []);
 

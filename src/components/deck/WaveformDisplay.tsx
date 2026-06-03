@@ -225,8 +225,16 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
     // ── Main-thread requestAnimationFrame loop for sending playhead position ──
     const engine = MixiEngine.getInstance();
     let rafId = 0;
+    let lastTickMs = 0;
 
     function sendTicks() {
+      // #16: honour fpsLimit here too (the worker already does) — otherwise this
+      // loop posts a message + two getCurrentTime calls every frame even at 30fps.
+      const now = performance.now();
+      const minInterval = 1000 / (useSettingsStore.getState().fpsLimit || 60);
+      if (now - lastTickMs < minInterval - 1) { rafId = requestAnimationFrame(sendTicks); return; }
+      lastTickMs = now;
+
       const state = useMixiStore.getState();
       const d = state.decks[deckId];
       const otherDeck = state.decks[otherDeckId];

@@ -71,6 +71,7 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
 
   // Circular input buffer
   private inputBuf = new Float32Array(GRAIN_SIZE * 4);
+  private inputBufR = new Float32Array(GRAIN_SIZE * 4); // right channel (stereo key lock)
   private inputWrite = 0;
 
   // Grain output positions
@@ -122,7 +123,8 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
 
     this.port.onmessage = (e: MessageEvent) => {
       if (e.data.type === 'setPitchRatio') {
-        this.pitchRatio = e.data.value;
+        // Clamp to the supported range so the grain look-back fits the buffer.
+        this.pitchRatio = Math.max(0.5, Math.min(2.0, e.data.value));
       } else if (e.data.type === 'setEnabled') {
         this.enabled = e.data.value;
         if (!this.enabled) {
@@ -292,61 +294,64 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    // Process mono (channel 0)
-    const inCh = input[0];
-    const frames = inCh.length;
+    // Stereo: process L and R through independent grain buffers (shared grain
+    // timing). Reading only channel 0 collapsed key-locked audio to mono.
+    const inL = input[0];
+    const inR = (input.length > 1 && input[1]) ? input[1] : input[0];
+    const frames = inL.length;
     const bufLen = this.inputBuf.length;
 
-    // Write input to circular buffer
+    // Write both channels to their circular buffers
     for (let i = 0; i < frames; i++) {
-      this.inputBuf[this.inputWrite % bufLen] = inCh[i];
+      const w = this.inputWrite % bufLen;
+      this.inputBuf[w] = inL[i];
+      this.inputBufR[w] = inR[i];
       this.inputWrite++;
     }
 
-    // Generate output by overlap-adding two resampled grains
+    // A grain spans GRAIN_SIZE*ratio input samples — look back by that much
+    // (>= GRAIN_SIZE) so the read window never passes inputWrite into stale
+    // audio when ratio>1 (key lock + slowing). See pitch_shift.rs.
+    const lookBack = Math.ceil(GRAIN_SIZE * Math.max(1, this.pitchRatio));
+    const outR = output.length > 1 ? output[1] : null;
+
+    // Generate output by overlap-adding two resampled grains, per channel.
     for (let i = 0; i < frames; i++) {
       const aIdx = this.grainAPos;
       const aFrac = aIdx * this.pitchRatio;
       const aInt = Math.floor(aFrac);
       const aT = aFrac - aInt;
-      const aBase = (this.inputWrite - GRAIN_SIZE + aInt) % bufLen;
-      const s0 = this.inputBuf[(aBase + bufLen) % bufLen];
-      const s1 = this.inputBuf[(aBase + 1 + bufLen) % bufLen];
-      const aSample = s0 + (s1 - s0) * aT;
-      const aWin = this.window[aIdx];
+      const aBase = (this.inputWrite - lookBack + aInt) % bufLen;
+      const aw = this.window[aIdx];
 
       const bIdx = this.grainBPos;
       const bFrac = bIdx * this.pitchRatio;
       const bInt = Math.floor(bFrac);
       const bT = bFrac - bInt;
-      const bBase = (this.inputWrite - GRAIN_SIZE + bInt - HALF_GRAIN) % bufLen;
-      const t0 = this.inputBuf[(bBase + bufLen) % bufLen];
-      const t1 = this.inputBuf[(bBase + 1 + bufLen) % bufLen];
-      const bSample = t0 + (t1 - t0) * bT;
-      const bWin = this.window[bIdx];
+      const bBase = (this.inputWrite - lookBack + bInt - HALF_GRAIN) % bufLen;
+      const bw = this.window[bIdx];
 
-      const sample = aSample * aWin + bSample * bWin;
+      const aI0 = (aBase + bufLen) % bufLen;
+      const aI1 = (aBase + 1 + bufLen) % bufLen;
+      const bI0 = (bBase + bufLen) % bufLen;
+      const bI1 = (bBase + 1 + bufLen) % bufLen;
 
-      for (let ch = 0; ch < output.length; ch++) {
-        output[ch][i] = sample;
+      // Left
+      const aL = this.inputBuf[aI0] + (this.inputBuf[aI1] - this.inputBuf[aI0]) * aT;
+      const bL = this.inputBuf[bI0] + (this.inputBuf[bI1] - this.inputBuf[bI0]) * bT;
+      output[0][i] = aL * aw + bL * bw;
+
+      // Right (independent buffer)
+      if (outR) {
+        const aR = this.inputBufR[aI0] + (this.inputBufR[aI1] - this.inputBufR[aI0]) * aT;
+        const bR = this.inputBufR[bI0] + (this.inputBufR[bI1] - this.inputBufR[bI0]) * bT;
+        outR[i] = aR * aw + bR * bw;
       }
 
       this.grainAPos++;
       this.grainBPos++;
-
-      if (this.grainAPos >= GRAIN_SIZE) {
-        this.grainAPos = 0;
-      }
-      if (this.grainBPos >= GRAIN_SIZE) {
-        this.grainBPos = 0;
-      }
-    }
-
-    if (input.length > 1 && input[1]) {
-      const outR = output[1];
-      if (outR) {
-        outR.set(output[0]);
-      }
+      if (this.grainAPos >= GRAIN_SIZE) this.grainAPos = 0;
+      if (this.grainBPos >= GRAIN_SIZE) this.grainBPos = 0;
     }
 
     const cpuDuration = performance.now() - startCpu;

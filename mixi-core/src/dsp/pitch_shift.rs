@@ -56,9 +56,11 @@ impl GrainPitchShift {
     }
 
     /// Set the pitch shift ratio. 1.0 = no shift. 1/playbackRate for key lock.
+    /// Clamped to [0.5, 2.0] — the supported playbackRate range — so the grain
+    /// look-back (GRAIN_SIZE*ratio) always fits inside BUF_SIZE.
     #[inline]
     pub fn set_pitch_ratio(&mut self, ratio: f32) {
-        self.pitch_ratio = ratio;
+        self.pitch_ratio = ratio.clamp(0.5, 2.0);
     }
 
     /// Enable or disable pitch shifting. When disabled, audio passes through.
@@ -85,6 +87,11 @@ impl GrainPitchShift {
 
         let buf_len = BUF_SIZE;
         let ratio = self.pitch_ratio;
+        // A grain spans GRAIN_SIZE*ratio input samples. Look back by that much
+        // (>= GRAIN_SIZE) so the resampled read window never runs PAST write_pos
+        // into not-yet-written/stale audio when ratio>1 (key lock + slowing) —
+        // the source of the warble/metallic artifact.
+        let look_back = ((GRAIN_SIZE as f32) * ratio.max(1.0)).ceil() as usize;
 
         // Write input to circular buffer
         for i in 0..len {
@@ -99,8 +106,8 @@ impl GrainPitchShift {
             let a_frac = a_idx as f32 * ratio;
             let a_int = a_frac as usize;
             let a_t = a_frac - a_int as f32;
-            // Read position: write_pos - GRAIN_SIZE + a_int
-            let a_base = (self.write_pos + buf_len - GRAIN_SIZE + a_int) % buf_len;
+            // Read position: write_pos - look_back + a_int (always <= write_pos)
+            let a_base = (self.write_pos + buf_len - look_back + a_int) % buf_len;
             let s0 = self.input_buf[a_base];
             let s1 = self.input_buf[(a_base + 1) % buf_len];
             let a_sample = s0 + (s1 - s0) * a_t; // linear interpolation
@@ -111,7 +118,7 @@ impl GrainPitchShift {
             let b_frac = b_idx as f32 * ratio;
             let b_int = b_frac as usize;
             let b_t = b_frac - b_int as f32;
-            let b_base = (self.write_pos + buf_len - GRAIN_SIZE + b_int + buf_len - HALF_GRAIN) % buf_len;
+            let b_base = (self.write_pos + buf_len - look_back + b_int + buf_len - HALF_GRAIN) % buf_len;
             let t0 = self.input_buf[b_base];
             let t1 = self.input_buf[(b_base + 1) % buf_len];
             let b_sample = t0 + (t1 - t0) * b_t;

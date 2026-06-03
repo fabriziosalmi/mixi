@@ -21,19 +21,25 @@ import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { COLOR_DECK_A, COLOR_DECK_B } from '../../theme';
 import { MobileTrackLoader } from './MobileTrackLoader';
+import { notify } from '../topbar/HudNotifications';
 import type { DeckId } from '../../types';
 
 // ── Load-to-deck (same logic as desktop TrackBrowser) ────────
 
 async function loadToDeck(track: TrackEntry, deck: DeckId) {
+  const engine = MixiEngine.getInstance();
+  if (!engine.isInitialized) {
+    notify.warn('Start audio first, then load a track');
+    return;
+  }
   try {
-    const engine = MixiEngine.getInstance();
-    if (!engine.isInitialized) return;
-
     // Resolve a real blob URL (recovers from IndexedDB / drops phantoms) so we
     // never fetch('') — that would resolve to the app's own HTML.
     const url = await useBrowserStore.getState().resolvePlayableUrl(track.id);
-    if (!url) return;
+    if (!url) {
+      notify.error(`"${track.title}" is missing its audio — removed`);
+      return;
+    }
     const res = await fetch(url);
     const buf = await res.arrayBuffer();
     await engine.loadTrack(deck, buf);
@@ -41,8 +47,9 @@ async function loadToDeck(track: TrackEntry, deck: DeckId) {
     const name = `${track.artist ? track.artist + ' - ' : ''}${track.title}`;
     useMixiStore.getState().setDeckTrackName(deck, name);
     useMixiStore.getState().setDeckTrackLoaded(deck, true);
+    notify.success(`Deck ${deck}: ${name}`);
   } catch {
-    // silent on mobile — no log dependency
+    notify.error(`Failed to load "${track.title}" to Deck ${deck}`);
   }
 }
 

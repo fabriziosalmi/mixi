@@ -23,6 +23,7 @@ import { DiskRecordingBridge } from '../../audio/recording/DiskRecordingBridge';
 import { useMixiStore } from '../../store/mixiStore';
 import { useSettingsStore, type RecFormat } from '../../store/settingsStore';
 import { generateFingerprint, watermarkAudioBlob } from '../../utils/watermark';
+import { notify } from '../topbar/HudNotifications';
 
 const REC_MIME: Record<RecFormat, { mime: string; ext: string; bitrate: number }> = {
   'webm-opus': { mime: 'audio/webm;codecs=opus', ext: 'webm', bitrate: 128_000 },
@@ -108,7 +109,10 @@ export const RecPanel: FC = () => {
 
   const startRec = useCallback(async () => {
     const engine = MixiEngine.getInstance();
-    if (!engine.isInitialized) return;
+    if (!engine.isInitialized) {
+      notify.warn('Start audio before recording');
+      return;
+    }
 
     const actx = engine.getAudioContext();
     const masterOutput = engine.getMasterOutput();
