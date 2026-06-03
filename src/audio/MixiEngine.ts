@@ -121,6 +121,15 @@ export class MixiEngine {
   private _visHandler: (() => void) | null = null;
   /** Generation counter per deck — stale async loads are discarded. */
   private _loadGen: Record<DeckId, number> = { A: 0, B: 0 };
+  /**
+   * Transport-mutation epoch per deck. Bumped by every synchronous source
+   * change (play / stopSource / pause). The async locked ops (seek /
+   * crossfadeSeek / segment-transition) capture it at entry and re-check it
+   * after each await — if a synchronous play()/pause() ran during the await,
+   * they bail instead of clobbering the new transport state (e.g. seek would
+   * otherwise overwrite the position a mid-seek pause just captured).
+   */
+  private _transportEpoch: Record<DeckId, number> = { A: 0, B: 0 };
   /** Analysis queue — serialize waveform analysis to avoid 6 concurrent OfflineAudioContext jobs. */
   private _analysisQueue: Promise<void> = Promise.resolve();
 
@@ -797,20 +806,14 @@ export class MixiEngine {
 
     this.connectSource(deck, source);
 
-    source.onended = () => {
-      if (transport.source === source) {
-        transport.source = null;
-        transport.offset = 0;
-        transport.startedAt = 0;
-        // Sync store: track ended naturally.
-        useMixiStore.getState().setDeckPlaying(deck, false);
-      }
-    };
+    source.onended = () => this.onNaturalEnd(deck, source);
 
     const relativeOffset = Math.max(0, transport.offset - transport.currentSegmentStart);
     source.start(0, relativeOffset);
     transport.source = source;
     transport.startedAt = this.ctx.currentTime;
+    // Bump epoch so an in-flight seek/transition parked on an await bails.
+    this._transportEpoch[deck]++;
   }
 
   pause(deck: DeckId): void {
@@ -1426,6 +1429,7 @@ export class MixiEngine {
     phaseLockLoop.reset(deck);
     const transport = this.transports[deck];
     if (!transport.streamingBuffer) return;
+    const epoch = this._transportEpoch[deck];
 
     const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
 
@@ -1436,6 +1440,9 @@ export class MixiEngine {
       log.error('Engine', 'Failed to seek (load segment):', err);
       return;
     }
+
+    // A play()/pause() ran during the decode await — don't clobber it.
+    if (this._transportEpoch[deck] !== epoch) return;
 
     const relativeOffset = clampedTime - transport.currentSegmentStart;
 
@@ -1474,13 +1481,7 @@ export class MixiEngine {
 
     this.connectSource(deck, source);
 
-    source.onended = () => {
-      if (transport.source === source) {
-        transport.source = null;
-        transport.offset = 0;
-        transport.startedAt = 0;
-      }
-    };
+    source.onended = () => this.onNaturalEnd(deck, source);
 
     // Schedule the new source to start exactly when the fade-out finishes.
     source.start(startAt, relativeOffset);
@@ -1525,6 +1526,7 @@ export class MixiEngine {
 
     this.cancelBrake(deck);
     phaseLockLoop.reset(deck);
+    const epoch = this._transportEpoch[deck];
 
     const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
 
@@ -1535,6 +1537,9 @@ export class MixiEngine {
       log.error('Engine', 'Failed to crossfadeSeek (load segment):', err);
       return;
     }
+
+    // A play()/pause() ran during the decode await — don't clobber it.
+    if (this._transportEpoch[deck] !== epoch) return;
 
     if (!transport.source) {
       transport.offset = clampedTime;
@@ -1591,13 +1596,7 @@ export class MixiEngine {
     transport.offset = clampedTime;
     transport.startedAt = now;
 
-    newSource.onended = () => {
-      if (transport.source === newSource) {
-        transport.source = null;
-        transport.offset = 0;
-        transport.startedAt = 0;
-      }
-    };
+    newSource.onended = () => this.onNaturalEnd(deck, newSource);
   }
 
   // ── Looping ────────────────────────────────────────────────
@@ -1693,8 +1692,26 @@ export class MixiEngine {
 
   // ── Internal Helpers ───────────────────────────────────────
 
+  /**
+   * Single handler for a source that played to its natural end. Resets the
+   * transport AND syncs the store's isPlaying flag — every source-creation site
+   * (play/seek/crossfadeSeek/segment-transition) must use this, otherwise a
+   * `play → seek → track ends` sequence leaves isPlaying=true forever (button
+   * stuck lit, playhead frozen, sync/automix mis-firing).
+   */
+  private onNaturalEnd(deck: DeckId, src: AudioBufferSourceNode): void {
+    const transport = this.transports[deck];
+    if (transport.source !== src) return; // superseded by a stop/seek/transition
+    transport.source = null;
+    transport.offset = 0;
+    transport.startedAt = 0;
+    useMixiStore.getState().setDeckPlaying(deck, false);
+  }
+
   private stopSource(deck: DeckId): void {
     const transport = this.transports[deck];
+    // Bump the epoch so any locked op parked on an await bails on resume.
+    this._transportEpoch[deck]++;
     if (transport.source) {
       transport.source.onended = null;
       // Memory Leak Fix for WebAudio: Disable loop so the buffer isn't pinned indefinitely
@@ -1956,6 +1973,7 @@ export class MixiEngine {
   private async _segmentTransitionLocked(deck: DeckId): Promise<void> {
     const transport = this.transports[deck];
     if (!transport.streamingBuffer || !transport.source || !transport.buffer) return;
+    const epoch = this._transportEpoch[deck];
 
     const currentTime = this.getCurrentTime(deck);
     const segmentEnd = transport.currentSegmentStart + transport.currentSegmentDuration;
@@ -1969,6 +1987,9 @@ export class MixiEngine {
         const nextSegmentDuration = Math.min(transport.totalDuration - nextSegmentStart, 300);
 
         const nextBuffer = await transport.streamingBuffer.decodeSegment(nextSegmentStart, nextSegmentDuration);
+
+        // A play()/pause() ran during the decode await — abort the transition.
+        if (this._transportEpoch[deck] !== epoch) return;
 
         // Double-check if we are still playing and playhead is in the expected range
         if (!transport.source || Math.abs(this.getCurrentTime(deck) - currentTime) > 5) {
@@ -2030,13 +2051,7 @@ export class MixiEngine {
         transport.startedAt = startAt;
         transport.offset = nextSegmentStart;
 
-        newSource.onended = () => {
-          if (transport.source === newSource) {
-            transport.source = null;
-            transport.offset = 0;
-            transport.startedAt = 0;
-          }
-        };
+        newSource.onended = () => this.onNaturalEnd(deck, newSource);
 
         log.info('Engine', `Segment transition complete on deck ${deck}. New segment start: ${nextSegmentStart}`);
       } catch (err) {
