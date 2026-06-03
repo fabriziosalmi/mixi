@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.18] - 2026-06-03
+
+### Fixed
+- **Onboarding Escape ate the panic double-press.** The 0.5.15 onboarding
+  Escape-to-dismiss handler used capture-phase + stopImmediatePropagation, which
+  swallowed the first of a double-Escape while the first-launch onboarding was
+  visible — so the panic reset never fired. Onboarding now dismisses on Escape
+  without stopping propagation; App's single Escape owner still runs.
+  (Restores the advisory E2E `07-keyboard` panic test to green.)
+
 ## [0.5.17] - 2026-06-03
 
 ### Fixed
