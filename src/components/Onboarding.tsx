@@ -78,19 +78,17 @@ export const Onboarding: FC = () => {
     if (step > 0) setStep(s => s - 1);
   }, [step]);
 
-  // Escape dismisses onboarding. Capture phase + stopImmediatePropagation so
-  // App's window keydown handler never sees this Escape (no Panic arm/fire).
+  // Escape dismisses onboarding. We do NOT stop propagation — App's Escape
+  // owner still runs, so the panic double-press keeps working (harmless on the
+  // empty first-launch decks). Swallowing it here previously ate the first of a
+  // double-Escape, breaking panic while onboarding was up.
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        dismiss();
-      }
+      if (e.key === 'Escape') dismiss();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [visible, dismiss]);
 
   if (!visible) return null;
