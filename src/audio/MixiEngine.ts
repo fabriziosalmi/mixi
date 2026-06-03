@@ -119,6 +119,9 @@ export class MixiEngine {
   private pitchShifters: Record<DeckId, AudioWorkletNode | null> = { A: null, B: null };
   private _gateTimer: ReturnType<typeof setInterval> | null = null;
   private _streamingLookAheadTimer: ReturnType<typeof setInterval> | null = null;
+  /** Short cleanup timers (crossfade/segment old-source stop). Tracked so
+   *  destroy() can cancel them instead of leaving them to fire post-teardown. */
+  private _cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
   private _keepAliveOsc: OscillatorNode | null = null;
   private _keepAliveGain: GainNode | null = null;
   private _deviceGuard: AudioDeviceGuard | null = null;
@@ -568,6 +571,10 @@ export class MixiEngine {
         this._brakeTimers[d] = null;
       }
     }
+
+    // Cancel pending crossfade/segment old-source cleanup timers (#19).
+    for (const id of this._cleanupTimers) clearTimeout(id);
+    this._cleanupTimers.clear();
 
     if (this._keepAliveOsc) {
       this._keepAliveOsc.stop();
@@ -1108,6 +1115,16 @@ export class MixiEngine {
     return this._transportEpoch[deck] !== snap.epoch
       || this._loadGen[deck] !== snap.gen
       || this.transports[deck].streamingBuffer !== snap.sb;
+  }
+
+  /** Run a short cleanup callback after `ms`, tracked so destroy() can cancel
+   *  it (prevents a late old-source stop firing against a torn-down engine). */
+  private scheduleCleanup(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      this._cleanupTimers.delete(id);
+      fn();
+    }, ms);
+    this._cleanupTimers.add(id);
   }
 
   /** Standard nudge: ±4 %. Fine nudge (Shift): ±1 %. */
@@ -1657,7 +1674,7 @@ export class MixiEngine {
     newSource.start(now, relativeOffset);
 
     // ── Cleanup old source after crossfade ──────────────────
-    setTimeout(() => {
+    this.scheduleCleanup(() => {
       try {
         oldSource.stop();
         oldSource.disconnect();
@@ -2135,7 +2152,7 @@ export class MixiEngine {
 
         newSource.start(startAt, 0);
 
-        setTimeout(() => {
+        this.scheduleCleanup(() => {
           try {
             oldSource.stop();
             oldSource.disconnect();

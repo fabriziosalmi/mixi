@@ -171,12 +171,16 @@ async def mixer_websocket(ws: WebSocket):
     except WebSocketDisconnect:
         logger.info("[dim]Browser disconnesso dal WebSocket[/dim]")
     finally:
-        _browser_ws = None
-        # Drain any pending command futures — the browser is gone.
-        for cmd_id, fut in list(_pending_responses.items()):
-            if not fut.done():
-                fut.set_result({"type": "response", "id": cmd_id, "ok": False, "error": "Browser disconnected"})
-        _pending_responses.clear()
+        # Generation guard: only tear down global state if WE are still the
+        # registered connection. Otherwise a just-preempted older socket's
+        # disconnect would wipe the live (newer) connection's registration and
+        # pending futures.
+        if _browser_ws is ws:
+            _browser_ws = None
+            for cmd_id, fut in list(_pending_responses.items()):
+                if not fut.done():
+                    fut.set_result({"type": "response", "id": cmd_id, "ok": False, "error": "Browser disconnected"})
+            _pending_responses.clear()
 
 
 async def send_command_to_browser(

@@ -34,6 +34,12 @@ const DOT_COLOR_R = 168;         // #a855f7 → R
 const DOT_COLOR_G = 85;          //          → G
 const DOT_COLOR_B = 247;         //          → B
 
+// 256-entry RGBA-string LUT, computed ONCE at module load (was rebuilt every
+// frame inside draw() despite the comment — ~15k string allocs/sec). (#19)
+const ALPHA_LUT: string[] = Array.from({ length: 256 }, (_, a) =>
+  `rgba(${DOT_COLOR_R},${DOT_COLOR_G},${DOT_COLOR_B},${(a / 255).toFixed(3)})`,
+);
+
 // ── Component ──────────────────────────────────────────────
 
 export const MasterLedScreen: FC = () => {
@@ -128,12 +134,7 @@ export const MasterLedScreen: FC = () => {
     const scale = Math.min(cx, cy) * GAIN;
     const invSqrt2 = 0.7071;
 
-    // Pre-compute 256-entry RGBA string LUT — eliminates ~2048
-    // template string allocations per frame (61k allocs/sec saved).
-    const alphaLUT: string[] = new Array(256);
-    for (let a = 0; a < 256; a++) {
-      alphaLUT[a] = `rgba(${DOT_COLOR_R},${DOT_COLOR_G},${DOT_COLOR_B},${(a / 255).toFixed(3)})`;
-    }
+    const alphaLUT = ALPHA_LUT; // module-level, computed once
 
     let sumCorr = 0;
     let sumL2 = 0;

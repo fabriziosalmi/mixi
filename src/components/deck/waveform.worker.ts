@@ -400,6 +400,13 @@ self.onmessage = (e: MessageEvent) => {
       height = data.height;
       dpr = data.dpr;
 
+      // Size the backing store + apply the DPR transform up front — the resize
+      // case did this but init didn't, so the first paint rendered into the
+      // top-left quadrant blurry/clipped until a resize happened to fire.
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
       ctx.font = '8px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';

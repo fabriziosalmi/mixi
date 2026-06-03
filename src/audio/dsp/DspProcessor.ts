@@ -190,6 +190,11 @@ export class SharedParamBus implements DspParamBus {
   private readonly seqIdx = GLOBAL.SEQ >> 2;
   private writeDepth = 0;
 
+  /** Reusable f32↔i32 reinterpret scratch — avoids two TypedArray allocations
+   *  on every get/setFloat (~thousands/sec during a flush → main-thread GC). */
+  private readonly _f32 = new Float32Array(1);
+  private readonly _i32 = new Int32Array(this._f32.buffer);
+
   constructor(sizeBytes: number) {
     this.buffer = new SharedArrayBuffer(sizeBytes);
     this.i32View = new Int32Array(this.buffer);
@@ -209,19 +214,13 @@ export class SharedParamBus implements DspParamBus {
   }
 
   getFloat(byteOffset: number): number {
-    const idx = byteOffset >> 2; // byte offset → i32 index
-    const bits = Atomics.load(this.i32View, idx);
-    // Reinterpret i32 bits as f32
-    const tmp = new Float32Array(1);
-    new Int32Array(tmp.buffer)[0] = bits;
-    return tmp[0];
+    this._i32[0] = Atomics.load(this.i32View, byteOffset >> 2); // i32 bits → f32
+    return this._f32[0];
   }
 
   setFloat(byteOffset: number, value: number): void {
-    const idx = byteOffset >> 2;
-    const tmp = new Float32Array([value]);
-    const bits = new Int32Array(tmp.buffer)[0];
-    Atomics.store(this.i32View, idx, bits);
+    this._f32[0] = value; // f32 → i32 bits
+    Atomics.store(this.i32View, byteOffset >> 2, this._i32[0]);
   }
 
   getBool(byteOffset: number): boolean {

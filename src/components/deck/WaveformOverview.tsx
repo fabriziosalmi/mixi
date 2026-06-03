@@ -51,6 +51,11 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
   /** Viewport drag state */
   const isDraggingRef = useRef(false);
   const dragOffsetRef = useRef(0);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  // Tear down any in-flight viewport drag on unmount so the window
+  // mousemove/mouseup listeners can't leak.
+  useEffect(() => () => { dragCleanupRef.current?.(); }, []);
 
   // ── Measure container width ────────────────────────────────
   useEffect(() => {
@@ -282,14 +287,21 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
         engine.seek(deckId, Math.max(0, Math.min(duration, targetTime)));
       };
 
-      const onMouseUp = () => {
-        isDraggingRef.current = false;
+      const cleanup = () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
+        dragCleanupRef.current = null;
+      };
+      const onMouseUp = () => {
+        isDraggingRef.current = false;
+        cleanup();
       };
 
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
+      // Remember the teardown so an unmount mid-drag can't leak the listeners
+      // (and keep firing seek() against a stale deck). (#19)
+      dragCleanupRef.current = cleanup;
     },
     [deckId, duration, externalZoomRef],
   );
