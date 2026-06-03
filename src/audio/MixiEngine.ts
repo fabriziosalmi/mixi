@@ -71,6 +71,9 @@ interface DeckTransport {
   currentSegmentDuration: number;
   totalDuration: number;
   isTransitioning?: boolean;
+  /** Zero-crossing-snapped loop bounds (#13) — reused on every source rebuild
+   *  so the click-free seam survives seek/cue/resume/segment transitions. */
+  snappedLoop: { start: number; end: number } | null;
 }
 
 function createTransport(): DeckTransport {
@@ -88,6 +91,7 @@ function createTransport(): DeckTransport {
     currentSegmentDuration: 0,
     totalDuration: 0,
     isTransitioning: false,
+    snappedLoop: null,
   };
 }
 
@@ -813,7 +817,7 @@ export class MixiEngine {
     source.playbackRate.value = transport.playbackRate;
 
     // Restore loop state if a loop was active before pause.
-    const loopState = useMixiStore.getState().decks[deck].activeLoop;
+    const loopState = this.resolveLoopBounds(deck);
     if (loopState) {
       source.loop = true;
       source.loopStart = loopState.start;
@@ -1545,7 +1549,7 @@ export class MixiEngine {
     source.buffer = buffer;
     source.playbackRate.value = transport.playbackRate;
 
-    const loopState = useMixiStore.getState().decks[deck].activeLoop;
+    const loopState = this.resolveLoopBounds(deck);
     if (loopState) {
       source.loop = true;
       source.loopStart = loopState.start;
@@ -1629,7 +1633,7 @@ export class MixiEngine {
     newSource.buffer = nextBuffer;
     newSource.playbackRate.value = transport.playbackRate + this._nudge[deck];
 
-    const loopState = useMixiStore.getState().decks[deck].activeLoop;
+    const loopState = this.resolveLoopBounds(deck);
     if (loopState) {
       newSource.loop = true;
       newSource.loopStart = loopState.start;
@@ -1684,32 +1688,50 @@ export class MixiEngine {
   ): number {
     const sr = buffer.sampleRate;
     const idealSample = Math.round(timeSec * sr);
-    const data = buffer.getChannelData(0); // use L channel
-    const lo = Math.max(0, idealSample - windowSamples);
-    const hi = Math.min(data.length - 1, idealSample + windowSamples);
+    const ch0 = buffer.getChannelData(0);
+    const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : null;
+    const lo = Math.max(1, idealSample - windowSamples);
+    const hi = Math.min(ch0.length - 1, idealSample + windowSamples);
 
-    let bestIdx = idealSample;
-    let bestAbs = Math.abs(data[idealSample] ?? 1);
+    // Mono mix of |L|,|R| so the seam is click-free on BOTH channels (the old
+    // version only looked at channel 0).
+    const mag = (i: number) => (ch1 ? Math.abs(ch0[i]) + Math.abs(ch1[i]) : Math.abs(ch0[i]));
+    const mono = (i: number) => (ch1 ? ch0[i] + ch1[i] : ch0[i]);
+
+    // Prefer an actual rising sign-change (mono[i-1] <= 0 < mono[i]) nearest to
+    // the ideal point — the cleanest splice. Fall back to the minimum-magnitude
+    // sample if no crossing exists in the window.
+    let bestCross = -1;
+    let bestCrossDist = Infinity;
+    let bestMagIdx = idealSample;
+    let bestMag = mag(idealSample);
 
     for (let i = lo; i <= hi; i++) {
-      const v = Math.abs(data[i]);
-      if (v < bestAbs) {
-        bestAbs = v;
-        bestIdx = i;
+      if (mono(i - 1) <= 0 && mono(i) > 0) {
+        const d = Math.abs(i - idealSample);
+        if (d < bestCrossDist) { bestCrossDist = d; bestCross = i; }
       }
+      const m = mag(i);
+      if (m < bestMag) { bestMag = m; bestMagIdx = i; }
     }
-    return bestIdx / sr;
+
+    return (bestCross >= 0 ? bestCross : bestMagIdx) / sr;
   }
 
   setLoop(deck: DeckId, startTime: number, endTime: number): void {
     this.assertReady();
     const transport = this.transports[deck];
-    if (!transport.source) return;
 
-    // #32: Snap loop boundaries to nearest zero-crossing to avoid clicks.
+    // #32/#13: Snap loop boundaries to the nearest zero-crossing to avoid
+    // clicks, and PERSIST the snapped bounds so every source rebuild
+    // (seek/cue/resume/segment) reuses them instead of the un-snapped store
+    // values. Computed even while paused so the next play() picks them up.
     const buf = transport.buffer;
     const loopStart = buf ? this.snapToZeroCrossing(buf, startTime) : startTime;
     const loopEnd = buf ? this.snapToZeroCrossing(buf, endTime) : endTime;
+    transport.snappedLoop = { start: loopStart, end: loopEnd };
+
+    if (!transport.source) return;
 
     transport.source.loop = true;
     transport.source.loopStart = loopStart;
@@ -1725,9 +1747,18 @@ export class MixiEngine {
   exitLoop(deck: DeckId): void {
     this.assertReady();
     const transport = this.transports[deck];
+    transport.snappedLoop = null;
     if (!transport.source) return;
     transport.source.loop = false;
     this.updateWorkletLoopState(deck);
+  }
+
+  /** Resolve the loop bounds to apply on a source rebuild: the snapped bounds
+   *  if present (#13), else the store's logical activeLoop. */
+  private resolveLoopBounds(deck: DeckId): { start: number; end: number } | null {
+    const active = useMixiStore.getState().decks[deck].activeLoop;
+    if (!active) return null;
+    return this.transports[deck].snappedLoop ?? active;
   }
 
   // ── Playback Position ──────────────────────────────────────
@@ -2079,7 +2110,7 @@ export class MixiEngine {
         newSource.buffer = nextBuffer;
         newSource.playbackRate.value = transport.playbackRate + this._nudge[deck];
 
-        const loopState = useMixiStore.getState().decks[deck].activeLoop;
+        const loopState = this.resolveLoopBounds(deck);
         if (loopState) {
           newSource.loop = true;
           newSource.loopStart = loopState.start;

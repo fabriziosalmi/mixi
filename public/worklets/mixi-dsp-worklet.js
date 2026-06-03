@@ -26,6 +26,8 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     this.wasmReady = false;
     this.paramView = null;     // Uint8Array on SharedArrayBuffer
     this.paramI32 = null;      // Int32Array on the SAME buffer (seqlock reads)
+    this.paramScratch = null;  // local read target (non-shared)
+    this.lastGoodParams = null;// last seqlock-validated snapshot (non-shared)
     this.meteringView = null;  // Float32Array on SharedArrayBuffer
 
     // Wasm state (set after instantiation of the lean mixi-dsp wasm)
@@ -50,6 +52,8 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       if (data.paramBus) {
         this.paramView = new Uint8Array(data.paramBus);
         this.paramI32 = new Int32Array(data.paramBus);
+        this.paramScratch = new Uint8Array(data.paramBus.byteLength);
+        this.lastGoodParams = new Uint8Array(data.paramBus.byteLength);
       }
       if (data.meteringBus) {
         this.meteringView = new Float32Array(data.meteringBus);
@@ -146,20 +150,26 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       }
 
       // Param bus (SharedArrayBuffer snapshot) → engine param buffer.
-      // Seqlock: if the writer publishes mid-copy (counter is odd or changes
-      // across the copy), retry so the DSP never sees a half-written batch
-      // (e.g. an FX `active` flag without its matching `amount`). If the writer
-      // never bumps the counter it stays 0/even and this copies once.
+      // Seqlock: read into a local scratch and only promote it to lastGood when
+      // the generation counter is even AND unchanged across the read. We then
+      // ALWAYS feed the engine lastGood — so on retry exhaustion it sees the
+      // PREVIOUS consistent snapshot, never a half-written one (e.g. an FX
+      // `active` flag without its matching `amount`). If the writer never bumps
+      // the counter it stays 0/even and the first read validates immediately.
       if (this.paramView) {
         const i32 = this.paramI32;
-        if (i32) {
-          let s1, s2, attempts = 0;
-          do {
-            s1 = Atomics.load(i32, PARAM_SEQ_I32);
-            if (s1 & 1) continue;                      // write in progress — spin
-            memU8.set(this.paramView, this._paramPtr); // tentative snapshot copy
-            s2 = Atomics.load(i32, PARAM_SEQ_I32);
-          } while (((s1 & 1) || s1 !== s2) && ++attempts < PARAM_SEQ_MAX_RETRIES);
+        if (i32 && this.paramScratch && this.lastGoodParams) {
+          for (let attempts = 0; attempts < PARAM_SEQ_MAX_RETRIES; attempts++) {
+            const s1 = Atomics.load(i32, PARAM_SEQ_I32);
+            if (s1 & 1) continue;                       // write in progress — spin
+            this.paramScratch.set(this.paramView);      // tentative read
+            const s2 = Atomics.load(i32, PARAM_SEQ_I32);
+            if (s1 === s2) {                            // clean → promote
+              this.lastGoodParams.set(this.paramScratch);
+              break;
+            }
+          }
+          memU8.set(this.lastGoodParams, this._paramPtr);
         } else {
           memU8.set(this.paramView, this._paramPtr);
         }

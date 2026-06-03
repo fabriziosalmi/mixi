@@ -370,6 +370,10 @@ pub struct DspEngine {
 /// Maximum block size supported (AudioWorklet standard = 128).
 const MAX_BLOCK: usize = 1024;
 
+/// Sum-bus headroom: 1/√2 ≈ -3 dB so a both-decks-full / centred-crossfader
+/// sum (~1.41) lands at ~0 dBFS before the master dynamics chain.
+const SUM_HEADROOM: f32 = 0.707_106_77;
+
 impl DspEngine {
     /// Create a new DSP engine for the given sample rate.
     pub fn new(sample_rate: f32) -> Self {
@@ -445,9 +449,15 @@ impl DspEngine {
         // C1 fix: True stereo mix — deck A left, deck B right
         // Both decks contribute to both channels (mono sources → stereo sum)
         // but each channel gets its own master processing (C2 fix).
+        //
+        // Sum-bus headroom: two decks at full fader with the crossfader centred
+        // sum to ~1.41 (0 dBFS = 1.0). Trim by 1/√2 so that worst case lands at
+        // ~0 dBFS, giving the distortion/punch/limiter room to work instead of
+        // being slammed into permanent reduction. Make-up is the master gain.
         for i in 0..len {
-            output_l[i] = self.scratch_a[i] + self.scratch_b[i];
-            output_r[i] = self.scratch_a[i] + self.scratch_b[i];
+            let mix = (self.scratch_a[i] + self.scratch_b[i]) * SUM_HEADROOM;
+            output_l[i] = mix;
+            output_r[i] = mix;
         }
 
         // C2 fix: Separate master chain per channel (independent state)
