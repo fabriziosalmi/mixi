@@ -82,6 +82,18 @@ export const TrackBrowser: FC = () => {
   const analyzerRef = useRef<BatchAnalyzer | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; title: string } | null>(null);
 
+  // #17: virtualize the track list for large libraries. Below the threshold we
+  // render every row (proven path, zero risk); above it we window to the
+  // visible range using a measured row height (robust to styling changes).
+  const VIRT_THRESHOLD = 120;
+  const OVERSCAN = 8;
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const firstRowRef = useRef<HTMLTableRowElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(0);
+  const [rowH, setRowH] = useState(28);
+  const scrollRaf = useRef(0);
+
   const startBatchAnalysis = useCallback(() => {
     if (analyzerRef.current?.isRunning) {
       analyzerRef.current.cancel();
@@ -313,6 +325,45 @@ export const TrackBrowser: FC = () => {
     });
   }, [tracks, search, sortCol, sortAsc, selectedPlaylist]);
 
+  // ── Virtualization window (#17) ──────────────────────────────
+  const virtualize = filtered.length > VIRT_THRESHOLD;
+
+  // Track scroll position + viewport height of the list (rAF-throttled).
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el) return;
+    const update = () => { setScrollTop(el.scrollTop); setViewH(el.clientHeight); };
+    update();
+    const onScroll = () => {
+      if (scrollRaf.current) return;
+      scrollRaf.current = requestAnimationFrame(() => { scrollRaf.current = 0; update(); });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+      if (scrollRaf.current) { cancelAnimationFrame(scrollRaf.current); scrollRaf.current = 0; }
+    };
+  }, []);
+
+  // Measure the real row height from the first rendered data row. The
+  // difference guard makes this converge (no infinite update loop).
+  useEffect(() => {
+    const h = firstRowRef.current?.offsetHeight;
+    if (h && h > 0 && Math.abs(h - rowH) > 0.5) setRowH(h);
+  }, [rowH, virtualize, filtered.length]);
+
+  const total = filtered.length;
+  const winStart = virtualize ? Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN) : 0;
+  const winEnd = virtualize
+    ? Math.min(total, Math.ceil((scrollTop + (viewH || 600)) / rowH) + OVERSCAN)
+    : total;
+  const visibleTracks = virtualize ? filtered.slice(winStart, winEnd) : filtered;
+  const padTop = virtualize ? winStart * rowH : 0;
+  const padBottom = virtualize ? (total - winEnd) * rowH : 0;
+
   // H3: Memoize smart playlist counts to avoid O(playlists × tracks) per render
   const playlistCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -500,7 +551,7 @@ export const TrackBrowser: FC = () => {
       </div>
 
       {/* ── Track Table ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto">
+      <div ref={listScrollRef} className="flex-1 overflow-auto">
         <table className="w-full text-zinc-400 text-[11px] font-mono">
           <thead className="sticky top-0 bg-zinc-900/90 backdrop-blur-sm border-b border-zinc-800/30">
             <tr>
@@ -516,9 +567,13 @@ export const TrackBrowser: FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t, i) => (
+            {padTop > 0 && <tr aria-hidden style={{ height: padTop }}><td colSpan={9} /></tr>}
+            {visibleTracks.map((t, li) => {
+              const i = winStart + li;
+              return (
               <tr
                 key={t.id}
+                ref={li === 0 ? firstRowRef : undefined}
                 className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors group cursor-grab"
                 draggable
                 onDragStart={(e) => { e.dataTransfer.setData('text/track-id', t.id); e.dataTransfer.effectAllowed = 'copy'; }}
@@ -610,7 +665,9 @@ export const TrackBrowser: FC = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
+            {padBottom > 0 && <tr aria-hidden style={{ height: padBottom }}><td colSpan={9} /></tr>}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-6 text-center text-zinc-600 text-[11px]">

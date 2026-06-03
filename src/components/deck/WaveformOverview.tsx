@@ -44,8 +44,8 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
   zoomRef: externalZoomRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const staticRef = useRef<ImageData | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);      // transparent overlay (cursor/markers)
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);    // static waveform (painted once)
   const rafRef = useRef(0);
   const [width, setWidth] = useState(400);
   /** Viewport drag state */
@@ -82,7 +82,10 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
   const duration = useMixiStore((s) => s.decks[deckId].duration);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    // Static layer: paint the waveform ONCE into the background canvas (on data
+    // change). The dynamic cursor/markers live on a separate overlay canvas, so
+    // we no longer re-blit the whole waveform (putImageData) every frame. (#17)
+    const canvas = bgCanvasRef.current;
     if (!canvas || !waveformData || waveformData.length === 0) return;
 
     const dpr = window.devicePixelRatio || 1;
@@ -91,8 +94,8 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })!;
-    ctx.scale(dpr, dpr);
+    const ctx = canvas.getContext('2d', { alpha: false })!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Mono overview tinted with deck color — clean, readable silhouette
     const deckColor = deckId === 'A'
@@ -123,17 +126,20 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
       ctx.fillRect(x, halfH - h, 1, h * 2);
     }
     ctx.globalAlpha = 1;
-
-    // Cache the static image so we don't redraw every frame.
-    staticRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
   }, [waveformData, width, height, deckId]);
 
   // ── Animate cursor at 30 FPS ───────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })!;
     const dpr = window.devicePixelRatio || 1;
+    // Transparent overlay (no willReadFrequently → GPU-backed): each frame we
+    // clearRect + draw thin rects instead of blitting the whole waveform.
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d', { alpha: true })!;
     const engine = MixiEngine.getInstance();
     const COLOR_CURSOR = themeVar('wave-playhead', '#fff');
     const WAVE_DROP = themeVar('wave-drop', '#ff0044');
@@ -149,10 +155,9 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
       if (now - lastFrame > 33) {
         lastFrame = now;
 
-        // Restore static waveform.
-        if (staticRef.current) {
-          ctx.putImageData(staticRef.current, 0, 0);
-        }
+        // Clear the transparent overlay (the static waveform shows through from
+        // the bg canvas behind) — no full-canvas putImageData blit.
+        ctx.clearRect(0, 0, width * dpr, height * dpr);
 
         ctx.save();
         ctx.scale(dpr, dpr);
@@ -307,12 +312,17 @@ const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
   );
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="relative w-full" style={{ height }}>
+      {/* Static waveform layer (painted once on data change) */}
+      <canvas
+        ref={bgCanvasRef}
+        className="absolute inset-0 w-full h-full rounded-lg shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)] pointer-events-none"
+      />
+      {/* Transparent overlay: cursor / markers / viewport, cleared each frame */}
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
-        className="w-full rounded-lg cursor-crosshair shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]"
-        style={{ height }}
+        className="absolute inset-0 w-full h-full rounded-lg cursor-crosshair"
       />
     </div>
   );
