@@ -15,7 +15,7 @@
 // Modern toggle switches and segmented controls.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useState, type FC, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   useSettingsStore,
   EQ_RANGE_PRESETS,
@@ -68,6 +68,38 @@ export const SettingsModal: FC = () => {
   const close = useSettingsStore((s) => s.setShowSettings);
 
   const [tab, setTab] = useState<TabId>('mixer');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Focus management: autofocus the dialog on open, trap Tab inside it, and
+  // restore focus to the previously-focused element on close. (Escape-to-close
+  // is owned by App's single Escape handler.)
+  useEffect(() => {
+    if (!show) return;
+    const prevFocused = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    panel?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) { e.preventDefault(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const activeEl = document.activeElement;
+      if (e.shiftKey) {
+        if (activeEl === first || activeEl === panel) { e.preventDefault(); last.focus(); }
+      } else if (activeEl === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel?.addEventListener('keydown', onKeyDown);
+    return () => {
+      panel?.removeEventListener('keydown', onKeyDown);
+      prevFocused?.focus?.();
+    };
+  }, [show]);
 
   if (!show) return null;
 
@@ -77,6 +109,11 @@ export const SettingsModal: FC = () => {
       onClick={() => close(false)}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        tabIndex={-1}
         className="w-[660px] max-h-[78vh] rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--srf-base)' }}
         onClick={(e) => e.stopPropagation()}

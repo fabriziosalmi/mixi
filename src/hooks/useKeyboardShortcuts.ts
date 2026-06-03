@@ -120,11 +120,10 @@ export function useKeyboardShortcuts() {
           }
           break;
 
-        // ── Escape: eject Deck A, Shift+Esc: eject B ──────
-        case 'Escape':
-          e.preventDefault();
-          store.ejectDeck(e.shiftKey ? 'B' : 'A');
-          break;
+        // Escape is intentionally NOT bound to eject: it is the modal/overlay
+        // dismiss key (handled in App), and binding a destructive action to it
+        // meant dismissing a dialog ejected the playing deck. Eject stays a
+        // deliberate action (UI button / shift-click).
 
         // ── 1–8: hot cues on Deck A ────────────────────────
         case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':

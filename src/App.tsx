@@ -128,10 +128,13 @@ const App: FC = () => {
   const { state: aiState, toggle: toggleAI } = useAIEngine();
   useKeyboardShortcuts();
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
+  const showSettings = useSettingsStore((s) => s.showSettings);
+  const setShowSettings = useSettingsStore((s) => s.setShowSettings);
   const skin = useSettingsStore((s) => s.skin);
   const customSkins = useSettingsStore((s) => s.customSkins);
   const toggleBrowser = useBrowserStore((s) => s.toggle);
   const browserOpen = useBrowserStore((s) => s.open);
+  const setBrowserOpen = useBrowserStore((s) => s.setOpen);
   const [audioStarted, setAudioStarted] = useState(false);
   const [vfxActive, setVfxActive] = useState(false);
   const [panicFlash, setPanicFlash] = useState(false);
@@ -283,9 +286,21 @@ const App: FC = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); handlePanic(); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        // Single owner for Escape: dismiss the topmost overlay first. Only when
+        // nothing is open does Escape reach Panic — so dismissing a dialog can
+        // never eject/reset the mix. (Eject-on-Escape was removed entirely.)
+        if (showSettings) { setShowSettings(false); return; }
+        if (browserOpen) { setBrowserOpen(false); return; }
+        if (vfxActive) { setVfxActive(false); return; }
+        handlePanic();
+        return;
+      }
       if (e.key === 'Tab') {
         const tag = (e.target as HTMLElement).tagName;
+        // Don't hijack Tab while a dialog is open — let it navigate within it.
+        if (showSettings) return;
         if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
           e.preventDefault();
           toggleBrowser();
@@ -294,7 +309,7 @@ const App: FC = () => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handlePanic, toggleBrowser]);
+  }, [handlePanic, toggleBrowser, showSettings, setShowSettings, browserOpen, setBrowserOpen, vfxActive]);
 
   if (!audioStarted) {
     return <SplashScreen onStart={handleStart} />;

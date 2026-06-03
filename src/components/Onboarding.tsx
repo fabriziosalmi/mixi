@@ -16,7 +16,7 @@
 // Dismissible at any step. Never shows again after completion.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, type FC } from 'react';
+import { useState, useCallback, useEffect, type FC } from 'react';
 
 const STORAGE_KEY = 'mixi-onboarding-done';
 
@@ -78,6 +78,21 @@ export const Onboarding: FC = () => {
     if (step > 0) setStep(s => s - 1);
   }, [step]);
 
+  // Escape dismisses onboarding. Capture phase + stopImmediatePropagation so
+  // App's window keydown handler never sees this Escape (no Panic arm/fire).
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        dismiss();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [visible, dismiss]);
+
   if (!visible) return null;
 
   const s = STEPS[step];
@@ -89,6 +104,9 @@ export const Onboarding: FC = () => {
       onClick={dismiss}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Welcome to MIXI"
         className="flex flex-col items-center gap-4 rounded-xl px-8 py-6 max-w-sm"
         style={{
           background: 'rgba(10,10,15,0.95)',
