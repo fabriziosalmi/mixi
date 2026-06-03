@@ -313,13 +313,18 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
           }
         }
 
-        // Calculate phase delta
-        const masterPeriod = 60 / this.masterBpm;
-        const slaveBpm = this.slaveOriginalBpm * this.baseRate;
+        // Calculate phase delta. masterTime/slaveTime are integrated in
+        // ORIGINAL-track seconds (the rate is applied during integration), so
+        // the beat periods MUST use the ORIGINAL BPMs. Using current BPM here
+        // double-counts the rate (~3.2% phase error at baseRate=1.032) — more
+        // than the PID's ±0.003 deadzone can ever cancel, so the deck drifts
+        // and loses lock. Mirrors src/audio/pitch-shift-processor.ts.
+        const masterPeriod = this.masterOriginalBpm > 0 ? 60 / this.masterOriginalBpm : 0;
+        const slaveBpm = this.slaveOriginalBpm;
         const ratio = findBestRatio(this.masterBpm, this.slaveOriginalBpm);
         const slavePeriod = ratio !== 1
           ? virtualBeatPeriod(slaveBpm, ratio)
-          : 60 / slaveBpm;
+          : (slaveBpm > 0 ? 60 / slaveBpm : 0);
 
         if (masterPeriod > 0 && slavePeriod > 0) {
           const masterFrac = (((this.masterTime - this.masterFirstBeatOffset) / masterPeriod) % 1 + 1) % 1;

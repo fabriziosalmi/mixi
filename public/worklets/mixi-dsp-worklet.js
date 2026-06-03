@@ -32,6 +32,8 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     this._exports = null;      // Wasm instance exports (stable C ABI)
     this._engine = 0;          // Handle from dsp_engine_new()
     this._memory = null;       // Wasm linear memory
+    this._memF32 = null;       // cached Float32 view over _memory.buffer
+    this._memU8 = null;        // cached Uint8 view over _memory.buffer
 
     // Engine-owned buffer byte-offsets (from the dsp_*_ptr accessors)
     this._inL = 0;
@@ -114,8 +116,16 @@ class MixiDspProcessor extends AudioWorkletProcessor {
 
     // ── Wasm DSP Processing ─────────────────────────────────
     if (this.wasmReady && this._exports && this._engine) {
-      const mem = new Float32Array(this._memory.buffer);
-      const memU8 = new Uint8Array(this._memory.buffer);
+      // Cache the views over Wasm memory; allocating two TypedArrays per block
+      // (~700/sec) churned GC on the audio render thread (xrun risk). Rebuild
+      // only if the backing ArrayBuffer changed (memory.grow detaches it — the
+      // fixed-size lean DSP never grows, but the guard is cheap insurance).
+      if (!this._memF32 || this._memF32.buffer !== this._memory.buffer) {
+        this._memF32 = new Float32Array(this._memory.buffer);
+        this._memU8 = new Uint8Array(this._memory.buffer);
+      }
+      const mem = this._memF32;
+      const memU8 = this._memU8;
 
       // Engine-owned buffer offsets (bytes → f32 index; ptrs are 4-aligned).
       const inLOff = this._inL / 4;

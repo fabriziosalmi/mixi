@@ -161,6 +161,30 @@ impl Compressor {
         }
     }
 
+    /// Parallel ("New York") compression: blend the dry signal with the
+    /// compressed signal by `wet` (0 = bypass, 1 = fully compressed). Lets the
+    /// Punch knob dial in continuously instead of jumping to a fixed +9dB the
+    /// instant it crosses on (which otherwise slams the master limiter).
+    #[inline]
+    pub fn process_block_mix(&mut self, samples: &mut [f32], wet: f32) {
+        let wet = wet.clamp(0.0, 1.0);
+        let dry = 1.0 - wet;
+        for s in samples.iter_mut() {
+            let input = *s;
+            let abs_s = input.abs();
+            let coeff = if abs_s > self.envelope { self.attack_coeff } else { self.release_coeff };
+            self.envelope = coeff * self.envelope + (1.0 - coeff) * abs_s;
+
+            let mut compressed = input;
+            if self.envelope > self.threshold {
+                let over = self.envelope / self.threshold;
+                let gain_reduction = over.powf(1.0 / self.ratio - 1.0);
+                compressed = input * gain_reduction * self.makeup_gain;
+            }
+            *s = input * dry + compressed * wet;
+        }
+    }
+
     pub fn reset(&mut self) {
         self.envelope = 0.0;
     }

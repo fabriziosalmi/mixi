@@ -56,6 +56,8 @@ const DECK_FX_FLG_AMOUNT: usize = 80;
 const DECK_FX_FLG_ACTIVE: usize = 84;
 const DECK_FX_GATE_AMOUNT: usize = 88;
 const DECK_FX_GATE_ACTIVE: usize = 92;
+// 96 = AUTO_GAIN (JS pre-multiplies into TRIM; not read here)
+const DECK_BPM: usize = 100;
 
 // Deck bases
 const DECK_A_BASE: usize = 0;
@@ -79,7 +81,7 @@ const GLOBAL_SAMPLE_RATE: usize = 400;
 
 // H2: Layout version — must match PARAM_LAYOUT_VERSION in ParamLayout.ts
 const PARAM_LAYOUT_VERSION_OFFSET: usize = 508;
-const PARAM_LAYOUT_VERSION: f32 = 2.0;
+const PARAM_LAYOUT_VERSION: f32 = 3.0;
 
 /// Read f32 from a byte buffer at a given offset.
 #[inline]
@@ -124,7 +126,6 @@ struct DeckDsp {
     trim_smooth: ParamSmoother,
     fader_smooth: ParamSmoother,
     // State
-    last_eq: [f32; 3],
     last_color_freq: f32,
 }
 
@@ -140,7 +141,6 @@ impl DeckDsp {
             gate: Gate::new(),
             trim_smooth: ParamSmoother::new(1.0, 5.0, sr),
             fader_smooth: ParamSmoother::new(1.0, 5.0, sr),
-            last_eq: [0.0; 3],
             last_color_freq: 0.0,
         }
     }
@@ -160,12 +160,10 @@ impl DeckDsp {
         let trim_target = if trim_val == 0.0 { 1.0 } else { trim_val };
         self.trim_smooth.set_target(trim_target);
 
-        // Update EQ only if changed (avoid recalculating coefficients)
-        let new_eq = [eq_low, eq_mid, eq_high];
-        if new_eq != self.last_eq {
-            self.eq.set_gains(eq_low, eq_mid, eq_high, sr);
-            self.last_eq = new_eq;
-        }
+        // Set EQ targets every block — set_gains just updates the per-band
+        // smoothers (cheap, epsilon-guarded); coefficients are recomputed inside
+        // process_block only while a smoothed dB is actually moving.
+        self.eq.set_gains(eq_low, eq_mid, eq_high, sr);
 
         // Update color filter
         if color_freq != self.last_color_freq && color_freq > 20.0 {
@@ -176,8 +174,8 @@ impl DeckDsp {
         // Process chain — smoothed trim gain
         self.trim_smooth.apply_gain(samples);
 
-        // EQ — flat-bypass and kill-switch handled internally
-        self.eq.process_block(samples);
+        // EQ — dB smoothed per band, biquads always run (unity at 0 dB)
+        self.eq.process_block(samples, sr);
 
         // Denormal killer after EQ filters
         denormal_kill(samples);
@@ -218,11 +216,16 @@ impl DeckDsp {
             self.flanger.process_block(samples);
         }
 
-        // FX: Gate
+        // FX: Gate — beat-locked. phase_inc = bpm/(60*sr) advances one gate
+        // cycle per beat. The old hardcoded 0.01 implied ~26000 BPM (a ~441 Hz
+        // buzz); driving it from the track's BPM makes it actually gate on the
+        // beat. bpm==0 (un-analyzed) ⇒ phase_inc 0 ⇒ the gate bypasses.
         if read_bool(params, base + DECK_FX_GATE_ACTIVE) {
             let amount = read_f32(params, base + DECK_FX_GATE_AMOUNT);
+            let bpm = read_f32(params, base + DECK_BPM);
+            let gate_phase_inc = if bpm > 0.0 { bpm / (60.0 * sr) } else { 0.0 };
             self.gate.set_params(amount, 1.0);
-            self.gate.process_block(samples, 0.01); // ~120 BPM default
+            self.gate.process_block(samples, gate_phase_inc);
         }
 
         // Denormal kill after the recursive FX chain (delay/reverb/phaser/
@@ -312,9 +315,11 @@ impl MasterDsp {
             self.distortion.process_block(samples);
         }
 
-        // Punch (compressor)
+        // Punch (parallel compressor) — amount is a true dry/wet so it dials in
+        // continuously instead of jumping to a fixed +9dB makeup the instant it
+        // crosses on (which used to slam the limiter into permanent reduction).
         if punch_active && punch_amount > 0.01 {
-            self.punch.process_block(samples);
+            self.punch.process_block_mix(samples, punch_amount);
         }
 
         // Limiter: Predictive (0.2ms lookahead) + brickwall safety net

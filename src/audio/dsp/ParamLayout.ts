@@ -90,6 +90,8 @@ export const DECK = {
 
   /** Auto-gain multiplier (set on track load). */
   AUTO_GAIN:      96,
+  /** Track BPM (current/effective) — used by the beat-locked gate FX. */
+  BPM:            100,
 } as const;
 
 // ── Deck Base Addresses ──────────────────────────────────────
@@ -151,7 +153,7 @@ export const GLOBAL = {
 
 /** H2: ParamBus layout version. Increment when changing ANY offset above.
  *  Must match PARAM_LAYOUT_VERSION in mixi-core/src/dsp/engine.rs. */
-export const PARAM_LAYOUT_VERSION = 2;
+export const PARAM_LAYOUT_VERSION = 3;
 
 // ── Total Layout Size ────────────────────────────────────────
 

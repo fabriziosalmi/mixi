@@ -244,6 +244,8 @@ export class MixiEngine {
       w.setDeckPlaybackRate(deck, d.playbackRate);
       w.setDeckCue(deck, d.cueActive);
       w.setDeckAutoGain(deck, this.autoGain[deck]);
+      // Current (effective) BPM for the beat-locked gate FX; 0 = un-analyzed.
+      w.setDeckBpm(deck, d.bpm > 0 ? d.bpm : d.originalBpm);
     }
 
     // ── Headphones ──
@@ -655,18 +657,26 @@ export class MixiEngine {
     if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
 
     const transport = this.transports[deck];
-    this.stopSource(deck);
+    // #2: Serialize the source swap against in-flight seek/crossfade/transition
+    // ops so a queued op can't start the *previous* track's source over the
+    // freshly-loaded one. The locked ops also bail via the loadGen/streamingBuffer
+    // guard (loadGen was bumped at the top of this method).
+    await this.runDeckExclusive(deck, async () => {
+      if (this._loadGen[deck] !== gen) return; // superseded while awaiting the lock
+      this.stopSource(deck);
 
-    // Edge-case #18: Explicitly release previous buffer for GC.
-    transport.buffer = null;
+      // Edge-case #18: Explicitly release previous buffer for GC.
+      transport.buffer = null;
 
-    transport.streamingBuffer = streamingBuffer;
-    transport.currentSegmentStart = 0;
-    transport.currentSegmentDuration = initialDuration;
-    transport.totalDuration = streamingBuffer.duration;
-    transport.buffer = buffer;
-    transport.offset = 0;
-    transport.startedAt = 0;
+      transport.streamingBuffer = streamingBuffer;
+      transport.currentSegmentStart = 0;
+      transport.currentSegmentDuration = initialDuration;
+      transport.totalDuration = streamingBuffer.duration;
+      transport.buffer = buffer;
+      transport.offset = 0;
+      transport.startedAt = 0;
+    });
+    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
 
     setStage('analyzing waveform');
 
@@ -1069,6 +1079,27 @@ export class MixiEngine {
     return run;
   }
 
+  /**
+   * Snapshot a deck's transport identity at the start of a locked async op.
+   * After each await, transportStale() reports whether a play()/pause()
+   * (epoch), a loadTrack() (loadGen, bumped at load *start*), or a buffer swap
+   * (streamingBuffer identity) happened meanwhile — in which case the op must
+   * bail rather than commit a source built from the now-stale state (#2).
+   */
+  private snapshotTransport(deck: DeckId): { epoch: number; gen: number; sb: unknown } {
+    return {
+      epoch: this._transportEpoch[deck],
+      gen: this._loadGen[deck],
+      sb: this.transports[deck].streamingBuffer,
+    };
+  }
+
+  private transportStale(deck: DeckId, snap: { epoch: number; gen: number; sb: unknown }): boolean {
+    return this._transportEpoch[deck] !== snap.epoch
+      || this._loadGen[deck] !== snap.gen
+      || this.transports[deck].streamingBuffer !== snap.sb;
+  }
+
   /** Standard nudge: ±4 %. Fine nudge (Shift): ±1 %. */
   static readonly NUDGE_AMOUNT = 0.04;
   static readonly FINE_NUDGE = 0.01;
@@ -1379,6 +1410,27 @@ export class MixiEngine {
     this._loadGen[deck]++;
   }
 
+  /**
+   * #12: Free a deck's audio buffers for GC on eject. Without this the decoded
+   * AudioBuffer (~105MB for a 5-min track) and the raw file bytes stay pinned
+   * until the next load — eject-then-leave-empty (end of set) keeps them
+   * resident indefinitely.
+   */
+  releaseDeck(deck: DeckId): void {
+    if (!this.initialized) return;
+    this._loadGen[deck]++; // discard any in-flight decode
+    this.stopSource(deck);
+    const t = this.transports[deck];
+    t.streamingBuffer?.dispose();
+    t.streamingBuffer = null;
+    t.buffer = null;
+    t.totalDuration = 0;
+    t.currentSegmentStart = 0;
+    t.currentSegmentDuration = 0;
+    t.offset = 0;
+    t.startedAt = 0;
+  }
+
   // ── PFL / CUE ──────────────────────────────────────────────
 
   /** Activate or deactivate the CUE (PFL) send for a deck. */
@@ -1429,7 +1481,7 @@ export class MixiEngine {
     phaseLockLoop.reset(deck);
     const transport = this.transports[deck];
     if (!transport.streamingBuffer) return;
-    const epoch = this._transportEpoch[deck];
+    const snap = this.snapshotTransport(deck);
 
     const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
 
@@ -1441,8 +1493,8 @@ export class MixiEngine {
       return;
     }
 
-    // A play()/pause() ran during the decode await — don't clobber it.
-    if (this._transportEpoch[deck] !== epoch) return;
+    // A play()/pause()/loadTrack ran during the decode await — don't clobber it.
+    if (this.transportStale(deck, snap)) return;
 
     const relativeOffset = clampedTime - transport.currentSegmentStart;
 
@@ -1526,7 +1578,7 @@ export class MixiEngine {
 
     this.cancelBrake(deck);
     phaseLockLoop.reset(deck);
-    const epoch = this._transportEpoch[deck];
+    const snap = this.snapshotTransport(deck);
 
     const clampedTime = Math.max(0, Math.min(time, transport.totalDuration));
 
@@ -1538,8 +1590,8 @@ export class MixiEngine {
       return;
     }
 
-    // A play()/pause() ran during the decode await — don't clobber it.
-    if (this._transportEpoch[deck] !== epoch) return;
+    // A play()/pause()/loadTrack ran during the decode await — don't clobber it.
+    if (this.transportStale(deck, snap)) return;
 
     if (!transport.source) {
       transport.offset = clampedTime;
@@ -1973,7 +2025,7 @@ export class MixiEngine {
   private async _segmentTransitionLocked(deck: DeckId): Promise<void> {
     const transport = this.transports[deck];
     if (!transport.streamingBuffer || !transport.source || !transport.buffer) return;
-    const epoch = this._transportEpoch[deck];
+    const snap = this.snapshotTransport(deck);
 
     const currentTime = this.getCurrentTime(deck);
     const segmentEnd = transport.currentSegmentStart + transport.currentSegmentDuration;
@@ -1988,8 +2040,8 @@ export class MixiEngine {
 
         const nextBuffer = await transport.streamingBuffer.decodeSegment(nextSegmentStart, nextSegmentDuration);
 
-        // A play()/pause() ran during the decode await — abort the transition.
-        if (this._transportEpoch[deck] !== epoch) return;
+        // A play()/pause()/loadTrack ran during the decode await — abort.
+        if (this.transportStale(deck, snap)) return;
 
         // Double-check if we are still playing and playhead is in the expected range
         if (!transport.source || Math.abs(this.getCurrentTime(deck) - currentTime) > 5) {

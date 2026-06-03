@@ -103,6 +103,7 @@ pub struct PredictiveLimiter {
 
     // Stage 4: Adaptive release
     gain_reduction: f32,       // current gain multiplier (0..1)
+    attack: f32,               // fast one-pole attack coeff (~0.15ms)
     release_fast: f32,         // coefficient for transients (hi-hat)
     release_slow: f32,         // coefficient for sustained (sub-bass)
     low_energy_ratio: f32,     // how much of the signal is low-freq (0..1)
@@ -143,6 +144,9 @@ impl PredictiveLimiter {
             write_pos: 0,
             peak_ahead: 0.0,
             gain_reduction: 1.0,
+            // ~0.15ms attack — fast enough to catch peaks within the 0.2ms
+            // lookahead, but not an instant step (which distorts bass transients).
+            attack: (-1.0 / (0.00015 * sr)).exp(),
             release_fast,
             release_slow,
             low_energy_ratio: 0.0,
@@ -222,8 +226,12 @@ impl PredictiveLimiter {
 
             // Apply gain with adaptive release
             if target_reduction < self.gain_reduction {
-                // Attack: instant (within the cosine window)
-                self.gain_reduction = target_reduction;
+                // Attack: fast one-pole (not an instant step). The lookahead
+                // means the reduction begins ~0.2ms before the peak, so a
+                // ~0.15ms ramp reaches target as the peak emerges; hard_clip()
+                // is the safety net for any residual overshoot.
+                self.gain_reduction =
+                    self.attack * self.gain_reduction + (1.0 - self.attack) * target_reduction;
             } else {
                 // Release: adaptive speed
                 self.gain_reduction =

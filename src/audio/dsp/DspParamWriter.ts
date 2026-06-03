@@ -90,6 +90,10 @@ export class DspParamWriter {
     this.bus.setFloat(deckParam(deck, DECK.AUTO_GAIN), gain);
   }
 
+  setDeckBpm(deck: DeckId, bpm: number): void {
+    this.bus.setFloat(deckParam(deck, DECK.BPM), bpm);
+  }
+
   // ── Per-deck FX ──────────────────────────────────────────
 
   setDeckFx(deck: DeckId, fx: FxId, amount: number, active: boolean): void {

@@ -226,4 +226,13 @@ export class AudioStreamingBuffer {
     }
     return slice;
   }
+
+  /**
+   * Release all decoded segment buffers — including the full-track decode
+   * cached under key -1 (~105MB for a 5-min non-WAV track). Call on eject so
+   * the memory is freed immediately instead of waiting for the next load.
+   */
+  dispose(): void {
+    this.cache.clear();
+  }
 }

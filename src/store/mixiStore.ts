@@ -253,8 +253,11 @@ export const useMixiStore = create<MixiStore>()(
         // BUG-13/20/19: Reset all FX to prevent ghost tails & stuck gate.
         engine.resetDeckFx(deck);
       }
-      // BUG-21: Bump load generation so any in-flight decode is discarded.
-      engine.bumpLoadGen(deck);
+      // #12: Free the decoded AudioBuffer + raw file bytes (also bumps loadGen
+      // to discard any in-flight decode). Without this they stay pinned in
+      // memory until the next load.
+      if (engine.isInitialized) engine.releaseDeck(deck);
+      else engine.bumpLoadGen(deck);
       // Reset deck to defaults.
       set((s) => ({
         decks: { ...s.decks, [deck]: defaultDeck() },

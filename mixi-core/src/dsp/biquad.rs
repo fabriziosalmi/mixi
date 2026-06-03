@@ -15,6 +15,8 @@
 
 use std::f32::consts::PI;
 
+use crate::dsp::smoother::ParamSmoother;
+
 /// A second-order IIR (biquad) filter.
 #[derive(Clone, Debug)]
 pub struct Biquad {
@@ -181,28 +183,42 @@ impl Biquad {
 // ── 3-Band EQ (convenience) ──────────────────────────────────
 
 /// A 3-band parametric EQ matching Mixi's DeckChannel EQ.
+///
+/// EQ dB is smoothed per band (block-rate) — DJs ride the EQ constantly and an
+/// instant coefficient swap on a running IIR zippers/clicks. The biquads are
+/// ALWAYS run (a 0 dB shelf is exactly unity), so returning a band to flat can
+/// never click from skipping a filter that still holds delayed state.
 pub struct ThreeBandEq {
     pub low: Biquad,
     pub mid: Biquad,
     pub high: Biquad,
-    // Track gains for flat-bypass and kill-switch
-    low_db: f32,
-    mid_db: f32,
-    high_db: f32,
+    low_smooth: ParamSmoother,
+    mid_smooth: ParamSmoother,
+    high_smooth: ParamSmoother,
+    // dB the coefficients were last computed for — avoid recompute when steady.
+    low_applied: f32,
+    mid_applied: f32,
+    high_applied: f32,
 }
 
-/// Kill switch threshold in dB.
-const EQ_KILL_DB: f32 = -32.0;
+/// EQ gain smoothing time (ms) — avoids coefficient-jump zipper.
+const EQ_SMOOTH_MS: f32 = 14.0;
+/// Recompute coefficients only when the smoothed dB moved more than this.
+const EQ_RECOMPUTE_EPS: f32 = 0.01;
 
 impl ThreeBandEq {
     pub fn new(sr: f32) -> Self {
+        let mk = || ParamSmoother::new(0.0, EQ_SMOOTH_MS, sr);
         let mut eq = Self {
             low: Biquad::new(),
             mid: Biquad::new(),
             high: Biquad::new(),
-            low_db: 0.0,
-            mid_db: 0.0,
-            high_db: 0.0,
+            low_smooth: mk(),
+            mid_smooth: mk(),
+            high_smooth: mk(),
+            low_applied: 0.0,
+            mid_applied: 0.0,
+            high_applied: 0.0,
         };
         // Initialise with flat (0 dB) curves
         eq.low.set_lowshelf(250.0, 0.0, sr);
@@ -211,54 +227,52 @@ impl ThreeBandEq {
         eq
     }
 
-    /// Update EQ band gains.
-    pub fn set_gains(&mut self, low_db: f32, mid_db: f32, high_db: f32, sr: f32) {
-        self.low_db = low_db;
-        self.mid_db = mid_db;
-        self.high_db = high_db;
-        self.low.set_lowshelf(250.0, low_db, sr);
-        self.mid.set_peaking(1000.0, mid_db, 1.0, sr);
-        self.high.set_highshelf(4000.0, high_db, sr);
+    /// Set EQ band gain targets (dB). Applied smoothly in process_block.
+    pub fn set_gains(&mut self, low_db: f32, mid_db: f32, high_db: f32, _sr: f32) {
+        self.low_smooth.set_target(low_db);
+        self.mid_smooth.set_target(mid_db);
+        self.high_smooth.set_target(high_db);
     }
 
-    /// Process a block with flat-bypass and kill-switch optimizations.
-    ///
-    /// - Flat (0dB): skip filter entirely (multiplying by 1.0 is a waste)
-    /// - Kill (<= -32dB): zero the signal component (instant silence)
-    /// - Active: process through filter normally
+    /// Advance the per-band dB smoothers across the block, recompute any band's
+    /// coefficients whose smoothed value moved, then run all three biquads.
     #[inline]
-    pub fn process_block(&mut self, samples: &mut [f32]) {
-        // Low band
-        if self.low_db <= EQ_KILL_DB {
-            // Kill: we need to high-pass out the low frequencies
-            // Since low shelf at -32dB effectively removes lows,
-            // just run the filter (it's set to deep cut)
-            self.low.process_block(samples);
-        } else if self.low_db.abs() > 0.1 {
-            // Active: process normally
-            self.low.process_block(samples);
+    pub fn process_block(&mut self, samples: &mut [f32], sr: f32) {
+        let len = samples.len();
+        for _ in 0..len {
+            self.low_smooth.next();
+            self.mid_smooth.next();
+            self.high_smooth.next();
         }
-        // else: flat (0dB) — skip entirely
+        let low_db = self.low_smooth.value();
+        let mid_db = self.mid_smooth.value();
+        let high_db = self.high_smooth.value();
 
-        // Mid band
-        if self.mid_db <= EQ_KILL_DB {
-            self.mid.process_block(samples);
-        } else if self.mid_db.abs() > 0.1 {
-            self.mid.process_block(samples);
+        if (low_db - self.low_applied).abs() > EQ_RECOMPUTE_EPS {
+            self.low.set_lowshelf(250.0, low_db, sr);
+            self.low_applied = low_db;
+        }
+        if (mid_db - self.mid_applied).abs() > EQ_RECOMPUTE_EPS {
+            self.mid.set_peaking(1000.0, mid_db, 1.0, sr);
+            self.mid_applied = mid_db;
+        }
+        if (high_db - self.high_applied).abs() > EQ_RECOMPUTE_EPS {
+            self.high.set_highshelf(4000.0, high_db, sr);
+            self.high_applied = high_db;
         }
 
-        // High band
-        if self.high_db <= EQ_KILL_DB {
-            self.high.process_block(samples);
-        } else if self.high_db.abs() > 0.1 {
-            self.high.process_block(samples);
-        }
+        self.low.process_block(samples);
+        self.mid.process_block(samples);
+        self.high.process_block(samples);
     }
 
     pub fn reset(&mut self) {
         self.low.reset();
         self.mid.reset();
         self.high.reset();
+        self.low_smooth.reset(self.low_applied);
+        self.mid_smooth.reset(self.mid_applied);
+        self.high_smooth.reset(self.high_applied);
     }
 }
 
@@ -388,7 +402,7 @@ mod tests {
         let mut eq = ThreeBandEq::new(SR);
         eq.set_gains(0.0, 0.0, 0.0, SR);
         let mut block = [0.5f32; 128];
-        eq.process_block(&mut block);
+        eq.process_block(&mut block, SR);
         // Flat EQ should ≈ passthrough
         assert!((block[127] - 0.5).abs() < 0.05, "Flat EQ: {}", block[127]);
     }
