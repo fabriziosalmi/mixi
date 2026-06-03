@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.14] - 2026-06-03
+
+Rigorous backend/frontend/audio audit — 21 blocking-to-severe issues fixed and
+verified (586 unit + 173 Rust tests, full build, dual-path audio E2E 81/81 on
+**both** WebAudio and Wasm DSP).
+
+### Security
+- **Command bridge** now validates every argument against a per-action schema (type + range + enum) instead of only checking the action name — a whitelisted action can no longer be driven with out-of-range/wrong-typed values. Hardened the store sinks it feeds: hot-cue index/time bounds, EQ-band whitelist (blocks `__proto__`/`constructor` prototype pollution via `[band]`), and finite/in-range auto-loop beats.
+- **LAN multi-device sync (UDP)** — magic + exact-size validation on incoming packets before they reach the renderer, a real per-IP token-bucket rate limit (the old ">100/sec" comment was never enforced), and outgoing `targetIp` restricted to private/link-local/loopback. Idle buckets are pruned; state cleared on stop.
+- **`/api/stream` SSRF** — the host allow-list now matches on a dot boundary (a bare `endswith` accepted `evilsoundcloud.com`); the yt-dlp-resolved CDN URL is rejected if its host resolves to a private/loopback/link-local/reserved IP; and redirects are disabled on the proxy hop so a 302 can't bounce onto an internal host.
+- **`/ws/mixer`** caps inbound frames at 512 KB (app-level close 1009 + uvicorn `ws_max_size`).
+
+### Fixed
+- **Doubled audio / wrong playhead on rapid seeks.** `seek`, `crossfadeSeek`, and the 1 Hz segment-transition each `await` a decode between reading and mutating the deck's source; with nothing serializing them, two overlapping ops could leave an orphan `BufferSource` playing or an offset pointing at a stale segment. A per-deck async mutex now serializes all source-swapping ops; the segment-transition re-validates the playhead after acquiring the lock.
+- **Deck frozen silent if the pitch-shift worklet died.** `connectSource` pins `source.playbackRate` to 0 and lets the worklet drive it; a processor crash or a never-completing init left the deck silent forever. Added `onprocessorerror` + a bytes-based init with a 5 s `ready` timeout that fail over to the native `playbackRate` path (key lock disabled, transport continues).
+- **Wasm DSP could read a half-written param batch.** The worklet bulk-copies the param bus each block, so a coupled pair (FX `amount`+`active`, distortion, limiter) could be torn for one block. Added a seqlock (JS/worklet-only generation slot at offset 408; Rust unchanged) — the writer brackets coupled writes and the full flush, the worklet retries its snapshot copy on an odd/changed counter.
+- **CPU pinned (~100×) by denormals when a deck went silent.** `denormal_kill` only scrubbed output buffers; the IIR *state* kept its subnormals. Now `flush_denorm` cleans biquad (EQ/color/master filter) z-state per block, the delay/flanger feedback writes per sample, the phaser/DC-blocker memories — and NaN/Inf are flushed too (self-healing).
+- **Phantom library tracks** whose IndexedDB blob was gone made the loader `fetch('')`, which resolves to the app's own HTML (then "decoded" as audio). Tracks now resolve a real blob URL (recovered on demand) or are removed.
+- **Garbage VU value** — metering `peakL` reinterpreted the float's bit pattern as an Int32; now read as f32.
+- **Python engine crash** left the app on a dead port — it now respawns with exponential backoff (capped, reset after a clean minute, suppressed on shutdown).
+- **PLL** produced a NaN phase delta from an un-analyzed master (BPM 0/NaN) — now guarded like the slave period.
+- **MIDI learn** armed a 10 s auto-cancel timer that was never cleared on a successful map or panel unmount (late state mutation / leak) — now cleared in both.
+
+### Changed
+- Store→param-bus flushes are coalesced to one per animation frame (the store fires on every change, including non-DSP UI state); init and Wasm-activation flushes stay synchronous.
+
 ## [0.5.13] - 2026-06-03
 
 ### Fixed
