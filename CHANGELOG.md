@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.16] - 2026-06-03
+
+Round-2 audit tail — the remaining deferred + minor items (173 Rust + 586 JS
+tests, dual-path audio E2E 81/81 on both backends).
+
+### Fixed — audio
+- **Seqlock torn snapshot (#10):** the DSP worklet's param-bus seqlock could
+  exit its retry loop on a still-torn read and run the engine on it. It now
+  reads into a scratch, promotes to a last-good buffer only on a validated read,
+  and always feeds the engine last-good — never a half-written batch.
+- **Loop zero-cross snap lost on rebuild (#13):** snapped loop bounds are now
+  persisted on the transport and reused on every seek/cue/resume/segment
+  rebuild (was re-applying the un-snapped store value, so the click-free seam
+  was lost). snapToZeroCrossing finds a true sign-change across both channels.
+- **Sum-bus headroom (#14):** the two-deck sum is trimmed by 1/√2 before the
+  master chain (Wasm path) so a both-decks-full mix lands at ~0 dBFS instead of
+  slamming the dynamics; master gain is the make-up.
+
+### Performance
+- **Control-path fan-out (#15):** registerUserInteraction no longer fires a
+  store-wide update on every drag tick when the AI is OFF; MIDI CC input is
+  coalesced to one write per control per frame (a knob sweep was 200-400/s);
+  PremiumJogWheel + PhaseMeter use selector subscriptions instead of firing on
+  every store mutation.
+- **Waveform overview (#17):** two-layer canvas (static waveform painted once +
+  transparent overlay) removes the full-canvas putImageData blit every frame.
+- **Track list (#17):** virtualized above 120 rows (measured row height) — a
+  1000-track library mounts ~30 rows instead of ~9000 DOM nodes.
+- **Grab-bag (#19):** worker DPR transform applied on init (no more first-paint
+  blur); SharedParamBus reuses a scratch pair instead of allocating per
+  get/setFloat; MasterLedScreen's RGBA LUT hoisted to module scope; crossfade/
+  segment cleanup timers tracked + cancelled on destroy; WaveformOverview drag
+  listeners torn down on unmount; Python /ws/mixer teardown generation-guarded.
+
+### Notes
+- Visual smoke-test recommended for the two #17 UI rewrites (verified here for
+  build/runtime soundness). Skipped as low-value/risky: flanger
+  modulo→bitmask, per-sample denormal-flush gating, runtime DPR-change re-read.
+
 ## [0.5.15] - 2026-06-03
 
 Round-2 audit (latency / performance / concurrency / audio-quality / UX / UI):
