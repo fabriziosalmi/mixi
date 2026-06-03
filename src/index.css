@@ -940,6 +940,11 @@ body::after {
 /* ═══════════════════════════════════════════════════════════ */
 
 :root {
+  /* MIXI is a dark-first app; declare it so the OS/UA renders native controls
+   * (scrollbars, form widgets) dark and doesn't auto-flip to a half-styled
+   * light theme. The mobile UI uses hardcoded dark surfaces, so a real light
+   * theme would need a full pass — until then we stay dark. (#18) */
+  color-scheme: dark;
   /* ── Dark theme (default) ────────────────────────────────── */
   --m-bg:        #0a0a0a;
   --m-surface:   #141414;
@@ -960,27 +965,10 @@ body::after {
   --m-input-bg:  #111111;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --m-bg:        #f2f2f7;
-    --m-surface:   #ffffff;
-    --m-surface-2: #f0f0f5;
-    --m-surface-3: #e5e5ea;
-    --m-border:    rgba(0, 0, 0, 0.08);
-    --m-border-2:  rgba(0, 0, 0, 0.12);
-    --m-text:      #1c1c1e;
-    --m-text-2:    #636366;
-    --m-text-3:    #8e8e93;
-    --m-text-dim:  #aeaeb2;
-    --m-btn:       #e5e5ea;
-    --m-btn-hover: #d1d1d6;
-    --m-btn-text:  #1c1c1e;
-    --m-overlay:   rgba(242, 242, 247, 0.82);
-    --m-overlay-border: rgba(0, 0, 0, 0.06);
-    --m-card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    --m-input-bg:  #e5e5ea;
-  }
-}
+/* NOTE: a prefers-color-scheme:light override used to live here, but the
+ * mobile components use hardcoded dark inline styles, so OS light mode produced
+ * a broken light page with floating dark cards and unreadable text. Removed
+ * until the mobile UI has a real, complete light theme. (#18) */
 
 /* ── Mobile: button press states ─────────────────────────── */
 

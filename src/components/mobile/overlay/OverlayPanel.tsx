@@ -144,8 +144,8 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
               key={d}
               onClick={() => onDeckSwitch(d)}
               style={{
-                width: 36,
-                height: 28,
+                width: 44,
+                height: 44,
                 border: `1px solid ${activeDeck === d ? (d === 'A' ? COLOR_DECK_A : COLOR_DECK_B) : '#333'}`,
                 borderRadius: 4,
                 background: activeDeck === d ? `${d === 'A' ? COLOR_DECK_A : COLOR_DECK_B}22` : 'transparent',
@@ -171,6 +171,7 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
               onClick={() => onTabChange(tab.id)}
               style={{
                 padding: '4px 14px',
+                minHeight: 44,
                 border: `1px solid ${activeTab === tab.id ? deckColor : '#333'}`,
                 borderRadius: 4,
                 background: activeTab === tab.id ? `${deckColor}22` : 'transparent',
@@ -188,8 +189,8 @@ export const OverlayPanel: FC<OverlayPanelProps> = ({
           ))}
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        {/* Content — pad the bottom past the home indicator on notched phones */}
+        <div style={{ flex: 1, overflow: 'auto', padding: 12, paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
           {children}
         </div>
       </div>

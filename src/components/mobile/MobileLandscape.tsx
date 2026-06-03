@@ -49,19 +49,27 @@ const COLORS: Record<DeckId, string> = { A: COLOR_DECK_A, B: COLOR_DECK_B };
 
 // ── Beat pulse hook ─────────────────────────────────────────
 
-function useBeatPulse(deckId: DeckId, isPlaying: boolean): boolean {
-  const [pulse, setPulse] = useState(false);
+/** Audio-clock-driven beat flash via rAF + classList — see MobilePortrait. (#18) */
+function useBeatPulse(deckId: DeckId, isPlaying: boolean, ref: React.RefObject<HTMLDivElement | null>): void {
   const bpm = useMixiStore((s) => s.decks[deckId].bpm);
+  const firstBeat = useMixiStore((s) => s.decks[deckId].firstBeatOffset);
   useEffect(() => {
-    if (!isPlaying || bpm <= 0) return;
-    const interval = 60000 / bpm;
-    const id = setInterval(() => {
-      setPulse(true);
-      setTimeout(() => setPulse(false), 200);
-    }, interval);
-    return () => clearInterval(id);
-  }, [isPlaying, bpm]);
-  return pulse;
+    const el = ref.current;
+    if (!isPlaying || bpm <= 0 || !el) return;
+    const beatPeriod = 60 / bpm;
+    let raf = 0;
+    let on = false;
+    const loop = () => {
+      const engine = MixiEngine.getInstance();
+      const t = engine.isInitialized ? engine.getCurrentTime(deckId) : 0;
+      const phase = (((t - firstBeat) / beatPeriod) % 1 + 1) % 1;
+      const shouldBeOn = phase < 0.16;
+      if (shouldBeOn !== on) { el.classList.toggle('m-beat-pulse', shouldBeOn); on = shouldBeOn; }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); el.classList.remove('m-beat-pulse'); };
+  }, [deckId, isPlaying, bpm, firstBeat, ref]);
 }
 
 // ── DeckRow ──────────────────────────────────────────────────
@@ -163,7 +171,8 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
   const currentTime = useCurrentTime(deckId);
 
   const haptics = useHaptics();
-  const beatPulse = useBeatPulse(deckId, isPlaying);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useBeatPulse(deckId, isPlaying, cardRef);
 
   const togglePlay = useCallback(
     () => { setPlaying(deckId, !isPlaying); haptics.tick(); },
@@ -198,7 +207,8 @@ const DeckRow: FC<{ deckId: DeckId }> = ({ deckId }) => {
 
   return (
     <div
-      className={`m-deck-accent${beatPulse ? ' m-beat-pulse' : ''}`}
+      ref={cardRef}
+      className="m-deck-accent"
       style={{
         display: 'flex',
         alignItems: 'stretch',

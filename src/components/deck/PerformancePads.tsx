@@ -30,7 +30,7 @@
 //   Hardware-inspired beveled look with Tailwind shadows.
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, useMemo, type FC, type MouseEvent } from 'react';
+import { useState, useCallback, useEffect, useMemo, memo, type FC, type MouseEvent } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import type { DeckId } from '../../types';
@@ -68,7 +68,7 @@ interface PerformancePadsProps {
   color: string;
 }
 
-export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => {
+const PerformancePadsBase: FC<PerformancePadsProps> = ({ deckId, color }) => {
   const [mode, setMode] = useState<PadMode>('hotcue');
   const quantize = useMixiStore((s) => s.decks[deckId].quantize);
   const setQuantize = useMixiStore((s) => s.setQuantize);
@@ -168,6 +168,10 @@ export const PerformancePads: FC<PerformancePadsProps> = ({ deckId, color }) => 
     </div>
   );
 };
+
+// Memoised so a parent re-render (panic flash / vfx / update banner) doesn't
+// reconcile the whole pad grid when deckId/color are unchanged.
+export const PerformancePads = memo(PerformancePadsBase);
 
 // ── Mode tab button ──────────────────────────────────────────
 

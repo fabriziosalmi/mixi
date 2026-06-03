@@ -18,7 +18,7 @@
 //   [▼ nudge slower]
 // ─────────────────────────────────────────────────────────────
 
-import { useCallback, useMemo, useRef, useState, useEffect, type FC } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect, memo, type FC } from 'react';
 import { useDrag } from '../../hooks/useDrag';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
@@ -70,7 +70,7 @@ interface PitchStripProps {
   midiAction?: any;
 }
 
-export const PitchStrip: FC<PitchStripProps> = ({
+const PitchStripBase: FC<PitchStripProps> = ({
   value,
   onChange,
   color,
@@ -375,6 +375,8 @@ export const PitchStrip: FC<PitchStripProps> = ({
     </div>
   );
 };
+
+export const PitchStrip = memo(PitchStripBase);
 
 // ── Nudge Button ────────────────────────────────────────────
 

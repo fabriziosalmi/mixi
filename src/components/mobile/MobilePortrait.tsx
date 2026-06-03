@@ -52,19 +52,32 @@ const COLORS: Record<DeckId, string> = { A: COLOR_DECK_A, B: COLOR_DECK_B };
 
 // ── Beat pulse hook ─────────────────────────────────────────
 
-function useBeatPulse(deckId: DeckId, isPlaying: boolean): boolean {
-  const [pulse, setPulse] = useState(false);
+/**
+ * Pulse a card's `m-beat-pulse` class on the beat. Driven by the audio clock
+ * (getCurrentTime) via rAF and toggled with classList — so it stays in time
+ * (no setInterval drift), never re-renders the heavy deck card, and leaks no
+ * timer (the old setInterval + uncleared inner setTimeout did all three). (#18)
+ */
+function useBeatPulse(deckId: DeckId, isPlaying: boolean, ref: React.RefObject<HTMLDivElement | null>): void {
   const bpm = useMixiStore((s) => s.decks[deckId].bpm);
+  const firstBeat = useMixiStore((s) => s.decks[deckId].firstBeatOffset);
   useEffect(() => {
-    if (!isPlaying || bpm <= 0) return;
-    const interval = 60000 / bpm;
-    const id = setInterval(() => {
-      setPulse(true);
-      setTimeout(() => setPulse(false), 200);
-    }, interval);
-    return () => clearInterval(id);
-  }, [isPlaying, bpm]);
-  return pulse;
+    const el = ref.current;
+    if (!isPlaying || bpm <= 0 || !el) return;
+    const beatPeriod = 60 / bpm;
+    let raf = 0;
+    let on = false;
+    const loop = () => {
+      const engine = MixiEngine.getInstance();
+      const t = engine.isInitialized ? engine.getCurrentTime(deckId) : 0;
+      const phase = (((t - firstBeat) / beatPeriod) % 1 + 1) % 1;
+      const shouldBeOn = phase < 0.16; // flash the first ~16% of each beat
+      if (shouldBeOn !== on) { el.classList.toggle('m-beat-pulse', shouldBeOn); on = shouldBeOn; }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); el.classList.remove('m-beat-pulse'); };
+  }, [deckId, isPlaying, bpm, firstBeat, ref]);
 }
 
 // ── Time formatter ──────────────────────────────────────────
@@ -116,7 +129,8 @@ const FocusDeck: FC<{
   const currentTime = useCurrentTime(deckId);
   const cueCount = hotCues.filter((c) => c !== null).length;
   const haptics = useHaptics();
-  const beatPulse = useBeatPulse(deckId, isPlaying);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useBeatPulse(deckId, isPlaying, cardRef);
   const hasTrack = !!trackName;
 
   const togglePlay = useCallback(
@@ -187,7 +201,8 @@ const FocusDeck: FC<{
 
   return (
     <div
-      className={`${isPlaying ? 'm-deck-card-playing' : 'm-deck-card'} m-deck-accent${beatPulse ? ' m-beat-pulse' : ''}`}
+      ref={cardRef}
+      className={`${isPlaying ? 'm-deck-card-playing' : 'm-deck-card'} m-deck-accent`}
       style={{
         background: 'var(--m-surface)',
         borderRadius: 14,

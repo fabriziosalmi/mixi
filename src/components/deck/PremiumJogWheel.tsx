@@ -21,7 +21,7 @@
 // React re-renders during playback.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState, type FC } from 'react';
+import { useEffect, useRef, useState, memo, type FC } from 'react';
 import { MixiEngine } from '../../audio/MixiEngine';
 import { useMixiStore } from '../../store/mixiStore';
 import type { DeckId } from '../../types';
@@ -70,7 +70,7 @@ interface PremiumJogWheelProps {
 
 // ── Component ──────────────────────────────────────────────
 
-export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
+const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
   deckId,
   color,
   size = 200,
@@ -517,6 +517,10 @@ export const PremiumJogWheel: FC<PremiumJogWheelProps> = ({
     </div>
   );
 };
+
+// Memoised: the heavy SVG jog tree shouldn't reconcile on unrelated parent
+// re-renders (panic flash / vfx / update banner).
+export const PremiumJogWheel = memo(PremiumJogWheelBase);
 
 // ── LED Corona ─────────────────────────────────────────────
 

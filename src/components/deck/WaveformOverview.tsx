@@ -21,7 +21,7 @@
 // Click anywhere on the bar to seek to that position.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState, useCallback, type FC } from 'react';
+import { useEffect, useRef, useState, useCallback, memo, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
 import type { DeckId } from '../../types';
@@ -38,7 +38,7 @@ interface WaveformOverviewProps {
   zoomRef?: React.RefObject<number>;
 }
 
-export const WaveformOverview: FC<WaveformOverviewProps> = ({
+const WaveformOverviewBase: FC<WaveformOverviewProps> = ({
   deckId,
   height = 16,
   zoomRef: externalZoomRef,
@@ -305,3 +305,7 @@ export const WaveformOverview: FC<WaveformOverviewProps> = ({
     </div>
   );
 };
+
+// Memoised: the overview canvas shouldn't reconcile on unrelated parent
+// re-renders (panic flash / vfx / update banner).
+export const WaveformOverview = memo(WaveformOverviewBase);
