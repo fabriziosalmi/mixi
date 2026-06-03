@@ -283,9 +283,12 @@ impl MasterDsp {
         let punch_active = read_bool(params, MASTER_PUNCH_ACTIVE);
         let limiter_active = read_bool(params, MASTER_LIMITER_ACTIVE);
 
-        // Smoothed master gain (click-free)
-        let gain_target = if gain_val == 0.0 { 1.0 } else { gain_val };
-        self.gain_smooth.set_target(gain_target);
+        // Smoothed master gain (click-free). NOTE: do NOT force gain 0 -> 1.0;
+        // 0 is a legitimate value (panic-mute / master fader to bottom). An
+        // uninitialized/zero param bus is already rejected by the layout-version
+        // passthrough guard at the top of DspEngine::process(), so no value-based
+        // guard is needed here.
+        self.gain_smooth.set_target(gain_val);
         self.gain_smooth.apply_gain(samples);
 
         // Master filter (bipolar: -1 = lowpass, +1 = highpass, 0 = bypass)
