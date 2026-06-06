@@ -89,6 +89,15 @@ export class TurboGenomeEngine {
     let base = this._sequenceStr[this.currentIndex];
     let mutated = false;
 
+    // Validate base before processing to prevent invalid sounds
+    const validBases = ['A', 'C', 'G', 'T'];
+    if (!validBases.includes(base)) {
+      // Skip invalid characters or handle them gracefully (e.g., skip or use default)
+      this.currentIndex = (this.currentIndex + 1) % this._sequenceStr.length;
+      this.tickerId = window.setTimeout(this.loop, this._speedMs);
+      return;
+    }
+
     // Mutate probabilistically
     if (Math.random() < this._mutationRate) {
        const bases = ['A', 'C', 'G', 'T'];
