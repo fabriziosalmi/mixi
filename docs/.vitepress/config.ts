@@ -73,7 +73,8 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/getting-started' }
+      { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Privacy', link: '/privacy' }
     ],
     sidebar: [
       {
@@ -107,6 +108,10 @@ export default defineConfig({
     ],
     socialLinks: [
       { icon: 'github', link: 'https://github.com/fabriziosalmi/mixi' }
-    ]
+    ],
+    footer: {
+      message: 'Privacy &amp; legal: <a href="/privacy">/privacy</a> · Publisher: Fabrizio Salmi',
+      copyright: '© 2026 MIXI — fabrizio.salmi@gmail.com'
+    }
   }
 });
