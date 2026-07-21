@@ -3,7 +3,7 @@
 The MIXI privacy policy is published with the documentation site, so there is a
 single canonical version instead of two copies that can drift apart:
 
-### → **https://www.mixidaw.com/privacy**
+**Canonical policy:** [https://www.mixidaw.com/privacy](https://www.mixidaw.com/privacy)
 
 Source file: [`docs/privacy.md`](docs/privacy.md)
 
