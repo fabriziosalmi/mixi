@@ -24,6 +24,7 @@ export class TurboGenomeEngine {
 
   constructor(deckId: DeckId) {
     this.deckId = deckId;
+    this.loop = this.loop.bind(this);
   }
 
   init(ctx: AudioContext) {
