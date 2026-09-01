@@ -592,13 +592,22 @@ export const MobilePortrait: FC = () => {
   // Escape closes the loader. Tapping the backdrop already does, but a keyboard
   // user has no backdrop: without this the only way out is tabbing back to the
   // trigger, which the overlay is drawn on top of.
+  //
+  // App.tsx is the single owner of Escape: it dismisses the topmost overlay and
+  // only reaches Panic when nothing is open. While this loader is open it *is*
+  // the topmost, so it claims the key in the capture phase and stops it there.
+  // Listening in the bubble phase instead would close the loader and panic the
+  // mix on the same press.
   useEffect(() => {
     if (!loaderOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLoaderOpen(false);
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLoaderOpen(false);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [loaderOpen]);
 
   const openOverlay = useCallback((tab: OverlayTab, deck: DeckId) => {
