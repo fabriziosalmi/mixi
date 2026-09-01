@@ -589,6 +589,27 @@ export const MobilePortrait: FC = () => {
     haptics.snap();
   }, [haptics]);
 
+  // Escape closes the loader. Tapping the backdrop already does, but a keyboard
+  // user has no backdrop: without this the only way out is tabbing back to the
+  // trigger, which the overlay is drawn on top of.
+  //
+  // App.tsx is the single owner of Escape: it dismisses the topmost overlay and
+  // only reaches Panic when nothing is open. While this loader is open it *is*
+  // the topmost, so it claims the key in the capture phase and stops it there.
+  // Listening in the bubble phase instead would close the loader and panic the
+  // mix on the same press.
+  useEffect(() => {
+    if (!loaderOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLoaderOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [loaderOpen]);
+
   const openOverlay = useCallback((tab: OverlayTab, deck: DeckId) => {
     setOverlayTab(tab);
     setOverlayDeck(deck);
@@ -738,7 +759,11 @@ export const MobilePortrait: FC = () => {
 
       {loaderOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div onClick={() => setLoaderOpen(false)} className="m-overlay-backdrop-enter" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          {/* Decorative: a dimmed sheet that dismisses on tap. Not a control, so it
+              is hidden from assistive tech rather than announced as one. Escape is
+              the keyboard equivalent, wired above. */}
+          {/* slopless-disable-next-line VBC-010 -- backdrop, not a control; Escape covers keyboard */}
+          <div aria-hidden="true" onClick={() => setLoaderOpen(false)} className="m-overlay-backdrop-enter" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
           <div className="m-overlay-enter" style={{
             position: 'relative',
             background: 'rgba(10,10,10,0.72)',
