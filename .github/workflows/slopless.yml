@@ -26,7 +26,7 @@ jobs:
       # upstream repository not to change under us.
       - name: Run slopless
         continue-on-error: true
-        uses: fabriziosalmi/slopless@dd5ce10921394c09d6faa5528a81179f2c64511d # v1.2.0
+        uses: fabriziosalmi/slopless@a9177f6333d731ec620d786638cf26639708b606 # v1.2.2
         with:
           patterns: "src/**/*.ts src/**/*.tsx src/**/*.css *.md docs/**/*.md"
           format: sarif
