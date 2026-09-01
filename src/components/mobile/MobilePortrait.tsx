@@ -589,6 +589,18 @@ export const MobilePortrait: FC = () => {
     haptics.snap();
   }, [haptics]);
 
+  // Escape closes the loader. Tapping the backdrop already does, but a keyboard
+  // user has no backdrop: without this the only way out is tabbing back to the
+  // trigger, which the overlay is drawn on top of.
+  useEffect(() => {
+    if (!loaderOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLoaderOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [loaderOpen]);
+
   const openOverlay = useCallback((tab: OverlayTab, deck: DeckId) => {
     setOverlayTab(tab);
     setOverlayDeck(deck);
@@ -738,7 +750,11 @@ export const MobilePortrait: FC = () => {
 
       {loaderOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div onClick={() => setLoaderOpen(false)} className="m-overlay-backdrop-enter" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          {/* Decorative: a dimmed sheet that dismisses on tap. Not a control, so it
+              is hidden from assistive tech rather than announced as one. Escape is
+              the keyboard equivalent, wired above. */}
+          {/* slopless-disable-next-line VBC-010 -- backdrop, not a control; Escape covers keyboard */}
+          <div aria-hidden="true" onClick={() => setLoaderOpen(false)} className="m-overlay-backdrop-enter" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
           <div className="m-overlay-enter" style={{
             position: 'relative',
             background: 'rgba(10,10,10,0.72)',
