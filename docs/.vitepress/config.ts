@@ -30,6 +30,9 @@ try {
 } catch { /* locale dir scan optional */ }
 
 export default defineConfig({
+  // The hostname carries the base path on purpose: VitePress joins it with each
+  // page's route, so without it every URL in the sitemap would point at a 404.
+  sitemap: { hostname: 'https://www.mixidaw.com/' },
   title: 'MIXI',
   description: 'Deterministic Audio Workstation — browser-native DJ engine with Rust/Wasm DSP, AI automixer, custom skins, and zero install.',
   locales,
