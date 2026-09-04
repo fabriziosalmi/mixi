@@ -11,7 +11,7 @@ export interface HouseDeckProps {
 const PRESETS = [
   { name: 'HackerNews', url: 'https://news.ycombinator.com/rss' },
   { name: 'Resident Advisor', url: 'https://ra.co/xml/news.xml' },
-  { name: 'BBC Tech', url: 'http://feeds.bbci.co.uk/news/technology/rss.xml' },
+  { name: 'BBC Tech', url: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
 ];
 
 export const TurboNewsDeck: FC<HouseDeckProps> = ({ deckId, color, onSwitchToTrack }) => {
