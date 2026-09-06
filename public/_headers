@@ -1,0 +1,15 @@
+# Cross-origin isolation, required for SharedArrayBuffer.
+#
+# The Rust/Wasm audio engine needs SharedArrayBuffer, which the browser only
+# exposes to a cross-origin isolated document. vite.config.ts sets these for
+# `vite dev` and `vite preview`, and the Electron app sets them itself, but a
+# static deployment is served by the host, so the host has to send them.
+#
+# Without them nothing fails: `crossOriginIsolated` is false, the engine falls
+# back to the Web Audio path, and the only symptom is that it sounds different.
+#
+# Netlify and Cloudflare Pages read this file from the publish directory. Vite
+# copies public/ into dist/ verbatim, so it ships with the build.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

@@ -270,6 +270,36 @@ tests/            Unit tests (vitest) + E2E (Playwright)
 
 ---
 
+## Hosting a Build
+
+The Rust/Wasm audio engine needs `SharedArrayBuffer`, and a browser only exposes
+it to a **cross-origin isolated** document. That requires two response headers,
+sent by whoever serves the files:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+`vite dev` and `vite preview` set them, and the Electron app sets them itself, so
+they are easy to forget for a static deployment, where the host is responsible.
+
+**Nothing fails when they are missing.** `crossOriginIsolated` is false, the
+engine falls back to the Web Audio path, and the only symptom is that it sounds
+different. The console now says so on startup.
+
+| Host | What to do |
+|---|---|
+| Netlify, Cloudflare Pages | Nothing: `public/_headers` ships in the build |
+| nginx | `add_header Cross-Origin-Opener-Policy same-origin; add_header Cross-Origin-Embedder-Policy require-corp;` |
+| Vercel | Add both to `headers` in `vercel.json` |
+| **GitHub Pages** | **Not possible.** Pages cannot send custom headers, so a build published there always runs on the fallback engine |
+
+To check a deployment, open the console and evaluate `crossOriginIsolated`. True
+means the Wasm engine can start.
+
+---
+
 ## Contributing
 
 Contributions are welcome. Please sign the [CLA](CLA.md) on your first pull request — enforced automatically via GitHub Actions.
