@@ -28,6 +28,7 @@ import { COLOR_DECK_A, COLOR_DECK_B, CAMELOT_KEY_COLORS } from '../../theme';
 import type { DeckId } from '../../types';
 import { log } from '../../utils/logger';
 import { parseTrackMeta } from '../../audio/metadataParser';
+import { fetchTrackAudio, deckLoadFailureMessage } from '../../audio/trackLoad';
 import { API_BASE } from '../../utils/apiBase';
 import { notify } from '../topbar/HudNotifications';
 
@@ -282,15 +283,14 @@ export const TrackBrowser: FC = () => {
         notify.error(`"${track.title}" is missing its audio — removed from library`);
         return;
       }
-      const res = await fetch(url);
-      const buf = await res.arrayBuffer();
+      const buf = await fetchTrackAudio(url);
       await engine.loadTrack(deck, buf);
       useMixiStore.getState().setDeckTrackName(deck, `${track.artist ? track.artist + ' - ' : ''}${track.title}`);
       useMixiStore.getState().setDeckTrackLoaded(deck, true);
       notify.success(`Deck ${deck}: ${track.artist ? track.artist + ' - ' : ''}${track.title}`);
     } catch (err) {
       log.error('TrackBrowser', `Failed to load to deck ${deck}`, err);
-      notify.error(`Failed to load "${track.title}" to Deck ${deck}`);
+      notify.error(deckLoadFailureMessage(track.title, deck, err));
     }
   }, []);
 

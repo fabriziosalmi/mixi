@@ -23,6 +23,8 @@ import { COLOR_DECK_A, COLOR_DECK_B } from '../../theme';
 import { MobileTrackLoader } from './MobileTrackLoader';
 import { notify } from '../topbar/HudNotifications';
 import type { DeckId } from '../../types';
+import { log } from '../../utils/logger';
+import { fetchTrackAudio, deckLoadFailureMessage } from '../../audio/trackLoad';
 
 // ── Load-to-deck (same logic as desktop TrackBrowser) ────────
 
@@ -40,16 +42,16 @@ async function loadToDeck(track: TrackEntry, deck: DeckId) {
       notify.error(`"${track.title}" is missing its audio — removed`);
       return;
     }
-    const res = await fetch(url);
-    const buf = await res.arrayBuffer();
+    const buf = await fetchTrackAudio(url);
     await engine.loadTrack(deck, buf);
 
     const name = `${track.artist ? track.artist + ' - ' : ''}${track.title}`;
     useMixiStore.getState().setDeckTrackName(deck, name);
     useMixiStore.getState().setDeckTrackLoaded(deck, true);
     notify.success(`Deck ${deck}: ${name}`);
-  } catch {
-    notify.error(`Failed to load "${track.title}" to Deck ${deck}`);
+  } catch (err) {
+    log.error('MobileBrowser', `Failed to load to deck ${deck}`, err);
+    notify.error(deckLoadFailureMessage(track.title, deck, err));
   }
 }
 
