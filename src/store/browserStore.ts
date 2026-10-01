@@ -22,6 +22,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeStorage } from './safeStorage';
 import { saveTrackBlob, deleteTrackBlob, getTrackBlob } from './trackDb';
 import { usePlaylistStore } from './playlistStore';
+import { log } from '../utils/logger';
 
 /** Fixed color palette for track tags (Rekordbox-style). */
 export const TAG_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'] as const;
@@ -126,7 +127,9 @@ export const useBrowserStore = create<BrowserStore>()(
           if (track?.audioUrl) {
             try { URL.revokeObjectURL(track.audioUrl); } catch { /* noop */ }
           }
-          deleteTrackBlob(id).catch(() => {});
+          deleteTrackBlob(id).catch((err) => {
+            log.warn('Browser', `Track ${id} removed, but its audio stays in IndexedDB`, err);
+          });
           // S1: Cascade delete from all playlists
           try {
             const { playlists } = usePlaylistStore.getState();

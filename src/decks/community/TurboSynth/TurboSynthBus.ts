@@ -12,7 +12,7 @@ export class TurboSynthBus {
   }
 
   setFx(_id: string, _value: number) {
-    // Optional placeholder
+    // TurboSynth has no per-deck FX: the bus only does volume.
   }
 
   setVolume(value: number) {
