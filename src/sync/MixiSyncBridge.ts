@@ -16,6 +16,7 @@
 import { useMixiStore } from '../store/mixiStore';
 import { MixiEngine } from '../audio/MixiEngine';
 import { PhaseLock, type PhaseLockState } from './PhaseLock';
+import { JitterEstimator } from './jitter';
 import {
   encodePacket, decodePacket, isNewerSequence,
   phaseToFp, fpToPhase, randomSenderId, packTriggers,
@@ -42,6 +43,7 @@ export class MixiSyncBridge {
 
   private api: SyncAPI | null;
   private phaseLock = new PhaseLock();
+  private jitter = new JitterEstimator();
   private senderId = randomSenderId();
   private sequence = 0;
   private epochGeneration = 0;
@@ -375,7 +377,7 @@ export class MixiSyncBridge {
     this.phaseLock.onHeartbeat(
       masterPhase, packet.bpm,
       localPhase, activeDeck.bpm || packet.bpm,
-      slaveVolume, 0, // jitter estimate TODO
+      slaveVolume, this.jitter.onPacket(packet.senderId, packet.timestamp, performance.now()),
     );
 
     // #3 Feed-Forward: if master is manually nudging (jog wheel),
