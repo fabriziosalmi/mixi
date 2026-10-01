@@ -24,6 +24,7 @@
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isSharedBufferSupported } from './audio/dsp/SharedBufferBridge';
 import './index.css';
 
 // ── Device detection: synchronous, pre-mount, one-time ──────
@@ -39,19 +40,23 @@ const Root = isMobile
   ? lazy(() => import('./MobileApp'))
   : lazy(() => import('./DesktopRoot'));
 
-// ── Cross-origin isolation check ────────────────────────────
-// The Rust/Wasm audio engine needs SharedArrayBuffer, which the browser only
-// exposes to a cross-origin isolated document. That requires the host to send
-// COOP and COEP. vite dev/preview and the Electron app set them; a static
-// deployment depends on whoever serves it, and GitHub Pages cannot send custom
-// headers at all.
+// ── SharedArrayBuffer check ─────────────────────────────────
+// The Rust/Wasm audio engine needs SharedArrayBuffer. A browser only exposes it
+// to a cross-origin isolated document, which requires the host to send COOP and
+// COEP: vite dev/preview set them; a static deployment depends on whoever
+// serves it, and GitHub Pages cannot send custom headers at all.
 //
-// Nothing throws when they are missing: the engine falls back to the Web Audio
+// Test what the engine tests (isSharedBufferSupported), not crossOriginIsolated:
+// Electron exposes SharedArrayBuffer to its file:// page without isolation, so
+// the Rust engine runs there, and checking isolation warned about a fallback
+// that was not happening.
+//
+// Nothing throws when it is missing: the engine falls back to the Web Audio
 // path and the only symptom is that it sounds different. Say so once, rather
 // than leaving it to be discovered by ear.
-if (!window.crossOriginIsolated) {
+if (!isSharedBufferSupported()) {
   console.warn(
-    '[mixi] Not cross-origin isolated: SharedArrayBuffer is unavailable, so the '
+    '[mixi] SharedArrayBuffer is unavailable (not cross-origin isolated), so the '
     + 'Rust/Wasm audio engine cannot start and the Web Audio fallback is in use. '
     + 'The host must send Cross-Origin-Opener-Policy: same-origin and '
     + 'Cross-Origin-Embedder-Policy: require-corp. See public/_headers.'
