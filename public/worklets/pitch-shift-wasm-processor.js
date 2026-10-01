@@ -2,7 +2,8 @@
  * Pitch Shift Wasm Processor — AudioWorklet
  *
  * Granular overlap-add pitch shifter running in Rust/Wasm.
- * Uses raw C-style exports (no wasm-bindgen glue needed in worklet).
+ * Uses raw C-style exports; the few wasm-bindgen imports the module still
+ * declares are stubbed in bindgenImports() below.
  *
  * Message protocol (same as JS processor for drop-in replacement):
  *   { type: 'wasm-module', module: WebAssembly.Module }  — init Wasm
@@ -72,6 +73,39 @@ const nowMs = () =>
  * Resource Acquisition Is Initialization (RAII) wrapper for the raw Wasm pitch shifter pointer.
  * Ensures the pointer is freed via FinalizationRegistry when garbage-collected or explicitly destroyed.
  */
+/**
+ * mixi_core_bg.wasm is a wasm-bindgen build: besides the raw pitch exports it
+ * declares imports from "./mixi_core_bg.js" (the JS glue), e.g.
+ * __wbindgen_object_drop_ref, __wbg___wbindgen_throw_<hash>. Instantiation
+ * fails without them ("module is not an object or function"), so the
+ * worklet never got a pitch shifter and every deck fell back to native rate.
+ *
+ * The pitch path calls none of them except throw on a Rust panic. Build the
+ * object from the module's own import list, since the names carry a hash that
+ * changes between builds: throw raises the panic message, drop_ref is a no-op,
+ * anything else raises with its name instead of failing silently.
+ */
+function bindgenImports(module, getMemory) {
+  const imports = {};
+  for (const imp of WebAssembly.Module.imports(module)) {
+    if (imp.kind !== 'function' || imp.module === 'env' || imp.module === 'wasi_snapshot_preview1') continue;
+    const ns = (imports[imp.module] ??= {});
+    const name = imp.name;
+    if (name.includes('wbindgen_throw')) {
+      ns[name] = (ptr, len) => {
+        // TextDecoder is not guaranteed in AudioWorkletGlobalScope: messages are ASCII.
+        const bytes = new Uint8Array(getMemory().buffer, ptr, len);
+        throw new Error(String.fromCharCode.apply(null, bytes));
+      };
+    } else if (name.includes('object_drop_ref')) {
+      ns[name] = () => {};
+    } else {
+      ns[name] = () => { throw new Error(`wasm-bindgen import ${name} is not available in the pitch worklet`); };
+    }
+  }
+  return imports;
+}
+
 class WasmPitchShifter {
   constructor(exports, pointer) {
     this.exports = exports;
@@ -228,8 +262,10 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
   async _initWasm(source) {
     try {
       // `source` may be raw bytes (ArrayBuffer) or a precompiled Module.
-      // instantiate(bytes) → {module, instance}; instantiate(module) → instance.
-      const result = await WebAssembly.instantiate(source, {
+      const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
+      let memory = null;
+      const instance = await WebAssembly.instantiate(module, {
+        ...bindgenImports(module, () => memory),
         env: {},
         wasi_snapshot_preview1: {
           proc_exit: () => {},
@@ -238,7 +274,7 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
           fd_close: () => 0,
         },
       });
-      const instance = result.instance || result;
+      memory = instance.exports.memory;
       this._exports = instance.exports;
       this._memory = instance.exports.memory;
 
