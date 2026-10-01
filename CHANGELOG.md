@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.19] - 2026-10-01
+
+### Security
+- **Electron 41.1.1 → 41.10.7** (the runtime the desktop app ships), plus
+  vitest, postcss, @xmldom/xmldom, js-yaml, nanoid, browserslist and
+  brace-expansion: `npm audit fix` within the declared ranges, lockfile only
+  (#29, supersedes #6). Still open with no fix in range: vitepress' bundled
+  vite 5 / esbuild (docs dev server only), `uuid` inside
+  vite-plugin-top-level-await (build time), `extract-zip` (no patched release).
+- **Web fonts are self-hosted.** Skins loaded them from Google Fonts, sending
+  every visitor's IP to Google on load. No visual change (#8).
+
+### Fixed
+- **Sync now measures heartbeat jitter.** The bridge always passed `0`, so the
+  phase lock never fell back to tempo-match on a bad link and kept chasing
+  noisy phase. It now uses the RFC 3550 interarrival jitter (#31).
+- **A failed deck load says why.** Every failure read "Failed to load [song]
+  to Deck A"; the browser now shows the engine's actual reason (too large,
+  unparsable format, undecodable first chunk), and the mobile browser no
+  longer discards it (#26).
+- **Static deployments get the headers the Wasm engine needs.**
+  `public/_headers` ships COOP/COEP, and the app warns once in the console
+  when it is not cross-origin isolated instead of silently falling back to
+  the Web Audio path (#25).
+- **Swallowed failures are reported** where they had a consequence: a streamed
+  track that cannot swap segments (warned once per streak), a track removed
+  while its audio stays in IndexedDB, a service worker that failed to register
+  on mobile. The sidecar API no longer uses a bare `except` that could swallow
+  task cancellation (#30).
+- **TurboFire has a background again.** It was a remote GIF the CSP blocks;
+  it is now a CSS glow, with no third-party request (#28).
+- **The loader overlay closes with Escape** without triggering the panic
+  double-press (#14).
+- **TurboNews fetches the BBC feed over https.**
+
+### Removed
+- Unused `TurboFireProcessor.ts` and `TurboGeigerProcessor.ts` (the decks load
+  the `.js` worklets) (#28).
+
+### Docs & CI
+- Privacy notice with GDPR header on the docs site (#10, #11); `sitemap.xml`
+  for the docs (#22).
+- Slopless static analysis in CI, pinned to v1.17.0, with SARIF upload to code
+  scanning (#13, #15–#20); checkout and SARIF actions moved off Node 20.
+
 ## [0.5.18] - 2026-06-03
 
 ### Fixed
