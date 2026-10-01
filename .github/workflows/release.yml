@@ -61,17 +61,17 @@ jobs:
           - os: macos-latest
             engine-artifact: mixi-engine-macos-arm64
             ext: ""
-            dist-cmd: "npm run build:all && npx electron-builder --mac --arm64"
+            dist-cmd: "npm run build:all && npx electron-builder --mac --arm64 --publish never"
             release-name: release-macos-arm64
           - os: windows-latest
             engine-artifact: mixi-engine-windows
             ext: ".exe"
-            dist-cmd: "npm run dist:win"
+            dist-cmd: "npm run dist:win -- --publish never"
             release-name: release-windows
           - os: ubuntu-latest
             engine-artifact: mixi-engine-linux
             ext: ""
-            dist-cmd: "npm run dist:linux"
+            dist-cmd: "npm run dist:linux -- --publish never"
             release-name: release-linux
     runs-on: ${{ matrix.os }}
     steps:
@@ -140,6 +140,11 @@ jobs:
         if: runner.os != 'Windows'
         run: chmod +x api/dist/mixi-engine
 
+      # --publish never: electron-builder (26.8.1 -> 26.15.3 in #29) publishes on its own when it
+      # sees GH_TOKEN on a tag build ("Implicit publishing triggered by git tag").
+      # The release job below is the one upload; without the flag 0.5.19 got
+      # every installer twice (Mixi-Setup-*.exe and Mixi.Setup.*.exe) plus
+      # latest*.yml and blockmaps, which nothing reads (no electron-updater).
       - name: Build & package
         env:
           EXEC_EXT: ${{ matrix.ext }}
