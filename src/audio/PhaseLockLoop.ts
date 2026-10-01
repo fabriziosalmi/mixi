@@ -548,13 +548,10 @@ class PhaseLockLoop {
         s.cancelAttempt = 2;
       }
       // If attempt 2 also fails, keep the -2ms nudge (usually resolves)
-    } else {
-      // No cancellation — clear the emergency nudge
-      if (s.cancelAttempt > 0) {
-        // Keep the successful nudge, but stop escalating
-      } else {
-        s.cancelNudge = 0;
-      }
+    } else if (s.cancelAttempt === 0) {
+      // No cancellation and no nudge was ever tried: clear the emergency nudge.
+      // (After an attempt, keep the nudge that worked and stop escalating.)
+      s.cancelNudge = 0;
     }
   }
 
