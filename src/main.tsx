@@ -60,7 +60,9 @@ if (!window.crossOriginIsolated) {
 
 // ── PWA service worker registration (mobile only) ──────────
 if ('serviceWorker' in navigator && isMobile) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').catch((err) => {
+    console.warn('[mixi] Service worker registration failed: the app will not work offline.', err);
+  });
 }
 
 // ── Expose stores for E2E tests (dev/test, or a packaged app launched with

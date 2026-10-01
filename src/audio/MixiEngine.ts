@@ -119,6 +119,8 @@ export class MixiEngine {
   private pitchShifters: Record<DeckId, AudioWorkletNode | null> = { A: null, B: null };
   private _gateTimer: ReturnType<typeof setInterval> | null = null;
   private _streamingLookAheadTimer: ReturnType<typeof setInterval> | null = null;
+  /** A failing segment transition retries every tick: warn once per streak, not once a second. */
+  private _segmentFailWarned: Record<DeckId, boolean> = { A: false, B: false };
   /** Short cleanup timers (crossfade/segment old-source stop). Tracked so
    *  destroy() can cancel them instead of leaving them to fire post-teardown. */
   private _cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
@@ -348,7 +350,14 @@ export class MixiEngine {
     this._streamingLookAheadTimer = setInterval(() => {
       if (!this.initialized) return;
       for (const deck of ['A', 'B'] as const) {
-        void this.checkSegmentTransition(deck).catch(() => {});
+        this.checkSegmentTransition(deck).then(
+          () => { this._segmentFailWarned[deck] = false; },
+          (err) => {
+            if (this._segmentFailWarned[deck]) return;
+            this._segmentFailWarned[deck] = true;
+            log.warn('Engine', `Deck ${deck}: segment transition failed, retrying every second`, err);
+          },
+        );
       }
     }, 1000);
 
@@ -1183,10 +1192,9 @@ export class MixiEngine {
     if (!this.initialized) return;
     const transport = this.transports[deck];
     const shifter = this.pitchShifters[deck];
-    if (shifter) {
-      // With relocated PLL, micro-corrections are calculated inside the worklet itself.
-      // We do not need to call applyPllRate for the worklet, as the worklet control signal handles it.
-    } else if (transport.source) {
+    // With a pitch shifter the PLL runs inside the worklet, which corrects the
+    // rate itself: only the plain source path needs the rate applied here.
+    if (!shifter && transport.source) {
       // Very gentle smoothing for PLL: 20ms time constant
       smoothParam(transport.source.playbackRate, rate, this.ctx, 0.020);
     }
