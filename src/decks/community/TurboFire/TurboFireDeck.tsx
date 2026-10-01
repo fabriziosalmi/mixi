@@ -85,13 +85,11 @@ export const TurboFireDeck: FC<HouseDeckProps> = ({ deckId, color: _color, onSwi
   return (
     <div className="flex flex-col h-full w-full bg-black/80 text-white rounded-lg font-mono relative overflow-hidden border border-[#ff6600]/30 shadow-[0_0_30px_rgb(255,100,0,0.1)]">
       
-      {/* BACKGROUND VIDEO / GIF PLACEHOLDER */}
+      {/* BACKGROUND — ember glow rising from the bottom (pure CSS: the CSP allows no remote images) */}
       <div className="absolute inset-0 z-0 opacity-40 pointer-events-none mix-blend-screen flex items-center justify-center">
-         {/* Placeholder Art - User will replace this with pure art */}
-         <img 
-            src="https://media.giphy.com/media/26FPCXdkvDbKBbgOI/giphy.gif" 
-            alt="Virtual Fireplace Art" 
-            className="w-full h-full object-cover blur-sm"
+         <div
+           className="absolute inset-0 blur-sm"
+           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 100%, #ffbb00 0%, #ff6600 35%, #7a1f00 65%, transparent 100%)' }}
          />
          {/* Dynamic Brightness Overlay based on warmth */}
          <div 
