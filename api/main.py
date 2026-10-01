@@ -137,8 +137,10 @@ async def mixer_websocket(ws: WebSocket):
     if _browser_ws is not None:
         try:
             await _browser_ws.close()
-        except:
-            pass
+        except Exception as exc:
+            # Expected when the old socket is already dead. Not a bare except:
+            # that would also swallow asyncio.CancelledError.
+            logger.debug("Closing the preempted WebSocket failed: %s", exc)
 
     await ws.accept()
     _browser_ws = ws
