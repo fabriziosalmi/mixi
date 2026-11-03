@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Security updates only: open-pull-requests-limit 0 turns off version
+  # updates, while the ignore below still applies to security update PRs.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    # Tailwind 4 is a migration, not a bump: #39 arrived as a security update
+    # for postcss-selector-parser and moved tailwindcss 3 -> 4 without naming
+    # it, and the build failed on the new PostCSS plugin
+    # (`@tailwindcss/postcss`). Remove this ignore when the UI is migrated.
+    ignore:
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
