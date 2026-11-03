@@ -142,5 +142,10 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
+  },
+  "overrides": {
+    "vitepress": {
+      "vite": "^6.4.5"
+    }
   }
 }
