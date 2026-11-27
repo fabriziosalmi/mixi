@@ -141,10 +141,10 @@ const PerformancePadsBase: FC<PerformancePadsProps> = ({ deckId, color }) => {
             onClick={toggleQuantize}
             className="flex-1 rounded-md text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
             style={{
-              background: quantize ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${quantize ? 'var(--clr-master)' : 'var(--brd-default)'}`,
-              color: quantize ? 'var(--clr-master)' : 'var(--txt-muted)',
-              boxShadow: quantize ? '0 0 8px rgba(168,85,247,0.2)' : 'none',
+              background: quantize ? `${color}1f` : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${quantize ? `${color}99` : 'var(--brd-default)'}`,
+              color: quantize ? color : 'var(--txt-secondary)',
+              boxShadow: quantize ? `0 0 8px ${color}2e` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
             }}
             title="Quantize: snap cues & loops to the beat grid"
           >
@@ -155,9 +155,9 @@ const PerformancePadsBase: FC<PerformancePadsProps> = ({ deckId, color }) => {
             onClick={cycleQValue}
             className="flex-1 rounded-md text-[10px] font-bold font-mono tabular-nums transition-all active:scale-95"
             style={{
-              background: quantize ? 'rgba(168, 85, 247, 0.08)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${quantize ? 'rgba(168,85,247,0.2)' : 'var(--brd-default)'}`,
-              color: quantize ? 'var(--clr-master)' : 'var(--txt-muted)',
+              background: quantize ? `${color}12` : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${quantize ? `${color}44` : 'var(--brd-default)'}`,
+              color: quantize ? color : 'var(--txt-secondary)',
             }}
             title={`Quantize resolution: ${qVal.label} beat`}
           >
@@ -245,21 +245,38 @@ const HotCuePad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) => 
       type="button"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className="mixi-pad relative flex items-center justify-center rounded-[6px] h-11 text-[10px] font-bold uppercase transition-all select-none"
+      aria-label={isFilled ? `Hot Cue ${index + 1}` : `Set Hot Cue ${index + 1}`}
+      className="mixi-pad relative overflow-hidden flex items-center justify-center rounded-[6px] h-11 text-[10px] font-mono font-bold uppercase transition-all select-none"
       style={{
         background: isFilled
-          ? `${padColor}08`
+          ? `${padColor}18`
           : 'var(--srf-mid)',
-        border: `1px solid ${isFilled ? padColor : 'var(--srf-light)'}`,
+        border: `1px solid ${isFilled ? padColor : 'var(--brd-default)'}`,
         color: isFilled ? padColor : 'var(--txt-dim)',
         boxShadow: isFilled
-          ? `inset 0 0 25px ${padColor}b3, 0 0 10px ${padColor}44, 0 2px 4px rgba(0,0,0,0.4)`
-          : 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 0 #252525, 0 1px 0 rgba(255,255,255,0.015)',
+          ? `inset 0 0 22px ${padColor}88, 0 0 10px ${padColor}44, 0 2px 4px rgba(0,0,0,0.4)`
+          : 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 2px 6px rgba(0,0,0,0.55)',
       }}
     >
-      {isFilled && (
-        <span style={{ textShadow: `0 0 6px ${padColor}88` }}>{index + 1}</span>
-      )}
+      {/* Top hardware LED strip — subtle cue-color hint when empty, bright when assigned */}
+      <span
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0"
+        style={{
+          height: 2,
+          background: padColor,
+          opacity: isFilled ? 1 : 0.25,
+        }}
+      />
+      <span
+        style={
+          isFilled
+            ? { textShadow: `0 0 6px ${padColor}88`, color: '#fff' }
+            : { opacity: 0.72 }
+        }
+      >
+        {index + 1}
+      </span>
     </button>
   );
 };
@@ -418,10 +435,10 @@ const FxToggleButton: FC<{ deckId: DeckId; unitKey: 'fx1' | 'fx2'; color: string
       onClick={toggle}
       className="flex-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
       style={{
-        background: active ? `${color}22` : 'rgba(255,255,255,0.03)',
+        background: active ? `${color}22` : 'rgba(255,255,255,0.04)',
         border: `1px solid ${active ? color : 'var(--brd-default)'}`,
-        color: active ? color : 'var(--txt-muted)',
-        boxShadow: active ? `0 0 8px ${color}33` : 'none',
+        color: active ? color : 'var(--txt-secondary)',
+        boxShadow: active ? `0 0 8px ${color}33` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
       }}
       title={`${label}: ${active ? 'ON' : 'OFF'}`}
     >

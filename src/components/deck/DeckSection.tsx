@@ -220,7 +220,14 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
         {bpm > 0 && (
           <div key={`bpm-${bpm.toFixed(0)}`} className="flex items-center gap-0.5 shrink-0 mixi-pop">
             {/* /2 button */}
-            <button type="button" onClick={halveBpm} className="text-[7px] text-zinc-600 hover:text-zinc-300 font-mono transition-colors px-0.5" title="Halve BPM">/2</button>
+            <button
+              type="button"
+              onClick={halveBpm}
+              className="text-[8px] font-mono font-bold text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] rounded px-1 py-0.5 transition-colors"
+              title="Halve BPM"
+            >
+              /2
+            </button>
 
             {/* BPM value — double-click to edit */}
             {editingBpm ? (
@@ -253,7 +260,14 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
             )}
 
             {/* x2 button */}
-            <button type="button" onClick={doubleBpm} className="text-[7px] text-zinc-600 hover:text-zinc-300 font-mono transition-colors px-0.5" title="Double BPM">x2</button>
+            <button
+              type="button"
+              onClick={doubleBpm}
+              className="text-[8px] font-mono font-bold text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] rounded px-1 py-0.5 transition-colors"
+              title="Double BPM"
+            >
+              x2
+            </button>
 
             <BeatCounter deckId={deckId} color={color} />
           </div>
@@ -281,13 +295,16 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               {/* GRID toggle button */}
-              <button type="button" onClick={() => setGridEditMode(g => !g)}
-                className="text-[7px] font-bold tracking-wider px-1.5 py-0.5 rounded active:scale-95 transition-all"
+              <button
+                type="button"
+                onClick={() => setGridEditMode(g => !g)}
+                className="text-[8px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded active:scale-95 transition-all"
                 style={{
-                  color: gridEditMode ? color : 'var(--txt-muted)',
-                  background: gridEditMode ? `${color}15` : 'transparent',
-                  border: `1px solid ${gridEditMode ? color + '44' : 'rgba(255,255,255,0.06)'}`,
-                }}>
+                  color: gridEditMode ? color : 'var(--txt-secondary)',
+                  background: gridEditMode ? `${color}1c` : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${gridEditMode ? `${color}66` : 'rgba(255,255,255,0.1)'}`,
+                }}
+              >
                 GRID
               </button>
               <WaveformOverview deckId={deckId} height={24} zoomRef={waveZoomRef} />

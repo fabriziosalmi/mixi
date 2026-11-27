@@ -23,9 +23,9 @@ export const HudCenter: FC = () => (
     <div
       className="mixi-master-hud flex items-center justify-center flex-1 rounded-md px-3 py-1 overflow-hidden h-full"
       style={{
-        background: 'rgba(0,0,0,0.5)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+        background: 'rgba(0,0,0,0.52)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 1px 4px rgba(0,0,0,0.6)',
         minWidth: 0,
       }}
     >

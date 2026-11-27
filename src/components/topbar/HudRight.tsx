@@ -112,7 +112,7 @@ export const HudRight: FC<HudRightProps> = ({
       <button
         type="button"
         onClick={handlePanic}
-        className="rounded p-0.5 text-zinc-600 hover:text-red-400 transition-colors duration-150 active:scale-90"
+        className="rounded p-0.5 text-zinc-400 hover:text-red-400 transition-colors duration-150 active:scale-90"
         title="Panic Reset (Esc) — flatten EQ, kill FX, exit loops"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -126,7 +126,7 @@ export const HudRight: FC<HudRightProps> = ({
       <button
         type="button"
         onClick={toggleSettings}
-        className="mixi-gear relative rounded p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="mixi-gear relative rounded p-0.5 text-zinc-400 hover:text-zinc-100 transition-colors"
         title={updateAvailable ? 'Settings — Update available!' : 'Settings'}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -140,10 +140,10 @@ export const HudRight: FC<HudRightProps> = ({
 
       {/* Help — opens docs */}
       <a
-        href="https://fabriziosalmi.github.io/mixi/guide/getting-started"
+        href="https://www.mixidaw.com/guide/getting-started"
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded p-0.5 text-zinc-600 hover:text-cyan-400 transition-colors"
+        className="rounded p-0.5 text-zinc-400 hover:text-cyan-400 transition-colors"
         title="Help & Documentation"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -24,14 +24,16 @@ export const HudLeft: FC<HudLeftProps> = ({ aiState, toggleAI }) => (
   <div
     className="flex items-center gap-2 justify-self-start rounded-md px-3 py-1 overflow-hidden h-full"
     style={{
-      background: 'rgba(0,0,0,0.5)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.6)',
+      background: 'rgba(0,0,0,0.52)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 1px 4px rgba(0,0,0,0.6)',
     }}
   >
     <CpuBadge />
     <LatencyBadge />
+    <div className="w-px self-stretch my-1 shrink-0" style={{ background: 'rgba(255,255,255,0.09)' }} />
     <MasterHud />
+    <div className="w-px self-stretch my-1 shrink-0" style={{ background: 'rgba(255,255,255,0.09)' }} />
     <AiControlPanel engineState={aiState} onToggleEngine={toggleAI} />
     <IntentDisplay engineState={aiState} />
   </div>

@@ -39,17 +39,17 @@ body {
   --srf-light:  #2a2a2a;    /* lighter surfaces, hover states       */
 
   /* ── Border scale ─────────────────────────────────────── */
-  --brd-subtle:  #222222;   /* subtle borders, icon boxes           */
-  --brd-default: #333333;   /* default borders, separators          */
-  --brd-strong:  #444444;   /* strong borders, tick marks           */
+  --brd-subtle:  #28282f;   /* subtle borders, icon boxes           */
+  --brd-default: #383842;   /* default borders, separators          */
+  --brd-strong:  #4c4c58;   /* strong borders, tick marks           */
 
-  /* ── Text scale ───────────────────────────────────────── */
-  --txt-dim:       #444444; /* barely visible labels                */
-  --txt-muted:     #555555; /* muted labels, inactive icons         */
-  --txt-secondary: #666666; /* secondary icons / text               */
-  --txt-tertiary:  #777777; /* FX labels inactive                   */
-  --txt-primary:   #888888; /* primary text, headphone color        */
-  --txt-bright:    #cccccc; /* bright indicators                    */
+  /* ── Text scale (calibrated for low-light booth legibility) */
+  --txt-dim:       #666672; /* subtle technical markings            */
+  --txt-muted:     #82828f; /* muted labels, inactive icons         */
+  --txt-secondary: #9d9daa; /* secondary icons / text               */
+  --txt-tertiary:  #aeaebb; /* FX labels inactive                   */
+  --txt-primary:   #c4c4d0; /* primary text, headphone color        */
+  --txt-bright:    #e4e4ec; /* bright indicators                    */
   --txt-white:     #ffffff; /* maximum brightness                   */
 
   /* ── Accent: Deck A (electric cyan) ───────────────────── */

@@ -95,8 +95,8 @@ const FxUnit: FC<FxUnitProps> = ({ unitKey, deckId, color }) => {
   return (
     <div className="flex flex-col items-center gap-0.5 w-full">
       {/* Unit label */}
-      <span className="text-[6px] font-bold tracking-widest"
-        style={{ color: active ? color : 'var(--txt-muted)' }}>
+      <span className="text-[7px] font-mono font-bold tracking-widest"
+        style={{ color: active ? color : 'var(--txt-secondary)' }}>
         {unitKey.toUpperCase()}
       </span>
 
@@ -106,9 +106,9 @@ const FxUnit: FC<FxUnitProps> = ({ unitKey, deckId, color }) => {
         onClick={cycleEffect}
         className="text-[9px] font-mono font-black tracking-wider w-full rounded py-0.5 transition-all active:scale-95"
         style={{
-          color: active ? color : 'var(--txt-muted)',
-          background: active ? `${color}15` : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${active ? color + '44' : 'rgba(255,255,255,0.06)'}`,
+          color: active ? color : 'var(--txt-primary)',
+          background: active ? `${color}1c` : 'rgba(255,255,255,0.05)',
+          border: `1px solid ${active ? color + '66' : 'rgba(255,255,255,0.1)'}`,
         }}
         title={`Click to cycle effect (current: ${label})`}
       >

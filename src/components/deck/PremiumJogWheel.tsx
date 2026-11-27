@@ -194,10 +194,10 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
           const mVal = smoothMid.current < 0.05 ? 0 : smoothMid.current;
           const hVal = smoothHigh.current < 0.05 ? 0 : smoothHigh.current;
 
-          // Apply to groove zone refs
-          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(bVal * 0.67);
-          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(mVal * 0.52);
-          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(hVal * 0.41);
+          // Apply to groove zone refs (keep subtle physical vinyl grooves visible even in quiet passages)
+          if (grooveBassRef.current) grooveBassRef.current.style.opacity = String(0.15 + bVal * 0.57);
+          if (grooveMidRef.current) grooveMidRef.current.style.opacity = String(0.12 + mVal * 0.44);
+          if (grooveHighRef.current) grooveHighRef.current.style.opacity = String(0.10 + hVal * 0.35);
 
           // Bezel kick pulse — soft glow on bass hits
           if (bezelGlowRef.current) {
@@ -213,10 +213,10 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
         if (coronaRef.current) coronaRef.current.style.opacity = String(0.04 + level * 0.12);
       } else {
         if (beatEl) beatEl.textContent = '';
-        // Fade grooves when stopped
-        if (grooveBassRef.current) grooveBassRef.current.style.opacity = '0';
-        if (grooveMidRef.current) grooveMidRef.current.style.opacity = '0';
-        if (grooveHighRef.current) grooveHighRef.current.style.opacity = '0';
+        // Resting vinyl groove sheen — consistent across playing and paused decks
+        if (grooveBassRef.current) grooveBassRef.current.style.opacity = '0.15';
+        if (grooveMidRef.current) grooveMidRef.current.style.opacity = '0.12';
+        if (grooveHighRef.current) grooveHighRef.current.style.opacity = '0.10';
         if (bezelGlowRef.current) bezelGlowRef.current.style.opacity = '0';
       }
 
@@ -418,7 +418,7 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
           {/* ── Reactive groove zones ───────────────────────── */}
           <g mask={`url(#${deckId}-spiral-mask)`}>
             {/* Bass zone (inner rings) — gradient: inner bright, edge dim */}
-            <g ref={grooveBassRef} opacity="0">
+            <g ref={grooveBassRef} opacity="0.15">
               {Array.from({ length: BASS_RINGS_END }, (_, i) => {
                 const fade = 1 - (i / BASS_RINGS_END) * 0.5; // 1.0→0.5
                 return (
@@ -432,7 +432,7 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
               })}
             </g>
             {/* Mid zone (middle rings) */}
-            <g ref={grooveMidRef} opacity="0">
+            <g ref={grooveMidRef} opacity="0.12">
               {Array.from({ length: MID_RINGS_END - BASS_RINGS_END }, (_, i) => {
                 const count = MID_RINGS_END - BASS_RINGS_END;
                 const fade = 1 - (i / count) * 0.4;
@@ -447,7 +447,7 @@ const PremiumJogWheelBase: FC<PremiumJogWheelProps> = ({
               })}
             </g>
             {/* High zone (outer rings) */}
-            <g ref={grooveHighRef} opacity="0">
+            <g ref={grooveHighRef} opacity="0.10">
               {Array.from({ length: GROOVE_COUNT - MID_RINGS_END }, (_, i) => {
                 const count = GROOVE_COUNT - MID_RINGS_END;
                 const fade = 1 - (i / count) * 0.35;
