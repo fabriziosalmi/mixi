@@ -24,8 +24,8 @@ import { useCallback, useRef, useEffect } from 'react';
 import { useMixiStore } from '../store/mixiStore';
 
 export interface UseDragOptions {
-  /** Called on every move with the pixel delta from the start point. */
-  onDrag: (deltaX: number, deltaY: number) => void;
+  /** Called on every move with the pixel delta from the start point (and whether Shift is held for fine-tuning). */
+  onDrag: (deltaX: number, deltaY: number, shiftKey?: boolean) => void;
   /** Called once when the drag ends. */
   onDragEnd?: () => void;
 }
@@ -67,7 +67,7 @@ function releaseShield() {
 export function useDrag({ onDrag, onDragEnd }: UseDragOptions) {
   const startPos = useRef({ x: 0, y: 0 });
   /** Latest un-processed delta (written by pointermove, read by rAF). */
-  const pendingDelta = useRef<{ dx: number; dy: number } | null>(null);
+  const pendingDelta = useRef<{ dx: number; dy: number; shiftKey: boolean } | null>(null);
   const rafId = useRef(0);
   /** #48: Track the capture target for lostpointercapture cleanup. */
   const captureTarget = useRef<HTMLElement | null>(null);
@@ -78,7 +78,7 @@ export function useDrag({ onDrag, onDragEnd }: UseDragOptions) {
       const d = pendingDelta.current;
       if (d) {
         pendingDelta.current = null;
-        onDrag(d.dx, d.dy);
+        onDrag(d.dx, d.dy, d.shiftKey);
       }
       rafId.current = requestAnimationFrame(flushDeltaImpl.current);
     }
@@ -90,7 +90,7 @@ export function useDrag({ onDrag, onDragEnd }: UseDragOptions) {
       const dx = e.clientX - startPos.current.x;
       const dy = e.clientY - startPos.current.y;
       // Just stash the latest delta; the rAF loop will pick it up.
-      pendingDelta.current = { dx, dy };
+      pendingDelta.current = { dx, dy, shiftKey: e.shiftKey };
     },
     [],
   );
@@ -121,7 +121,7 @@ export function useDrag({ onDrag, onDragEnd }: UseDragOptions) {
       const d = pendingDelta.current;
       if (d) {
         pendingDelta.current = null;
-        onDrag(d.dx, d.dy);
+        onDrag(d.dx, d.dy, d.shiftKey);
       }
 
       // Release pointer capture + shield

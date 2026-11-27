@@ -107,6 +107,23 @@ export const TrackBrowser: FC = () => {
     analyzer.analyzeAll();
   }, []);
 
+  // UX-4: Non-blocking two-click playlist delete confirmation (avoids window.confirm freezing audio/UI)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const confirmDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current); }, []);
+
+  const handleDeletePlaylistClick = useCallback((id: string) => {
+    if (confirmDeleteId === id) {
+      if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current);
+      setConfirmDeleteId(null);
+      deletePlaylist(id);
+    } else {
+      setConfirmDeleteId(id);
+      if (confirmDeleteTimerRef.current) clearTimeout(confirmDeleteTimerRef.current);
+      confirmDeleteTimerRef.current = setTimeout(() => setConfirmDeleteId(null), 2500);
+    }
+  }, [confirmDeleteId, deletePlaylist]);
+
   // ── Import from URL (yt-dlp) ────────────────────────────
 
   const handleImport = useCallback(
@@ -507,13 +524,16 @@ export const TrackBrowser: FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Delete "${pl.name}"?`)) deletePlaylist(pl.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-[9px] text-zinc-600 hover:text-red-400 px-1 transition-opacity"
-                title="Delete playlist"
+                onClick={() => handleDeletePlaylistClick(pl.id)}
+                aria-label={confirmDeleteId === pl.id ? `Confirm delete playlist ${pl.name}` : `Delete playlist ${pl.name}`}
+                className={`text-[9px] px-1 transition-opacity ${
+                  confirmDeleteId === pl.id
+                    ? 'opacity-100 text-red-400 font-bold animate-pulse'
+                    : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-zinc-600 hover:text-red-400'
+                }`}
+                title={confirmDeleteId === pl.id ? 'Click again to delete' : 'Delete playlist'}
               >
-                x
+                {confirmDeleteId === pl.id ? 'DEL?' : 'x'}
               </button>
             </div>
           );

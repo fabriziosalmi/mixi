@@ -183,14 +183,16 @@ export const Knob: FC<KnobProps> = ({
   }, [onChange, resetValue]);
 
   const onDrag = useCallback(
-    (_dx: number, dy: number) => {
+    (_dx: number, dy: number, shiftKey = false) => {
       const range = max - min;
-      const delta = (-dy / DRAG_SENSITIVITY) * range;
+      // UX-2: Shift + drag gives 4× finer precision for surgical EQ/pitch/trim control
+      const sensitivity = shiftKey ? DRAG_SENSITIVITY * 4 : DRAG_SENSITIVITY;
+      const delta = (-dy / sensitivity) * range;
       const raw = valueAtDragStart.current + delta;
       const clamped = Math.min(max, Math.max(min, raw));
 
-      // Snap to centre in bipolar mode when within 2% of range.
-      if (bipolar) {
+      // Snap to centre in bipolar mode when within 2% of range (disabled during Shift fine-tune).
+      if (bipolar && !shiftKey) {
         const snapZone = range * 0.02;
         if (Math.abs(clamped - centre) < snapZone) {
           onChange(centre);
@@ -201,6 +203,43 @@ export const Knob: FC<KnobProps> = ({
       onChange(clamped);
     },
     [min, max, onChange, bipolar, centre],
+  );
+
+  // UX-2: Mouse wheel micro-adjustments (Shift = 4× finer)
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const range = max - min;
+      const step = range * (e.shiftKey ? 0.005 : 0.02);
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const clamped = Math.min(max, Math.max(min, value + dir * step));
+      onChange(clamped);
+    },
+    [min, max, value, onChange],
+  );
+
+  // UX-3: Full keyboard accessibility for role="slider"
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const range = max - min;
+      const step = range * (e.shiftKey ? 0.01 : 0.05);
+      let next: number | null = null;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = Math.min(max, value + step);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = Math.max(min, value - step);
+      else if (e.key === 'PageUp') next = Math.min(max, value + range * 0.1);
+      else if (e.key === 'PageDown') next = Math.max(min, value - range * 0.1);
+      else if (e.key === 'Home') next = min;
+      else if (e.key === 'End') next = max;
+      else if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') && resetValue !== undefined) {
+        next = resetValue;
+      }
+      if (next !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+        onChange(next);
+      }
+    },
+    [min, max, value, onChange, resetValue],
   );
 
   const [isDragging, setIsDragging] = useState(false);
@@ -237,12 +276,13 @@ export const Knob: FC<KnobProps> = ({
   const isAtCentre = bipolar && value === centre;
 
   useEffect(() => {
-    if (isAtCentre && !prevAtCentre.current) {
+    const wasAtCentre = prevAtCentre.current;
+    prevAtCentre.current = isAtCentre;
+    if (isAtCentre && !wasAtCentre) {
       setDetentFlash(true);
       const t = setTimeout(() => setDetentFlash(false), 150);
       return () => clearTimeout(t);
     }
-    prevAtCentre.current = isAtCentre;
   }, [isAtCentre]);
 
   // ── Compute visuals ──────────────────────────────────────
@@ -281,13 +321,15 @@ export const Knob: FC<KnobProps> = ({
 
   return (
     <div
-      className="group flex flex-col items-center gap-1 select-none touch-none"
+      className="group flex flex-col items-center gap-1 select-none touch-none rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
       role="slider"
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={Math.round(value * 100) / 100}
       aria-label={label || undefined}
       tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onWheel={handleWheel}
     >
       <svg
         width={s}
@@ -402,14 +444,16 @@ export const Knob: FC<KnobProps> = ({
             {Math.round(value)}{unit}
           </span>
         ) : onKill ? (
-          /* Kill button — visible on hover when not dragging */
+          /* Kill button — subtly visible on touch devices, full opacity on hover/active */
           <button
             type="button"
+            aria-label={label ? `Kill ${label}` : 'Kill EQ band'}
+            aria-pressed={killed}
             onClick={(e) => { e.stopPropagation(); onKill(); }}
             className={`text-[7px] font-mono font-bold tracking-wider rounded px-1.5 py-0.5 -mt-0.5 transition-all duration-150 cursor-pointer
               ${killed
-                ? 'opacity-90'
-                : 'opacity-0 group-hover:opacity-90'
+                ? 'opacity-100'
+                : 'opacity-45 group-hover:opacity-95 focus-visible:opacity-100'
               }`}
             style={{
               background: killed ? 'rgba(220,38,38,0.15)' : 'var(--srf-base)',

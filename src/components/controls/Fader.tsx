@@ -50,6 +50,8 @@ export interface FaderProps {
   ghost?: boolean;
   /** Override cap dimensions [length, thickness] in px. */
   capSize?: [number, number];
+  /** Default value restored on double-click / Backspace. Defaults to midpoint for horizontal faders. */
+  defaultValue?: number;
   midiAction?: any;
 }
 
@@ -74,6 +76,7 @@ export const Fader: FC<FaderProps> = ({
   label,
   ghost = false,
   capSize,
+  defaultValue,
   midiAction,
 }) => {
   const glowColor = ghost ? COLOR_GHOST : color;
@@ -81,14 +84,23 @@ export const Fader: FC<FaderProps> = ({
   const capLen = capSize ? capSize[0] : CAP_LENGTH;
   const capThk = capSize ? capSize[1] : CAP_THICKNESS;
   const valueAtDragStart = useRef(value);
+  const trackContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  const resetValue = defaultValue ?? (!isVertical ? (min + max) / 2 : undefined);
+
+  const handleDoubleClick = useCallback(() => {
+    if (resetValue !== undefined) onChange(resetValue);
+  }, [onChange, resetValue]);
+
   const onDrag = useCallback(
-    (dx: number, dy: number) => {
+    (dx: number, dy: number, shiftKey = false) => {
       const range = max - min;
       const pixelDelta = isVertical ? -dy : dx;
-      const travelPx = length - capLen;
-      const delta = (pixelDelta / travelPx) * range;
+      const travelPx = Math.max(1, length - capLen);
+      // UX-1: Shift + drag gives 4× finer precision
+      const effectiveTravel = shiftKey ? travelPx * 4 : travelPx;
+      const delta = (pixelDelta / effectiveTravel) * range;
       const raw = valueAtDragStart.current + delta;
       onChange(Math.min(max, Math.max(min, raw)));
     },
@@ -113,6 +125,70 @@ export const Fader: FC<FaderProps> = ({
       onPointerDown(e);
     },
     [value, onPointerDown, midiAction],
+  );
+
+  // UX-1: Click anywhere on the track groove to jump directly and start dragging
+  const handleTrackPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (midiAction && (window as any).__MIXIMIDILEARN__ && useMidiStore.getState().isLearning) {
+        e.preventDefault();
+        e.stopPropagation();
+        (window as any).__MIXIMIDILEARN__(midiAction);
+        return;
+      }
+      const rect = trackContainerRef.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const travelPx = Math.max(1, length - capLen);
+        const posPx = isVertical
+          ? rect.bottom - e.clientY - capLen / 2
+          : e.clientX - rect.left - capLen / 2;
+        const clampedNorm = Math.min(1, Math.max(0, posPx / travelPx));
+        const jumped = min + clampedNorm * (max - min);
+        valueAtDragStart.current = jumped;
+        onChange(jumped);
+      } else {
+        valueAtDragStart.current = value;
+      }
+      setIsDragging(true);
+      onPointerDown(e);
+    },
+    [midiAction, length, capLen, isVertical, min, max, value, onChange, onPointerDown],
+  );
+
+  // UX-1: Mouse wheel micro-adjustments (Shift = 4× finer)
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const range = max - min;
+      const step = range * (e.shiftKey ? 0.005 : 0.02);
+      const dir = e.deltaY < 0 ? 1 : -1;
+      onChange(Math.min(max, Math.max(min, value + dir * step)));
+    },
+    [min, max, value, onChange],
+  );
+
+  // UX-3: Full keyboard accessibility for role="slider"
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const range = max - min;
+      const step = range * (e.shiftKey ? 0.01 : 0.05);
+      let next: number | null = null;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') next = Math.min(max, value + step);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = Math.max(min, value - step);
+      else if (e.key === 'PageUp') next = Math.min(max, value + range * 0.1);
+      else if (e.key === 'PageDown') next = Math.max(min, value - range * 0.1);
+      else if (e.key === 'Home') next = min;
+      else if (e.key === 'End') next = max;
+      else if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') && resetValue !== undefined) {
+        next = resetValue;
+      }
+      if (next !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+        onChange(next);
+      }
+    },
+    [min, max, value, onChange, resetValue],
   );
 
   // ── Position calculation ─────────────────────────────────
@@ -151,7 +227,7 @@ export const Fader: FC<FaderProps> = ({
 
   return (
     <div
-      className="flex flex-col items-center gap-1 select-none touch-none"
+      className="flex flex-col items-center gap-1 select-none touch-none rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
       role="slider"
       aria-valuemin={min}
       aria-valuemax={max}
@@ -159,9 +235,17 @@ export const Fader: FC<FaderProps> = ({
       aria-label={label || (isVertical ? 'Volume fader' : 'Crossfader')}
       aria-orientation={isVertical ? 'vertical' : 'horizontal'}
       tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onWheel={handleWheel}
+      onDoubleClick={handleDoubleClick}
     >
-      {/* Fader container */}
-      <div className="relative flex items-center justify-center" style={containerStyle}>
+      {/* Fader container — clicking the track jumps directly to the clicked position */}
+      <div
+        ref={trackContainerRef}
+        className="relative flex items-center justify-center cursor-pointer"
+        style={containerStyle}
+        onPointerDown={handleTrackPointerDown}
+      >
         {/* Recessed track groove */}
         <div
           className="absolute"
@@ -224,7 +308,8 @@ export const Fader: FC<FaderProps> = ({
               ? `0 2px 6px rgba(0,0,0,0.9), 0 0 12px ${glowColor}55, 0 0 4px ${glowColor}33, inset 0 1px 0 #666, inset 0 -1px 0 #111`
               : `0 2px 4px rgba(0,0,0,0.8), 0 0 6px ${glowColor}33, inset 0 1px 0 #666, inset 0 -1px 0 #111`,
           }}
-          onPointerDown={handlePointerDown}
+          onPointerDown={(e) => { e.stopPropagation(); handlePointerDown(e); }}
+          onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(); }}
         >
           {/* Incised white indicator line — shadow above, bright below */}
           <div
