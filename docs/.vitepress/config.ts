@@ -1,5 +1,10 @@
 import { defineConfig } from 'vitepress';
 import fs from 'fs';
+import path from 'path';
+
+const pkg = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')
+);
 
 // Discover all 2-letter language codes in the docs directory
 const RTL_LANGS = new Set(['ar']);
@@ -33,18 +38,20 @@ export default defineConfig({
   // The hostname carries the base path on purpose: VitePress joins it with each
   // page's route, so without it every URL in the sitemap would point at a 404.
   sitemap: { hostname: 'https://www.mixidaw.com/' },
+  appearance: 'force-dark',
   title: 'MIXI',
-  description: 'Deterministic Audio Workstation — browser-native DJ engine with Rust/Wasm DSP, AI automixer, custom skins, and zero install.',
+  description: 'Deterministic Audio Workstation: browser-native DJ engine with Rust/Wasm stereo DSP, AI automixer, custom skins, and zero install.',
   locales,
   head: [
-    ['meta', { name: 'theme-color', content: '#050508' }],
+    ['meta', { name: 'color-scheme', content: 'dark' }],
+    ['meta', { name: 'theme-color', content: '#09090b' }],
     ['meta', { name: 'author', content: 'Fabrizio Salmi' }],
     ['link', { rel: 'canonical', href: 'https://www.mixidaw.com/' }],
     ['link', { rel: 'icon', type: 'image/png', href: '/icon-192.png' }],
     // Open Graph
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'MIXI — Deterministic Audio Workstation' }],
-    ['meta', { property: 'og:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, custom skins, MIDI, headphone cue. Zero install.' }],
+    ['meta', { property: 'og:title', content: 'MIXI · Deterministic Audio Workstation' }],
+    ['meta', { property: 'og:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm stereo DSP, AI automixer, beatmatching, custom skins, MIDI, headphone cue. Zero install.' }],
     ['meta', { property: 'og:image', content: 'https://www.mixidaw.com/screenshot-og.jpg' }],
     ['meta', { property: 'og:image:width', content: '1920' }],
     ['meta', { property: 'og:image:height', content: '1080' }],
@@ -54,8 +61,8 @@ export default defineConfig({
     ...Object.keys(LANG_LABELS).map(l => ['meta', { property: 'og:locale:alternate', content: l }] as [string, Record<string, string>]),
     // Twitter Card
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'MIXI — Deterministic Audio Workstation' }],
-    ['meta', { name: 'twitter:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm DSP, AI automixer, beatmatching, custom skins. Zero install.' }],
+    ['meta', { name: 'twitter:title', content: 'MIXI · Deterministic Audio Workstation' }],
+    ['meta', { name: 'twitter:description', content: 'Browser-native DJ engine. Dual decks, Rust/Wasm stereo DSP, AI automixer, beatmatching, custom skins. Zero install.' }],
     ['meta', { name: 'twitter:image', content: 'https://www.mixidaw.com/screenshot-og.jpg' }],
     // JSON-LD structured data
     ['script', { type: 'application/ld+json' }, JSON.stringify({
@@ -66,8 +73,8 @@ export default defineConfig({
       operatingSystem: 'Web, Windows, macOS, Linux',
       url: 'https://www.mixidaw.com/',
       image: 'https://www.mixidaw.com/screenshot-og.jpg',
-      description: 'Browser-native DJ workstation with Rust/Wasm DSP engine, AI automixer, beatmatching, and custom skins.',
-      softwareVersion: '0.5.4',
+      description: 'Browser-native DJ workstation with Rust/Wasm stereo DSP engine, AI automixer, beatmatching, and custom skins.',
+      softwareVersion: pkg.version,
       author: { '@type': 'Person', name: 'Fabrizio Salmi' },
       license: 'https://polyformproject.org/licenses/noncommercial/1.0.0/',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
@@ -114,7 +121,7 @@ export default defineConfig({
     ],
     footer: {
       message: 'Privacy &amp; legal: <a href="/privacy">/privacy</a> · Publisher: Fabrizio Salmi',
-      copyright: '© 2026 MIXI — fabrizio.salmi@gmail.com'
+      copyright: '© 2026 MIXI · fabrizio.salmi@gmail.com'
     }
   }
 });

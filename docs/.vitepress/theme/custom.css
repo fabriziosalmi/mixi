@@ -1,0 +1,970 @@
+/* ═══════════════════════════════════════════════════════════════════
+   MIXI Docs — Studio Hardware Design System
+   Dark matte surfaces, WCAG AA contrast, restrained Deck A/B accents.
+   Applies globally to both Home and /guide/* documentation pages.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* Core studio surfaces */
+  --mixi-bg: #09090b;
+  --mixi-bg-elevated: #111114;
+  --mixi-bg-surface: #16161b;
+  --mixi-border: rgba(255, 255, 255, 0.09);
+  --mixi-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Typography colors (WCAG AA+ on #09090b / #111114) */
+  --mixi-text-1: #f4f4f5;
+  --mixi-text-2: #b4b4be;
+  --mixi-text-3: #9ca3af;
+
+  /* Hardware LED accents: Deck A (Cyan) & Deck B (Orange) */
+  --mixi-cyan: #00d4ff;
+  --mixi-cyan-soft: rgba(0, 212, 255, 0.12);
+  --mixi-cyan-border: rgba(0, 212, 255, 0.36);
+  --mixi-orange: #ff6a00;
+  --mixi-orange-soft: rgba(255, 106, 0, 0.12);
+  --mixi-orange-border: rgba(255, 106, 0, 0.36);
+
+  /* Native browser UI theming */
+  accent-color: var(--mixi-cyan);
+  --mixi-scrollbar-thumb: #3f3f46;
+  --mixi-scrollbar-track: #09090b;
+  scrollbar-color: var(--mixi-scrollbar-thumb) var(--mixi-scrollbar-track);
+
+  /* VitePress theme token overrides */
+  --vp-c-bg: var(--mixi-bg);
+  --vp-c-bg-alt: #0d0d10;
+  --vp-c-bg-elv: var(--mixi-bg-elevated);
+  --vp-c-bg-soft: var(--mixi-bg-surface);
+
+  --vp-c-border: var(--mixi-border);
+  --vp-c-divider: var(--mixi-border);
+  --vp-c-gutter: var(--mixi-border);
+
+  --vp-c-text-1: var(--mixi-text-1);
+  --vp-c-text-2: var(--mixi-text-2);
+  --vp-c-text-3: var(--mixi-text-3);
+
+  --vp-c-brand-1: var(--mixi-cyan);
+  --vp-c-brand-2: #38e0ff;
+  --vp-c-brand-3: #00a8cc;
+  --vp-c-brand-soft: var(--mixi-cyan-soft);
+
+  --vp-button-brand-bg: var(--mixi-cyan);
+  --vp-button-brand-text: #050507;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-bg: #38e0ff;
+  --vp-button-brand-hover-text: #050507;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-active-bg: #00b8e0;
+
+  --vp-button-alt-bg: var(--mixi-bg-surface);
+  --vp-button-alt-text: var(--mixi-text-1);
+  --vp-button-alt-border: var(--mixi-border-strong);
+  --vp-button-alt-hover-bg: #1f1f26;
+  --vp-button-alt-hover-text: #ffffff;
+  --vp-button-alt-hover-border: rgba(255, 255, 255, 0.28);
+
+  --vp-home-hero-name-color: var(--mixi-text-1);
+  --vp-home-hero-name-background: none;
+  --vp-nav-bg-color: rgba(9, 9, 11, 0.86);
+  --vp-sidebar-bg-color: #0b0b0e;
+  --vp-code-block-bg: #0e0e12;
+  --vp-code-bg: rgba(255, 255, 255, 0.06);
+  --vp-code-color: #e4e4e7;
+}
+
+@supports not (scrollbar-color: auto) {
+  :root {
+    scrollbar-width: auto;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--mixi-scrollbar-track);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--mixi-scrollbar-thumb);
+    border-radius: 5px;
+  }
+}
+
+html,
+body {
+  background-color: var(--mixi-bg);
+  color: var(--mixi-text-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Navigation Bar ─────────────────────────────────────────────── */
+.VPNavBar {
+  border-bottom: 1px solid var(--mixi-border) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.VPNavBarTitle .title {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--mixi-text-1);
+}
+
+.mixi-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 14px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: var(--mixi-cyan-soft);
+  border: 1px solid var(--mixi-cyan-border);
+  color: var(--mixi-cyan) !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.mixi-nav-cta:hover {
+  background: var(--mixi-cyan);
+  border-color: var(--mixi-cyan);
+  color: #050507 !important;
+}
+
+@media (max-width: 767px) {
+  .mixi-nav-cta {
+    display: none;
+  }
+}
+
+/* ── Home Hero & Dual-Deck Studio Atmosphere ────────────────────── */
+.VPHome {
+  position: relative;
+  background:
+    radial-gradient(ellipse 46% 360px at 24% 120px, rgba(0, 212, 255, 0.07), transparent 72%),
+    radial-gradient(ellipse 46% 360px at 76% 120px, rgba(255, 106, 0, 0.06), transparent 72%),
+    radial-gradient(ellipse 80% 420px at 50% 620px, rgba(0, 212, 255, 0.035), transparent 75%),
+    var(--mixi-bg);
+  padding-bottom: 72px !important;
+}
+
+.VPHome::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 760px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 72% 70% at 50% 18%, #000 10%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 72% 70% at 50% 18%, #000 10%, transparent 80%);
+}
+
+.VPHome .VPHero {
+  position: relative;
+  z-index: 1;
+  padding: calc(var(--vp-nav-height, 64px) + 38px) 24px 24px !important;
+  text-align: center;
+}
+
+.VPHome .VPHero .container {
+  max-width: 960px !important;
+  margin: 0 auto;
+  justify-content: center;
+}
+
+.VPHome .VPHero .main {
+  max-width: 820px !important;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.mixi-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border-strong);
+  font-family: var(--vp-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--mixi-text-2);
+}
+
+.mixi-badge-sep {
+  color: var(--mixi-border-strong);
+}
+
+.VPHome .VPHero .heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.VPHome .VPHero .name {
+  font-size: clamp(2.85rem, 6vw, 4.6rem) !important;
+  line-height: 1.02 !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.035em !important;
+  background: linear-gradient(180deg, #ffffff 15%, #c8c8d2 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  max-width: none !important;
+  text-wrap: balance;
+}
+
+.VPHome .VPHero .text {
+  margin-top: 10px !important;
+  font-size: clamp(1.2rem, 2.4vw, 1.75rem) !important;
+  line-height: 1.25 !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.015em !important;
+  color: var(--mixi-text-2) !important;
+  max-width: 720px !important;
+  text-wrap: balance;
+}
+
+.VPHome .VPHero .tagline {
+  margin: 16px auto 0 !important;
+  font-size: 1rem !important;
+  line-height: 1.65 !important;
+  color: var(--mixi-text-2) !important;
+  max-width: 650px !important;
+  font-weight: 400 !important;
+  text-wrap: pretty;
+}
+
+.VPHome .VPHero .actions {
+  justify-content: center !important;
+  margin-top: 26px !important;
+  gap: 12px;
+}
+
+.VPHome .VPHero .VPButton {
+  border-radius: 8px !important;
+  padding: 0 22px !important;
+  line-height: 44px !important;
+  font-size: 0.92rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.VPHome .VPHero .VPButton.brand {
+  box-shadow:
+    0 0 24px rgba(0, 212, 255, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.VPHome .VPHero .VPButton.brand:hover {
+  box-shadow:
+    0 0 32px rgba(0, 212, 255, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.VPHome .VPHero .VPButton.alt {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Shared Section Wrapper for Custom Home Components ──────────── */
+.mixi-section {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Hero Showcase (Above-the-Fold Hardware Display Frame) ──────── */
+.mixi-showcase {
+  margin-top: 4px;
+  margin-bottom: 48px;
+}
+
+.mixi-showcase::before {
+  content: '';
+  position: absolute;
+  inset: -18px 40px 24px 40px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 46% 70% at 22% 45%, rgba(0, 212, 255, 0.14), transparent 72%),
+    radial-gradient(ellipse 46% 70% at 78% 45%, rgba(255, 106, 0, 0.12), transparent 72%);
+  filter: blur(44px);
+}
+
+.mixi-showcase-frame {
+  position: relative;
+  background: var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 32px 84px rgba(0, 0, 0, 0.72);
+}
+
+.mixi-showcase-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 106, 0, 0.45) 100%
+  );
+}
+
+.mixi-showcase-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #0d0d11;
+  border-bottom: 1px solid var(--mixi-border);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mixi-text-2);
+}
+
+.mixi-showcase-leds {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mixi-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.mixi-led-a {
+  background: var(--mixi-cyan);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.65);
+}
+
+.mixi-led-b {
+  background: var(--mixi-orange);
+  box-shadow: 0 0 8px rgba(255, 106, 0, 0.65);
+}
+
+.mixi-showcase-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #050507;
+}
+
+.mixi-showcase-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  background: #0c0c10;
+  border-top: 1px solid var(--mixi-border);
+  font-size: 0.78rem;
+}
+
+.mixi-trust-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--mixi-text-2);
+}
+
+.mixi-trust-sep {
+  color: var(--mixi-border-strong);
+}
+
+.mixi-showcase-launch {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--mixi-cyan) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.mixi-showcase-launch:hover {
+  color: #38e0ff !important;
+  text-decoration: underline !important;
+}
+
+/* ── Home Feature Cards ─────────────────────────────────────────── */
+.VPHome .VPFeatures {
+  padding: 8px 24px 48px !important;
+}
+
+.VPHome .VPFeatures .container {
+  max-width: 1080px !important;
+}
+
+.VPHome .VPFeatures .VPFeature {
+  position: relative;
+  background: var(--mixi-bg-elevated) !important;
+  border: 1px solid var(--mixi-border) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.VPHome .VPFeatures .item:nth-child(1) .VPFeature {
+  border-top: 2px solid var(--mixi-cyan-border) !important;
+}
+
+.VPHome .VPFeatures .item:nth-child(2) .VPFeature {
+  border-top: 2px solid var(--mixi-border-strong) !important;
+}
+
+.VPHome .VPFeatures .item:nth-child(3) .VPFeature {
+  border-top: 2px solid var(--mixi-orange-border) !important;
+}
+
+.VPHome .VPFeatures .VPFeature:hover {
+  border-color: var(--mixi-border-strong) !important;
+  background: var(--mixi-bg-surface) !important;
+}
+
+.VPHome .VPFeatures .VPFeature .title {
+  color: var(--mixi-text-1) !important;
+  font-size: 1.02rem !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em;
+}
+
+.VPHome .VPFeatures .VPFeature .details {
+  color: var(--mixi-text-2) !important;
+  font-size: 0.9rem !important;
+  line-height: 1.65 !important;
+  text-wrap: pretty;
+}
+
+/* ── Verified Specs & Interactive Signal Chain ──────────────────── */
+.mixi-specs {
+  margin-bottom: 48px;
+}
+
+.mixi-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mixi-spec-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, transparent 100%), var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border);
+  border-radius: 10px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mixi-spec-value {
+  font-family: var(--vp-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--mixi-text-1);
+}
+
+.mixi-spec-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--mixi-text-1);
+}
+
+.mixi-spec-detail {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.74rem;
+  color: var(--mixi-text-3);
+}
+
+.mixi-chain {
+  margin-top: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%), var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mixi-chain-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mixi-text-3);
+  margin-bottom: 12px;
+}
+
+.mixi-chain-hint {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--mixi-text-3);
+}
+
+.mixi-chain-nodes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mixi-chain-node {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  background: var(--mixi-bg-surface);
+  border: 1px solid var(--mixi-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.mixi-chain-node:hover {
+  border-color: var(--mixi-border-strong);
+  background: #1b1b22;
+}
+
+.mixi-chain-node:focus-visible {
+  outline: 2px solid var(--mixi-cyan);
+  outline-offset: 2px;
+}
+
+.mixi-chain-node.is-active {
+  border-color: var(--mixi-cyan-border);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.mixi-chain-node:nth-child(4).is-active {
+  border-color: var(--mixi-orange-border);
+  background: rgba(255, 106, 0, 0.06);
+}
+
+.mixi-chain-step {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.68rem;
+  color: var(--mixi-cyan);
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.mixi-chain-node:nth-child(4) .mixi-chain-step {
+  color: var(--mixi-orange);
+}
+
+.mixi-chain-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--mixi-text-1);
+  line-height: 1.3;
+}
+
+.mixi-chain-sub {
+  margin-top: 3px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  color: var(--mixi-text-3);
+}
+
+.mixi-chain-inspector {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #0b0b0e;
+  border: 1px solid var(--mixi-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  font-size: 0.84rem;
+}
+
+.mixi-inspector-tag {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--mixi-cyan);
+  white-space: nowrap;
+}
+
+.mixi-inspector-text {
+  flex: 1 1 320px;
+  color: var(--mixi-text-2);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.mixi-inspector-link {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--mixi-text-1) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.mixi-inspector-link:hover {
+  color: var(--mixi-cyan) !important;
+}
+
+/* ── Download & Install Strip ───────────────────────────────────── */
+.mixi-download {
+  margin-bottom: 48px;
+}
+
+.mixi-download-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%), var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mixi-platform-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mixi-platform-label {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mixi-text-3);
+}
+
+.mixi-platform-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mixi-plat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: 7px;
+  background: var(--mixi-bg-surface);
+  border: 1px solid var(--mixi-border);
+  color: var(--mixi-text-1) !important;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none !important;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.mixi-plat-btn:hover {
+  border-color: var(--mixi-cyan-border);
+  background: rgba(0, 212, 255, 0.06);
+  color: #ffffff !important;
+}
+
+.mixi-plat-btn.is-detected {
+  border-color: var(--mixi-border-strong);
+  background: #1c1c23;
+}
+
+.mixi-plat-btn-primary {
+  border-color: var(--mixi-cyan-border);
+  background: var(--mixi-cyan-soft);
+  color: var(--mixi-cyan) !important;
+}
+
+.mixi-plat-btn-primary:hover {
+  background: rgba(0, 212, 255, 0.2);
+}
+
+.mixi-plat-ext {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.7rem;
+  color: var(--mixi-text-3);
+}
+
+.mixi-install-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 8px;
+  background: #0a0a0d;
+  border: 1px solid var(--mixi-border);
+}
+
+.mixi-install-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  color: var(--mixi-text-1);
+  white-space: nowrap;
+}
+
+.mixi-install-prompt {
+  color: var(--mixi-cyan);
+  user-select: none;
+}
+
+.mixi-copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--mixi-border-strong);
+  background: var(--mixi-bg-surface);
+  color: var(--mixi-text-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.mixi-copy-btn:hover {
+  border-color: var(--mixi-cyan-border);
+  color: var(--mixi-cyan);
+}
+
+.mixi-copy-btn.is-copied {
+  border-color: var(--mixi-cyan);
+  background: var(--mixi-cyan-soft);
+  color: var(--mixi-cyan);
+}
+
+/* ── Release & License Manifesto ────────────────────────────────── */
+.mixi-manifesto {
+  margin-bottom: 32px;
+}
+
+.mixi-manifesto-card {
+  background:
+    radial-gradient(ellipse 60% 140px at 50% 0%, rgba(0, 212, 255, 0.045), transparent 70%),
+    var(--mixi-bg-elevated);
+  border: 1px solid var(--mixi-border);
+  border-radius: 12px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mixi-version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--mixi-bg-surface);
+  border: 1px solid var(--mixi-border-strong);
+  font-family: var(--vp-font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--mixi-text-2);
+  margin-bottom: 14px;
+}
+
+.mixi-manifesto-title {
+  margin: 0 0 12px;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--mixi-text-1);
+  border: none !important;
+  padding: 0 !important;
+  text-wrap: balance;
+}
+
+.mixi-manifesto-text {
+  max-width: 680px;
+  margin: 0 auto 24px;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  color: var(--mixi-text-2);
+  text-wrap: pretty;
+}
+
+.mixi-manifesto-text strong {
+  color: var(--mixi-text-1);
+  font-weight: 600;
+}
+
+.mixi-manifesto-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mixi-manifesto-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--mixi-border-strong);
+  background: var(--mixi-bg-surface);
+  color: var(--mixi-text-1) !important;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.mixi-manifesto-btn:hover {
+  border-color: var(--mixi-cyan-border);
+  background: var(--mixi-cyan-soft);
+  color: #ffffff !important;
+}
+
+.mixi-manifesto-btn-alt:hover {
+  border-color: var(--mixi-orange-border);
+  background: var(--mixi-orange-soft);
+}
+
+/* ── Documentation Pages (/guide/*, /BPM, /privacy) ─────────────── */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  letter-spacing: -0.02em;
+  color: var(--mixi-text-1);
+}
+
+.vp-doc div[class*="language-"] {
+  border: 1px solid var(--mixi-border);
+  border-radius: 10px;
+}
+
+.vp-doc table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp-doc tr {
+  border-top: 1px solid var(--mixi-border);
+}
+
+.vp-doc th,
+.vp-doc td {
+  border: 1px solid var(--mixi-border);
+}
+
+.VPSidebarItem.is-active > .item > .link > .text {
+  color: var(--mixi-cyan) !important;
+}
+
+/* ── Opt-in subtle hover lift only when motion is allowed ───────── */
+@media (prefers-reduced-motion: no-preference) {
+  .VPHome .VPFeatures .VPFeature,
+  .mixi-plat-btn,
+  .mixi-manifesto-btn,
+  .mixi-chain-node {
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .mixi-plat-btn:hover,
+  .mixi-manifesto-btn:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* ── Responsive Breakpoints ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mixi-specs-grid,
+  .mixi-chain-nodes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .VPHome .VPHero {
+    padding: calc(var(--vp-nav-height, 64px) + 28px) 16px 24px !important;
+  }
+
+  .mixi-hero-badge {
+    font-size: 0.66rem;
+    padding: 4px 10px;
+  }
+
+  .mixi-section {
+    padding: 0 16px;
+  }
+
+  .mixi-specs-grid,
+  .mixi-chain-nodes {
+    grid-template-columns: 1fr;
+  }
+
+  .mixi-showcase-bar {
+    font-size: 0.66rem;
+    padding: 8px 12px;
+  }
+
+  .mixi-chain-hint {
+    display: none;
+  }
+
+  .mixi-install-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mixi-copy-btn {
+    justify-content: center;
+  }
+}
