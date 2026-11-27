@@ -58,6 +58,7 @@ const DECK_FX_GATE_AMOUNT: usize = 88;
 const DECK_FX_GATE_ACTIVE: usize = 92;
 // 96 = AUTO_GAIN (JS pre-multiplies into TRIM; not read here)
 const DECK_BPM: usize = 100;
+const DECK_COLOR_MODE: usize = 104; // 0 = bypass, -1 = lowpass, +1 = highpass
 
 // Deck bases
 const DECK_A_BASE: usize = 0;
@@ -74,6 +75,9 @@ const MASTER_LIMITER_ACTIVE: usize = 280;
 const MASTER_LIMITER_THRESH: usize = 284;
 const MASTER_SIDECHAIN_DEPTH: usize = 288;
 const MASTER_SIDECHAIN_MIX: usize = 292;
+const MASTER_EQ_LOW: usize = 296;
+const MASTER_EQ_MID: usize = 300;
+const MASTER_EQ_HIGH: usize = 304;
 
 // Global
 const GLOBAL_CROSSFADER: usize = 384;
@@ -117,6 +121,7 @@ struct DeckDsp {
     eq: ThreeBandEq,
     color: Biquad,
     // FX
+    fx_flt: Biquad,
     delay: Delay,
     reverb: Reverb,
     flanger: Flanger,
@@ -127,6 +132,9 @@ struct DeckDsp {
     fader_smooth: ParamSmoother,
     // State
     last_color_freq: f32,
+    last_color_res: f32,
+    last_color_mode: i8,
+    last_fx_flt_amount: f32,
 }
 
 impl DeckDsp {
@@ -134,7 +142,9 @@ impl DeckDsp {
         Self {
             eq: ThreeBandEq::new(sr),
             color: Biquad::new(),
-            delay: Delay::new((sr * 0.5) as usize),  // max 500ms
+            fx_flt: Biquad::new(),
+            // SE-07: 2000 ms capacity supports 1.5–2 beat DJ delays at any BPM
+            delay: Delay::new((sr * 2.0) as usize),
             reverb: Reverb::new(sr),
             flanger: Flanger::new(sr),
             phaser: Phaser::new(sr),
@@ -142,6 +152,9 @@ impl DeckDsp {
             trim_smooth: ParamSmoother::new(1.0, 5.0, sr),
             fader_smooth: ParamSmoother::new(1.0, 5.0, sr),
             last_color_freq: 0.0,
+            last_color_res: 0.707,
+            last_color_mode: 0,
+            last_fx_flt_amount: -1.0,
         }
     }
 
@@ -154,7 +167,15 @@ impl DeckDsp {
         let fader_val = read_f32(params, base + DECK_FADER);
         let xfader_gain = read_f32(params, base + DECK_XFADER_GAIN);
         let color_freq = read_f32(params, base + DECK_COLOR_FREQ);
-        let _color_res = read_f32(params, base + DECK_COLOR_RES);
+        let color_res = read_f32(params, base + DECK_COLOR_RES);
+        let color_mode_f = read_f32(params, base + DECK_COLOR_MODE);
+        let color_mode: i8 = if color_mode_f < -0.5 {
+            -1
+        } else if color_mode_f > 0.5 {
+            1
+        } else {
+            0
+        };
 
         // Smoothed trim (click-free)
         let trim_target = if trim_val == 0.0 { 1.0 } else { trim_val };
@@ -165,10 +186,28 @@ impl DeckDsp {
         // process_block only while a smoothed dB is actually moving.
         self.eq.set_gains(eq_low, eq_mid, eq_high, sr);
 
-        // Update color filter
-        if color_freq != self.last_color_freq && color_freq > 20.0 {
-            self.color.set_lowpass(color_freq, 0.707, sr);
-            self.last_color_freq = color_freq;
+        // Update color filter (SE-03: supports LPF, HPF, resonance, and clean bypass)
+        let q = if color_res > 0.05 { color_res.clamp(0.1, 12.0) } else { 0.707 };
+        if color_mode == 0 {
+            if self.last_color_mode != 0 {
+                self.color.reset();
+                self.last_color_mode = 0;
+                self.last_color_freq = 0.0;
+            }
+        } else if color_freq > 20.0 {
+            if color_mode != self.last_color_mode
+                || (color_freq - self.last_color_freq).abs() > 0.1
+                || (q - self.last_color_res).abs() > 0.005
+            {
+                if color_mode < 0 {
+                    self.color.set_lowpass(color_freq, q, sr);
+                } else {
+                    self.color.set_highpass(color_freq, q, sr);
+                }
+                self.last_color_mode = color_mode;
+                self.last_color_freq = color_freq;
+                self.last_color_res = q;
+            }
         }
 
         // Process chain — smoothed trim gain
@@ -180,8 +219,31 @@ impl DeckDsp {
         // Denormal killer after EQ filters
         denormal_kill(samples);
 
-        if self.last_color_freq > 20.0 {
+        if self.last_color_mode != 0 && self.last_color_freq > 20.0 {
             self.color.process_block(samples);
+        }
+
+        // SE-09: FX Filter (bipolar sweep: 0..0.5 = LPF 20k→120Hz, 0.5..1.0 = HPF 20→8kHz)
+        if read_bool(params, base + DECK_FX_FLT_ACTIVE) {
+            let amount = read_f32(params, base + DECK_FX_FLT_AMOUNT).clamp(0.0, 1.0);
+            if amount > 0.01 {
+                if (amount - self.last_fx_flt_amount).abs() > 0.002 {
+                    if amount <= 0.5 {
+                        let t = 1.0 - amount * 2.0; // 1 → 0
+                        let freq = 120.0 * (20000.0f32 / 120.0).powf(t);
+                        self.fx_flt.set_lowpass(freq, 1.2, sr);
+                    } else {
+                        let t = (amount - 0.5) * 2.0; // 0 → 1
+                        let freq = 20.0 * (8000.0f32 / 20.0).powf(t);
+                        self.fx_flt.set_highpass(freq, 1.2, sr);
+                    }
+                    self.last_fx_flt_amount = amount;
+                }
+                self.fx_flt.process_block(samples);
+            }
+        } else if self.last_fx_flt_amount >= 0.0 {
+            self.fx_flt.reset();
+            self.last_fx_flt_amount = -1.0;
         }
 
         // FX: Delay (uses dedicated time/feedback params from ParamLayout)
@@ -247,11 +309,11 @@ impl DeckDsp {
 
 struct MasterDsp {
     gain_smooth: ParamSmoother,
+    eq: ThreeBandEq,
     filter: Biquad,
     distortion: Waveshaper,
     punch: Compressor,
     limiter: Limiter,
-    predictive: PredictiveLimiter,
     last_filter_val: f32,
     // DC Blocker state (10 Hz one-pole highpass)
     dc_x_prev: f32,
@@ -265,11 +327,11 @@ impl MasterDsp {
         let dc_coeff = 1.0 - (2.0 * std::f32::consts::PI * 10.0 / sr);
         Self {
             gain_smooth: ParamSmoother::new(1.0, 5.0, sr),
+            eq: ThreeBandEq::new(sr),
             filter: Biquad::new(),
             distortion: Waveshaper::new(),
             punch: Compressor::new(-12.0, 4.0, 5.0, 100.0, sr),
             limiter: Limiter::new(-0.5, 50.0, sr),
-            predictive: PredictiveLimiter::new(-0.3, sr),
             last_filter_val: 0.0,
             dc_x_prev: 0.0,
             dc_y_prev: 0.0,
@@ -277,22 +339,24 @@ impl MasterDsp {
         }
     }
 
-    fn process(&mut self, samples: &mut [f32], params: &[u8], sr: f32) {
+    fn process_pre_limiter(&mut self, samples: &mut [f32], params: &[u8], sr: f32) {
         let gain_val = read_f32(params, MASTER_GAIN);
+        let eq_low = read_f32(params, MASTER_EQ_LOW).clamp(-12.0, 12.0);
+        let eq_mid = read_f32(params, MASTER_EQ_MID).clamp(-12.0, 12.0);
+        let eq_high = read_f32(params, MASTER_EQ_HIGH).clamp(-12.0, 12.0);
         let filter_val = read_f32(params, MASTER_FILTER);
         let dist_amount = read_f32(params, MASTER_DISTORTION);
         let dist_active = read_bool(params, MASTER_DIST_ACTIVE);
         let punch_amount = read_f32(params, MASTER_PUNCH);
         let punch_active = read_bool(params, MASTER_PUNCH_ACTIVE);
-        let limiter_active = read_bool(params, MASTER_LIMITER_ACTIVE);
 
-        // Smoothed master gain (click-free). NOTE: do NOT force gain 0 -> 1.0;
-        // 0 is a legitimate value (panic-mute / master fader to bottom). An
-        // uninitialized/zero param bus is already rejected by the layout-version
-        // passthrough guard at the top of DspEngine::process(), so no value-based
-        // guard is needed here.
+        // Smoothed master gain (click-free)
         self.gain_smooth.set_target(gain_val);
         self.gain_smooth.apply_gain(samples);
+
+        // SE-09: Master 3-band EQ
+        self.eq.set_gains(eq_low, eq_mid, eq_high, sr);
+        self.eq.process_block(samples, sr);
 
         // Master filter (bipolar: -1 = lowpass, +1 = highpass, 0 = bypass)
         if filter_val.abs() > 0.05 {
@@ -315,29 +379,20 @@ impl MasterDsp {
             self.distortion.process_block(samples);
         }
 
-        // Punch (parallel compressor) — amount is a true dry/wet so it dials in
-        // continuously instead of jumping to a fixed +9dB makeup the instant it
-        // crosses on (which used to slam the limiter into permanent reduction).
+        // Punch (parallel compressor)
         if punch_active && punch_amount > 0.01 {
             self.punch.process_block_mix(samples, punch_amount);
         }
+    }
 
-        // Limiter: Predictive (0.2ms lookahead) + brickwall safety net
-        if limiter_active {
-            self.predictive.process_block(samples);
-            self.predictive.hard_clip(samples);
-        }
-
+    fn process_post_limiter(&mut self, samples: &mut [f32]) {
         // DC Blocker (10 Hz highpass) — protects speakers
-        // y[n] = x[n] - x[n-1] + R * y[n-1]
         for s in samples.iter_mut() {
             let x = *s;
             self.dc_y_prev = x - self.dc_x_prev + self.dc_coeff * self.dc_y_prev;
             self.dc_x_prev = x;
             *s = self.dc_y_prev;
         }
-        // Flush the DC blocker's recursive memory — it's a one-pole IIR that
-        // decays toward subnormals when the master goes silent.
         self.dc_y_prev = super::flush_denorm(self.dc_y_prev);
         self.dc_x_prev = super::flush_denorm(self.dc_x_prev);
 
@@ -349,15 +404,22 @@ impl MasterDsp {
 // ── Top-level DspEngine (exported to JS) ────────────────────
 
 pub struct DspEngine {
-    deck_a: DeckDsp,
-    deck_b: DeckDsp,
+    deck_a_l: DeckDsp,
+    deck_a_r: DeckDsp,
+    deck_b_l: DeckDsp,
+    deck_b_r: DeckDsp,
     master_l: MasterDsp,  // C2 fix: separate state per channel
     master_r: MasterDsp,
+    // SE-06: Shared stereo-linked predictive limiter (preserves L/R imaging)
+    stereo_limiter: PredictiveLimiter,
+    last_limiter_thresh: f32,
     sr: f32,
     // Pre-allocated scratch buffers — ZERO allocations in process()
-    scratch_a: Vec<f32>,
-    scratch_b: Vec<f32>,
-    // Sidechain snapshot buffers — hold post-deck copy for cross-feed.
+    scratch_a_l: Vec<f32>,
+    scratch_a_r: Vec<f32>,
+    scratch_b_l: Vec<f32>,
+    scratch_b_r: Vec<f32>,
+    // Sidechain snapshot buffers — hold post-deck mono sum for cross-feed.
     // Pre-allocated to avoid Vec::to_vec() in the audio hot path.
     sc_snap_a: Vec<f32>,
     sc_snap_b: Vec<f32>,
@@ -378,13 +440,19 @@ impl DspEngine {
     /// Create a new DSP engine for the given sample rate.
     pub fn new(sample_rate: f32) -> Self {
         Self {
-            deck_a: DeckDsp::new(sample_rate),
-            deck_b: DeckDsp::new(sample_rate),
+            deck_a_l: DeckDsp::new(sample_rate),
+            deck_a_r: DeckDsp::new(sample_rate),
+            deck_b_l: DeckDsp::new(sample_rate),
+            deck_b_r: DeckDsp::new(sample_rate),
             master_l: MasterDsp::new(sample_rate),
             master_r: MasterDsp::new(sample_rate),
+            stereo_limiter: PredictiveLimiter::new(-0.3, sample_rate),
+            last_limiter_thresh: -0.3,
             sr: sample_rate,
-            scratch_a: vec![0.0; MAX_BLOCK],
-            scratch_b: vec![0.0; MAX_BLOCK],
+            scratch_a_l: vec![0.0; MAX_BLOCK],
+            scratch_a_r: vec![0.0; MAX_BLOCK],
+            scratch_b_l: vec![0.0; MAX_BLOCK],
+            scratch_b_r: vec![0.0; MAX_BLOCK],
             sc_snap_a: vec![0.0; MAX_BLOCK],
             sc_snap_b: vec![0.0; MAX_BLOCK],
             sidechain_a_to_b: SpectralSidechainCompressor::new(sample_rate, 0.0, 0.0),
@@ -392,13 +460,109 @@ impl DspEngine {
         }
     }
 
-    /// Process one block of stereo audio.
+    /// Process one block of TRUE STEREO audio (Deck A L/R + Deck B L/R → Master L/R).
     ///
-    /// * `input_l` / `input_r` — interleaved deck A/B inputs (128 samples each)
-    /// * `output_l` / `output_r` — output buffers
-    /// * `params` — flat parameter bus (512 bytes, read-only)
-    ///
-    /// Called once per AudioWorklet quantum (128 frames).
+    /// Called once per AudioWorklet quantum (128 frames). Zero heap allocations.
+    pub fn process_stereo(
+        &mut self,
+        in_a_l: &[f32],
+        in_a_r: &[f32],
+        in_b_l: &[f32],
+        in_b_r: &[f32],
+        output_l: &mut [f32],
+        output_r: &mut [f32],
+        params: &[u8],
+    ) {
+        let len = in_a_l
+            .len()
+            .min(in_a_r.len())
+            .min(in_b_l.len())
+            .min(in_b_r.len())
+            .min(output_l.len())
+            .min(output_r.len())
+            .min(MAX_BLOCK);
+
+        // H2: Version check — passthrough if layout mismatch
+        let version = read_f32(params, PARAM_LAYOUT_VERSION_OFFSET);
+        if version != PARAM_LAYOUT_VERSION {
+            for i in 0..len {
+                output_l[i] = in_a_l[i] + in_b_l[i];
+                output_r[i] = in_a_r[i] + in_b_r[i];
+            }
+            return;
+        }
+
+        // Copy into pre-allocated scratch buffers (ZERO heap allocation)
+        self.scratch_a_l[..len].copy_from_slice(&in_a_l[..len]);
+        self.scratch_a_r[..len].copy_from_slice(&in_a_r[..len]);
+        self.deck_a_l.process(&mut self.scratch_a_l[..len], params, DECK_A_BASE, self.sr);
+        self.deck_a_r.process(&mut self.scratch_a_r[..len], params, DECK_A_BASE, self.sr);
+
+        self.scratch_b_l[..len].copy_from_slice(&in_b_l[..len]);
+        self.scratch_b_r[..len].copy_from_slice(&in_b_r[..len]);
+        self.deck_b_l.process(&mut self.scratch_b_l[..len], params, DECK_B_BASE, self.sr);
+        self.deck_b_r.process(&mut self.scratch_b_r[..len], params, DECK_B_BASE, self.sr);
+
+        // SE-10: Spectral sub-bass sidechain with unidirectional arbitration —
+        // only the deck with stronger energy triggers ducking on the other deck,
+        // preventing mutual pumping when both decks are playing.
+        {
+            let sc_depth = read_f32(params, MASTER_SIDECHAIN_DEPTH);
+            let sc_mix = read_f32(params, MASTER_SIDECHAIN_MIX);
+            if sc_depth > 0.001 && sc_mix > 0.001 {
+                let mut energy_a = 0.0f32;
+                let mut energy_b = 0.0f32;
+                for i in 0..len {
+                    let ma = 0.5 * (self.scratch_a_l[i] + self.scratch_a_r[i]);
+                    let mb = 0.5 * (self.scratch_b_l[i] + self.scratch_b_r[i]);
+                    self.sc_snap_a[i] = ma;
+                    self.sc_snap_b[i] = mb;
+                    energy_a += ma * ma;
+                    energy_b += mb * mb;
+                }
+                if energy_a >= energy_b {
+                    self.sidechain_a_to_b.set_depth(sc_depth);
+                    self.sidechain_a_to_b.set_mix(sc_mix);
+                    self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b_l[..len]);
+                    self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b_r[..len]);
+                } else {
+                    self.sidechain_b_to_a.set_depth(sc_depth);
+                    self.sidechain_b_to_a.set_mix(sc_mix);
+                    self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a_l[..len]);
+                    self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a_r[..len]);
+                }
+            }
+        }
+
+        // SE-01 fix: True stereo sum — Deck A L + Deck B L → Out L; Deck A R + Deck B R → Out R.
+        for i in 0..len {
+            output_l[i] = (self.scratch_a_l[i] + self.scratch_b_l[i]) * SUM_HEADROOM;
+            output_r[i] = (self.scratch_a_r[i] + self.scratch_b_r[i]) * SUM_HEADROOM;
+        }
+
+        // Separate master pre-limiter chain per channel (gain, 3-band EQ, filter, distortion, punch)
+        self.master_l.process_pre_limiter(&mut output_l[..len], params, self.sr);
+        self.master_r.process_pre_limiter(&mut output_r[..len], params, self.sr);
+
+        // SE-06: Stereo-linked predictive limiter (single shared GR envelope across L/R)
+        if read_bool(params, MASTER_LIMITER_ACTIVE) {
+            let thresh_db = read_f32(params, MASTER_LIMITER_THRESH);
+            if thresh_db < -0.05 && (thresh_db - self.last_limiter_thresh).abs() > 0.05 {
+                let clamped = thresh_db.clamp(-24.0, -0.1);
+                self.stereo_limiter.set_threshold_db(clamped);
+                self.last_limiter_thresh = clamped;
+            }
+            self.stereo_limiter.process_block_stereo(&mut output_l[..len], &mut output_r[..len]);
+            self.stereo_limiter.hard_clip(&mut output_l[..len]);
+            self.stereo_limiter.hard_clip(&mut output_r[..len]);
+        }
+
+        // Post-limiter DC blocker & denormal kill per channel
+        self.master_l.process_post_limiter(&mut output_l[..len]);
+        self.master_r.process_post_limiter(&mut output_r[..len]);
+    }
+
+    /// Legacy mono-per-deck entry point (kept for callers/tests passing 2 inputs).
     pub fn process(
         &mut self,
         input_l: &mut [f32],
@@ -407,103 +571,44 @@ impl DspEngine {
         output_r: &mut [f32],
         params: &[u8],
     ) {
-        let len = input_l.len().min(input_r.len()).min(output_l.len()).min(output_r.len()).min(MAX_BLOCK);
-
-        // H2: Version check — silent passthrough if layout mismatch
-        let version = read_f32(params, PARAM_LAYOUT_VERSION_OFFSET);
-        if version != PARAM_LAYOUT_VERSION {
-            // Layout mismatch — output silence to prevent garbage audio
-            for i in 0..len {
-                output_l[i] = input_l[i]; // passthrough instead of processing
-                output_r[i] = input_r[i];
-            }
-            return;
-        }
-
-        // Copy into pre-allocated scratch buffers (ZERO heap allocation)
-        self.scratch_a[..len].copy_from_slice(&input_l[..len]);
-        self.deck_a.process(&mut self.scratch_a[..len], params, DECK_A_BASE, self.sr);
-
-        self.scratch_b[..len].copy_from_slice(&input_r[..len]);
-        self.deck_b.process(&mut self.scratch_b[..len], params, DECK_B_BASE, self.sr);
-
-        // Sidechain compression: read depth/mix from param bus and apply.
-        // Uses pre-allocated sc_snap_* buffers — ZERO heap allocation.
-        {
-            let sc_depth = read_f32(params, MASTER_SIDECHAIN_DEPTH);
-            let sc_mix   = read_f32(params, MASTER_SIDECHAIN_MIX);
-
-            // Snapshot deck outputs before cross-feed mutates them.
-            self.sc_snap_a[..len].copy_from_slice(&self.scratch_a[..len]);
-            self.sc_snap_b[..len].copy_from_slice(&self.scratch_b[..len]);
-
-            self.sidechain_a_to_b.set_depth(sc_depth);
-            self.sidechain_a_to_b.set_mix(sc_mix);
-            self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b[..len]);
-
-            self.sidechain_b_to_a.set_depth(sc_depth);
-            self.sidechain_b_to_a.set_mix(sc_mix);
-            self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a[..len]);
-        }
-
-        // C1 fix: True stereo mix — deck A left, deck B right
-        // Both decks contribute to both channels (mono sources → stereo sum)
-        // but each channel gets its own master processing (C2 fix).
-        //
-        // Sum-bus headroom: two decks at full fader with the crossfader centred
-        // sum to ~1.41 (0 dBFS = 1.0). Trim by 1/√2 so that worst case lands at
-        // ~0 dBFS, giving the distortion/punch/limiter room to work instead of
-        // being slammed into permanent reduction. Make-up is the master gain.
-        for i in 0..len {
-            let mix = (self.scratch_a[i] + self.scratch_b[i]) * SUM_HEADROOM;
-            output_l[i] = mix;
-            output_r[i] = mix;
-        }
-
-        // C2 fix: Separate master chain per channel (independent state)
-        self.master_l.process(&mut output_l[..len], params, self.sr);
-        self.master_r.process(&mut output_r[..len], params, self.sr);
+        self.process_stereo(input_l, input_l, input_r, input_r, output_l, output_r, params);
     }
 
     /// Get the current limiter gain reduction in dB (for metering).
     /// Returns 0.0 when idle, negative values when limiting.
     /// Use this to drive the LIM badge intensity in the UI.
     pub fn get_limiter_gain_reduction(&self) -> f32 {
-        // Return the max GR across both channels
-        self.master_l.predictive.gain_reduction_db()
-            .min(self.master_r.predictive.gain_reduction_db())
+        self.stereo_limiter.gain_reduction_db()
     }
 
     /// Reset all DSP state (on track change, etc.)
     pub fn reset(&mut self) {
-        self.deck_a.eq.reset();
-        self.deck_a.color.reset();
-        self.deck_a.delay.reset();
-        self.deck_a.reverb.reset();
-        self.deck_a.flanger.reset();
-        self.deck_a.phaser.reset();
-        self.deck_a.gate.reset();
+        for deck in [&mut self.deck_a_l, &mut self.deck_a_r, &mut self.deck_b_l, &mut self.deck_b_r] {
+            deck.eq.reset();
+            deck.color.reset();
+            deck.fx_flt.reset();
+            deck.last_color_freq = 0.0;
+            deck.last_color_mode = 0;
+            deck.last_fx_flt_amount = -1.0;
+            deck.delay.reset();
+            deck.reverb.reset();
+            deck.flanger.reset();
+            deck.phaser.reset();
+            deck.gate.reset();
+        }
 
-        self.deck_b.eq.reset();
-        self.deck_b.color.reset();
-        self.deck_b.delay.reset();
-        self.deck_b.reverb.reset();
-        self.deck_b.flanger.reset();
-        self.deck_b.phaser.reset();
-        self.deck_b.gate.reset();
+        for master in [&mut self.master_l, &mut self.master_r] {
+            master.eq.reset();
+            master.filter.reset();
+            master.last_filter_val = 0.0;
+            master.distortion.reset();
+            master.punch.reset();
+            master.limiter.reset();
+            master.dc_x_prev = 0.0;
+            master.dc_y_prev = 0.0;
+        }
 
-        self.master_l.filter.reset();
-        self.master_l.distortion.reset();
-        self.master_l.punch.reset();
-        self.master_l.limiter.reset();
-        self.master_l.predictive.reset();
-
-        self.master_r.filter.reset();
-        self.master_r.distortion.reset();
-        self.master_r.punch.reset();
-        self.master_r.limiter.reset();
-        self.master_r.predictive.reset();
-
+        self.stereo_limiter.reset();
         self.sidechain_a_to_b.reset();
         self.sidechain_b_to_a.reset();
     }

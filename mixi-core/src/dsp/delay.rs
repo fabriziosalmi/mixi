@@ -19,12 +19,14 @@ pub fn next_power_of_2(n: usize) -> usize {
     v + 1
 }
 
-/// A simple delay line with feedback.
+/// A simple delay line with feedback and smoothed delay time.
 pub struct Delay {
     buffer: Vec<f32>,
     mask: usize,       // buffer.len() - 1, for bitmask wrapping
     write_pos: usize,
     delay_samples: f32,
+    delay_target: f32,
+    delay_initialized: bool,
     feedback: f32,
     wet: f32,
 }
@@ -39,14 +41,22 @@ impl Delay {
             mask: size - 1,
             write_pos: 0,
             delay_samples: 0.0,
+            delay_target: 0.0,
+            delay_initialized: false,
             feedback: 0.0,
             wet: 0.0,
         }
     }
 
-    /// Set delay parameters.
+    /// Set delay parameters. First call snaps delay_samples to avoid initial pitch sweep;
+    /// subsequent changes slew smoothly per-sample to prevent clicks (SE-07).
     pub fn set_params(&mut self, delay_samples: f32, feedback: f32, wet: f32) {
-        self.delay_samples = delay_samples.clamp(0.0, self.mask as f32);
+        let clamped = delay_samples.clamp(0.0, self.mask as f32);
+        self.delay_target = clamped;
+        if !self.delay_initialized {
+            self.delay_samples = clamped;
+            self.delay_initialized = true;
+        }
         self.feedback = feedback.clamp(0.0, 0.99);
         self.wet = wet.clamp(0.0, 1.0);
     }
@@ -54,18 +64,28 @@ impl Delay {
     /// Process a block of samples.
     #[inline]
     pub fn process_block(&mut self, samples: &mut [f32]) {
-        if self.delay_samples < 1.0 {
+        if self.delay_target < 1.0 && self.delay_samples < 1.0 {
             return; // bypass
         }
 
         let dry = 1.0 - self.wet;
         let mask = self.mask;
+        // One-pole delay-time slew (~15 ms @ 48 kHz) — smooth tape-like pitch glide, zero clicks
+        const DELAY_SLEW: f32 = 0.0015;
 
         for s in samples.iter_mut() {
-            // Read from delay line with linear interpolation
-            let read_back = self.delay_samples;
+            if (self.delay_target - self.delay_samples).abs() > 0.01 {
+                self.delay_samples += DELAY_SLEW * (self.delay_target - self.delay_samples);
+            } else {
+                self.delay_samples = self.delay_target;
+            }
+            // Read from delay line with linear interpolation.
+            // Target time is (write_pos - read_back), which lies between
+            // write_pos - floor(read_back) (read_pos_int) and
+            // write_pos - floor(read_back) - 1 (idx1, one sample older).
+            let read_back = self.delay_samples.max(1.0);
             let read_pos_int = (self.write_pos + mask + 1 - read_back as usize) & mask;
-            let idx1 = (read_pos_int + 1) & mask;
+            let idx1 = (read_pos_int + mask) & mask;
             let frac = read_back.fract();
             let delayed = self.buffer[read_pos_int] * (1.0 - frac) + self.buffer[idx1] * frac;
 
@@ -85,6 +105,7 @@ impl Delay {
     pub fn reset(&mut self) {
         self.buffer.fill(0.0);
         self.write_pos = 0;
+        self.delay_initialized = false;
     }
 }
 
@@ -144,5 +165,18 @@ mod tests {
         d.process_block(&mut [1.0; 64]);
         d.reset();
         assert!(d.buffer.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn test_delay_fractional_interpolation_direction() {
+        let mut d = Delay::new(64);
+        d.set_params(10.25, 0.0, 1.0);
+        let mut buf = vec![0.0f32; 20];
+        buf[0] = 1.0;
+        d.process_block(&mut buf);
+        // Delay of 10.25 samples splits the impulse: 0.75 at t=10, 0.25 at t=11 (0 at t=9).
+        assert!(buf[9].abs() < 1e-6, "Must not interpolate backward to t=9: {}", buf[9]);
+        assert!((buf[10] - 0.75).abs() < 1e-5, "Expected 0.75 at t=10, got {}", buf[10]);
+        assert!((buf[11] - 0.25).abs() < 1e-5, "Expected 0.25 at t=11, got {}", buf[11]);
     }
 }

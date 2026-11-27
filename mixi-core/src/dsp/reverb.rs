@@ -3,16 +3,13 @@
 //! Uses 4 parallel comb filters + 2 series allpass filters.
 //! Simple, efficient, and good enough for DJ use.
 //!
-//! All internal buffers use power-of-2 sizes with bitmask wrapping.
+//! All internal buffers use exact coprime lengths to preserve diffusion.
 //!
 //! Reference: Schroeder, M.R. (1961) "Natural Sounding Artificial Reverberation"
 
-use super::delay::next_power_of_2;
-
-/// Comb filter (feedback delay).
+/// Comb filter (feedback delay) with exact coprime delay length.
 struct CombFilter {
     buffer: Vec<f32>,
-    mask: usize,
     pos: usize,
     feedback: f32,
     damp: f32,
@@ -21,10 +18,9 @@ struct CombFilter {
 
 impl CombFilter {
     fn new(size: usize, feedback: f32, damp: f32) -> Self {
-        let sz = next_power_of_2(size.max(2));
+        let sz = size.max(2);
         Self {
             buffer: vec![0.0; sz],
-            mask: sz - 1,
             pos: 0,
             feedback,
             damp,
@@ -37,11 +33,14 @@ impl CombFilter {
         let output = self.buffer[self.pos];
 
         // Low-pass damping (simulates air absorption)
-        let filtered = output * (1.0 - self.damp) + self.damp_prev * self.damp;
+        let filtered = super::flush_denorm(output * (1.0 - self.damp) + self.damp_prev * self.damp);
         self.damp_prev = filtered;
 
-        self.buffer[self.pos] = input + filtered * self.feedback;
-        self.pos = (self.pos + 1) & self.mask;
+        self.buffer[self.pos] = super::flush_denorm(input + filtered * self.feedback);
+        self.pos += 1;
+        if self.pos >= self.buffer.len() {
+            self.pos = 0;
+        }
 
         output
     }
@@ -53,20 +52,18 @@ impl CombFilter {
     }
 }
 
-/// Allpass filter.
+/// Allpass filter with exact delay length.
 struct AllpassFilter {
     buffer: Vec<f32>,
-    mask: usize,
     pos: usize,
     feedback: f32,
 }
 
 impl AllpassFilter {
     fn new(size: usize, feedback: f32) -> Self {
-        let sz = next_power_of_2(size.max(2));
+        let sz = size.max(2);
         Self {
             buffer: vec![0.0; sz],
-            mask: sz - 1,
             pos: 0,
             feedback,
         }
@@ -76,8 +73,11 @@ impl AllpassFilter {
     fn tick(&mut self, input: f32) -> f32 {
         let buf_out = self.buffer[self.pos];
         let output = -input + buf_out;
-        self.buffer[self.pos] = input + buf_out * self.feedback;
-        self.pos = (self.pos + 1) & self.mask;
+        self.buffer[self.pos] = super::flush_denorm(input + buf_out * self.feedback);
+        self.pos += 1;
+        if self.pos >= self.buffer.len() {
+            self.pos = 0;
+        }
         output
     }
 
@@ -137,6 +137,9 @@ impl Reverb {
     /// Process a block of mono samples.
     #[inline]
     pub fn process_block(&mut self, samples: &mut [f32]) {
+        if samples.is_empty() {
+            return;
+        }
         let dry = 1.0 - self.wet;
 
         // Auto-sleep: check if input has energy
@@ -243,5 +246,14 @@ mod tests {
         rev.process_block(&mut silence);
         let energy: f32 = silence.iter().map(|s| s * s).sum();
         assert!(energy < 0.0001, "After reset, should be silent: {}", energy);
+    }
+
+    #[test]
+    fn test_reverb_comb_lengths_are_distinct() {
+        let rev = Reverb::new(44100.0);
+        let lengths: Vec<usize> = rev.combs.iter().map(|c| c.buffer.len()).collect();
+        assert_eq!(lengths, COMB_LENGTHS.to_vec(), "Comb lengths must stay coprime, not rounded to 2048");
+        let ap_lengths: Vec<usize> = rev.allpasses.iter().map(|a| a.buffer.len()).collect();
+        assert_eq!(ap_lengths, AP_LENGTHS.to_vec(), "Allpass lengths must remain exact");
     }
 }
