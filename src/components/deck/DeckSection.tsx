@@ -97,17 +97,21 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   useEffect(() => () => clearTimeout(ejectTimerRef.current), []);
 
   // ── BPM x2/÷2 + inline edit ───────────────────────────
+  // UX-5: Use originalBpm (native track tempo), not pitched bpm, so x2/÷2 on a
+  // pitched deck never corrupts the track's base BPM.
   const doubleBpm = useCallback(() => {
     const store = useMixiStore.getState();
     const d = store.decks[deckId];
-    const newBpm = doubleBpmHelper(d.bpm);
+    const baseBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
+    const newBpm = doubleBpmHelper(baseBpm);
     if (newBpm !== null) store.setDeckBpm(deckId, newBpm, d.firstBeatOffset);
   }, [deckId]);
 
   const halveBpm = useCallback(() => {
     const store = useMixiStore.getState();
     const d = store.decks[deckId];
-    const newBpm = halveBpmHelper(d.bpm);
+    const baseBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
+    const newBpm = halveBpmHelper(baseBpm);
     if (newBpm !== null) store.setDeckBpm(deckId, newBpm, d.firstBeatOffset);
   }, [deckId]);
 
@@ -172,6 +176,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
           <button
             type="button"
             onClick={handleEject}
+            aria-label={ejectPending ? `Confirm eject Deck ${deckId}` : `Eject Deck ${deckId}`}
             className={`shrink-0 rounded p-0.5 transition-colors ${
               ejectPending
                 ? 'text-red-400 animate-pulse'
