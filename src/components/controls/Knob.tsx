@@ -350,6 +350,18 @@ export const Knob: FC<KnobProps> = ({
           stroke="var(--brd-default)"
           strokeWidth={1}
         />
+        {/* 12 o'clock zero-detent hardware tick for bipolar knobs */}
+        {bipolar && (
+          <line
+            x1={CX}
+            y1={1.5}
+            x2={CX}
+            y2={4.5}
+            stroke={isAtCentre ? 'var(--txt-bright)' : 'var(--txt-muted)'}
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+        )}
         {/* Knob body — cylindrical with zenithal light */}
         <circle cx={CX} cy={CY} r={RADIUS} fill="var(--srf-mid)" />
         <circle
@@ -360,12 +372,12 @@ export const Knob: FC<KnobProps> = ({
           opacity={0.5}
         />
 
-        {/* Track arc (dim groove) */}
+        {/* Track arc (recessed 270° groove, clearly visible at rest) */}
         <path
           d={trackPath}
           fill="none"
-          stroke="var(--brd-subtle)"
-          strokeWidth={3.5}
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth={3.2}
           strokeLinecap="round"
         />
 

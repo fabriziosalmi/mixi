@@ -47,7 +47,7 @@ interface PlayButtonProps {
 export const NeonPlayButton: FC<PlayButtonProps> = ({
   isPlaying,
   onToggle,
-  color,
+  color: _color,
   size = 52,
   midiAction,
 }) => {
@@ -63,37 +63,43 @@ export const NeonPlayButton: FC<PlayButtonProps> = ({
     onToggle();
   };
 
+  const playRingColor = isPlaying ? 'var(--status-ok, #22c55e)' : 'rgba(74, 222, 128, 0.35)';
+
   return (
     <button
       type="button"
       onClick={handleClick}
       title={isPlaying ? 'Pause' : 'Play'}
-      className="relative rounded-full flex items-center justify-center transition-all duration-150 mixi-btn focus:outline-none"
+      aria-label={isPlaying ? 'Pause' : 'Play'}
+      aria-pressed={isPlaying}
+      className="relative rounded-full flex items-center justify-center transition-all duration-150 mixi-btn focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       style={{
         width: size,
         height: size,
         background: isPlaying
-          ? `linear-gradient(145deg, var(--srf-raised), #141414)`
-          : 'var(--srf-raised)',
-        border: `1.5px solid ${isPlaying ? `${color}88` : 'var(--srf-light)'}`,
-        boxShadow: neonShadow(color, isPlaying),
+          ? 'radial-gradient(circle at 50% 35%, #232826, #121514)'
+          : 'radial-gradient(circle at 50% 30%, #222328, #141418)',
+        border: `2px solid ${playRingColor}`,
+        boxShadow: isPlaying
+          ? 'inset 0 0 12px rgba(74, 222, 128, 0.22), 0 0 10px rgba(74, 222, 128, 0.35), 0 0 24px rgba(74, 222, 128, 0.16)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 10px rgba(0,0,0,0.65)',
       }}
     >
       <svg
         width={iconSize}
         height={iconSize}
         viewBox="0 0 24 24"
-        style={isPlaying ? { filter: `drop-shadow(0 0 4px ${color}88)` } : undefined}
+        style={isPlaying ? { filter: 'drop-shadow(0 0 5px rgba(74, 222, 128, 0.75))' } : undefined}
       >
         {isPlaying ? (
           <>
-            <rect x="5" y="3" width="5" height="18" rx="1" fill={color} />
-            <rect x="14" y="3" width="5" height="18" rx="1" fill={color} />
+            <rect x="5" y="3" width="5" height="18" rx="1" fill="var(--status-ok, #4ade80)" />
+            <rect x="14" y="3" width="5" height="18" rx="1" fill="var(--status-ok, #4ade80)" />
           </>
         ) : (
           <polygon
             points="6,3 20,12 6,21"
-            fill="var(--txt-secondary)"
+            fill="var(--txt-bright)"
             stroke="none"
           />
         )}
@@ -139,20 +145,24 @@ export const NeonSyncButton: FC<SyncButtonProps> = ({
       onClick={handleClick}
       disabled={!canSync}
       title={isSynced ? 'Unsync' : 'Sync'}
-      className="relative rounded-full flex items-center justify-center transition-all duration-150 mixi-btn disabled:opacity-20 disabled:cursor-not-allowed focus:outline-none"
+      aria-label={isSynced ? 'Unsync' : 'Sync'}
+      aria-pressed={isSynced}
+      className="relative rounded-full flex flex-col items-center justify-center gap-0.5 transition-all duration-150 mixi-btn disabled:opacity-25 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       style={{
         width: size,
         height: size,
         background: isSynced
-          ? `linear-gradient(145deg, var(--srf-raised), #141414)`
-          : 'var(--srf-raised)',
-        border: `1.5px solid ${isSynced ? `${color}88` : 'var(--srf-light)'}`,
-        boxShadow: neonShadow(color, isSynced),
+          ? 'radial-gradient(circle at 50% 35%, #23242b, #121216)'
+          : 'radial-gradient(circle at 50% 30%, #222328, #141418)',
+        border: `2px solid ${isSynced ? color : `${color}45`}`,
+        boxShadow: isSynced
+          ? neonShadow(color, true)
+          : 'inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 10px rgba(0,0,0,0.65)',
       }}
     >
       <svg
-        width={iconSize}
-        height={iconSize}
+        width={iconSize * 0.82}
+        height={iconSize * 0.82}
         viewBox="0 0 24 24"
         style={isSynced ? { filter: `drop-shadow(0 0 4px ${color}88)` } : undefined}
       >
@@ -165,13 +175,19 @@ export const NeonSyncButton: FC<SyncButtonProps> = ({
           </>
         ) : (
           <>
-            <path d="M4 12a8 8 0 0 1 14-5.3" fill="none" stroke="var(--txt-primary)" strokeWidth="2" strokeLinecap="round" />
-            <path d="M20 12a8 8 0 0 1-14 5.3" fill="none" stroke="var(--txt-primary)" strokeWidth="2" strokeLinecap="round" />
-            <polygon points="18,3 22,7 14,7" fill="none" stroke="var(--txt-primary)" strokeWidth="2" strokeLinejoin="round" />
-            <polygon points="6,21 2,17 10,17" fill="none" stroke="var(--txt-primary)" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M4 12a8 8 0 0 1 14-5.3" fill="none" stroke="var(--txt-bright)" strokeWidth="2" strokeLinecap="round" />
+            <path d="M20 12a8 8 0 0 1-14 5.3" fill="none" stroke="var(--txt-bright)" strokeWidth="2" strokeLinecap="round" />
+            <polygon points="18,3 22,7 14,7" fill="none" stroke="var(--txt-bright)" strokeWidth="2" strokeLinejoin="round" />
+            <polygon points="6,21 2,17 10,17" fill="none" stroke="var(--txt-bright)" strokeWidth="2" strokeLinejoin="round" />
           </>
         )}
       </svg>
+      <span
+        className="text-[7px] font-mono font-bold tracking-widest uppercase leading-none"
+        style={{ color: isSynced ? color : 'var(--txt-secondary)' }}
+      >
+        SYNC
+      </span>
     </button>
   );
 };

@@ -165,16 +165,24 @@ interface HudKnobProps {
 }
 
 const HudKnob: FC<HudKnobProps> = ({
-  value, min, max, onChange, color, icon, ghost, defaultValue, bipolar, iconScale, activeGlow,
+  value, min, max, onChange, color, icon, label, valueText, ghost, defaultValue, bipolar, iconScale, activeGlow,
 }) => {
   return (
     <div
       className="flex items-center gap-0.5"
-      title={`${Math.round(value * 100)}%`}
+      title={`${label}: ${valueText}`}
       style={activeGlow ? { filter: `drop-shadow(0 0 4px ${activeGlow}44)` } : undefined}
     >
-      <div style={iconScale ? { transform: `scale(${iconScale})` } : undefined}>
-        {icon}
+      <div className="flex flex-col items-center justify-center leading-none gap-0.5">
+        <div style={iconScale ? { transform: `scale(${iconScale})` } : undefined}>
+          {icon}
+        </div>
+        <span
+          className="text-[6.5px] font-mono font-bold uppercase tracking-wider select-none"
+          style={{ color: activeGlow ? color : 'var(--txt-secondary)' }}
+        >
+          {label}
+        </span>
       </div>
       <Knob
         value={value} min={min} max={max}

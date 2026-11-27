@@ -67,7 +67,7 @@ export const HudDeckInfo: FC<HudDeckInfoProps> = ({ deckId }) => {
             }
           } else {
             phaseRef.current.textContent = deck.isPlaying ? 'LIVE' : '—';
-            phaseRef.current.style.color = 'var(--txt-muted)';
+            phaseRef.current.style.color = deck.isPlaying ? color : 'var(--txt-muted)';
           }
         }
 
@@ -110,7 +110,7 @@ export const HudDeckInfo: FC<HudDeckInfoProps> = ({ deckId }) => {
     <span
       ref={bpmRef}
       className="text-[11px] font-mono font-bold tabular-nums"
-      style={{ color: 'var(--txt-secondary)', minWidth: 36 }}
+      style={{ color: 'var(--txt-bright)', minWidth: 36 }}
     >
       ---
     </span>

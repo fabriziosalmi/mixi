@@ -234,57 +234,29 @@ const GainCellB: FC<{ value: number; onChange: (v: number) => void; color: strin
   );
 };
 
-// ── Mixer row icons (rounded, tiny) ─────────────────────────
+// ── Mixer row labels (engraved hardware legends) ────────────
 
-const iconBox = {
-  display: 'flex',
-  alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-  width: 24,
-  height: 24,
-};
-
-const IcGain: FC = () => (
-  <div style={iconBox} title="Gain">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v16M8 8v8M4 11v2M16 8v8M20 11v2" stroke="var(--txt-secondary)" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  </div>
+const RowLegend: FC<{ text: string; title: string }> = ({ text, title }) => (
+  <span
+    title={title}
+    className="font-mono font-bold uppercase tracking-[0.12em] select-none text-center"
+    style={{
+      fontSize: 8,
+      lineHeight: 1,
+      minWidth: 28,
+      color: 'var(--txt-secondary)',
+      textShadow: '0 1px 0 rgba(0,0,0,0.8)',
+    }}
+  >
+    {text}
+  </span>
 );
 
-const IcHi: FC = () => (
-  <div style={iconBox} title="High EQ">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <path d="M2 12c1.5-4 3-4 4.5 0s3 4 4.5 0 3-4 4.5 0 3 4 4.5 0" stroke="var(--txt-secondary)" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  </div>
-);
-
-const IcMid: FC = () => (
-  <div style={iconBox} title="Mid EQ">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <path d="M2 12c3-5 6-5 9 0s6 5 9 0" stroke="var(--txt-secondary)" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  </div>
-);
-
-const IcLow: FC = () => (
-  <div style={iconBox} title="Low EQ">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <path d="M2 12c5-6 10-6 20 0" stroke="var(--txt-secondary)" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  </div>
-);
-
-const IcColor: FC = () => (
-  <div style={iconBox} title="Color FX">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-      <circle cx="9" cy="9" r="4" stroke="var(--txt-secondary)" strokeWidth="2.5" />
-      <circle cx="15" cy="9" r="4" stroke="var(--txt-secondary)" strokeWidth="2.5" />
-      <circle cx="12" cy="15" r="4" stroke="var(--txt-secondary)" strokeWidth="2.5" />
-    </svg>
-  </div>
-);
+const IcGain: FC = () => <RowLegend text="GAIN" title="Channel Gain (Trim)" />;
+const IcHi: FC = () => <RowLegend text="HI" title="High EQ Band" />;
+const IcMid: FC = () => <RowLegend text="MID" title="Mid EQ Band" />;
+const IcLow: FC = () => <RowLegend text="LOW" title="Low EQ Band" />;
+const IcColor: FC = () => <RowLegend text="FLT" title="Color Filter FX" />;
 
 // ── HUD Screen (tabbed: Phase Meter / Vectorscope) ─────────
 
@@ -459,10 +431,14 @@ export const MixerSection: FC = () => {
       <HpMasterStrip />
 
       {/* Crossfader */}
-      <div className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/50 px-3 py-2 border border-zinc-800/40">
+      <div
+        className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/60 px-3 py-2 border border-zinc-800/60"
+        style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
+      >
         <Fader value={crossfader} min={0} max={1} onChange={onCrossfaderChange} orientation="horizontal" length={260} color="#fff" ghost={isGhost('crossfader')} capSize={[40, 14]} midiAction={{ type: 'CROSSFADER' }} />
         <div className="flex w-full items-center justify-between px-1 mt-0.5">
           <span className="text-[11px] font-black" style={{ color: CYAN }}>A</span>
+          <span className="text-[8px] font-mono tracking-widest uppercase" style={{ color: 'var(--txt-dim)' }}>X-FADE</span>
           <span className="text-[11px] font-black" style={{ color: ORANGE }}>B</span>
         </div>
       </div>
@@ -519,20 +495,20 @@ const HpMasterStrip: FC = () => {
       {/* Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Label bar — pinned to top */}
-        <div className="flex items-center justify-around shrink-0" style={{ height: 12, background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center justify-around shrink-0" style={{ height: 15, background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           {page === 'hp' ? (
             <>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${CYAN}99` }}>CUE A</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>MIX</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>SPLIT</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_HP}88` }}>VOL</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${ORANGE}99` }}>CUE B</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: cueA ? CYAN : 'var(--txt-secondary)' }}>CUE A</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: 'var(--txt-secondary)' }}>MIX</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: splitMode ? 'var(--txt-bright)' : 'var(--txt-secondary)' }}>SPLIT</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: 'var(--txt-secondary)' }}>VOL</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: cueB ? ORANGE : 'var(--txt-secondary)' }}>CUE B</span>
             </>
           ) : (
             <>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>HI</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>MID</span>
-              <span className="flex-1 text-center text-[6px] font-bold tracking-widest uppercase" style={{ color: `${COLOR_MST}88` }}>LO</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: COLOR_MST }}>HI</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: COLOR_MST }}>MID</span>
+              <span className="flex-1 text-center text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: COLOR_MST }}>LO</span>
             </>
           )}
         </div>

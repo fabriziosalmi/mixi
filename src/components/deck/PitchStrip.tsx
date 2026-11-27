@@ -174,10 +174,10 @@ const PitchStripBase: FC<PitchStripProps> = ({
       const tickY = (1 - t) * TRACK_LEN;
       const tickW = isCenter ? 14 : (softCenter ? 6 + 4 * (1 - Math.abs(t - 0.5) * 2) : 8);
       const alpha = isCenter
-        ? 0.15
+        ? 0.38
         : softCenter
-          ? 0.04 + 0.06 * (1 - Math.abs(t - 0.5) * 2)
-          : 0.04;
+          ? 0.1 + 0.12 * (1 - Math.abs(t - 0.5) * 2)
+          : 0.12;
       result.push(
         <div
           key={i}
@@ -270,14 +270,20 @@ const PitchStripBase: FC<PitchStripProps> = ({
         }}
         title={`Key Lock: ${keyLock ? 'ON' : 'OFF'}`}
       >
-        <span
-          className="text-[7px] font-bold tracking-wider"
-          style={{
-            color: keyLock ? color : 'var(--txt-secondary)',
-          }}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={keyLock ? color : 'var(--txt-secondary)'}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
         >
-          🔒
-        </span>
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
       </button>
 
       {/* Inline pitch fader */}

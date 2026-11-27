@@ -286,15 +286,35 @@ export const Fader: FC<FaderProps> = ({
                   }
             }
           />
-          {/* Centre tick mark */}
-          <div
-            className="absolute bg-zinc-700"
-            style={
-              isVertical
-                ? { width: '100%', height: 1, top: '50%' }
-                : { height: '100%', width: 1, left: '50%' }
-            }
-          />
+          {/* Scale tick marks — subtle hardware gradations */}
+          {isVertical ? (
+            [0.08, 0.25, 0.5, 0.75, 0.92].map((pos) => (
+              <div
+                key={pos}
+                className="absolute pointer-events-none"
+                style={{
+                  width: pos === 0.5 ? 22 : 16,
+                  height: 1,
+                  top: `${pos * 100}%`,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: pos === 0.5 ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.12)',
+                }}
+              />
+            ))
+          ) : (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                height: 18,
+                width: 1.5,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(255,255,255,0.3)',
+              }}
+            />
+          )}
         </div>
 
         {/* Fader cap */}
