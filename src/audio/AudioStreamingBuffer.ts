@@ -13,6 +13,7 @@ export class AudioStreamingBuffer {
 
   // Format info
   public isWav = false;
+  public audioFormat = 1; // 1 = PCM int, 3 = IEEE float
   public duration = 0;
   public sampleRate = 44100;
   public channels = 2;
@@ -55,6 +56,7 @@ export class AudioStreamingBuffer {
         }
 
         if (fmtOffset !== -1 && this.dataSize > 0) {
+          this.audioFormat = view.getUint16(fmtOffset, true);
           this.channels = view.getUint16(fmtOffset + 2, true);
           this.sampleRate = view.getUint32(fmtOffset + 4, true);
           this.bitsPerSample = view.getUint16(fmtOffset + 14, true);
@@ -136,8 +138,8 @@ export class AudioStreamingBuffer {
       wavView.setUint32(12, 0x666d7420, false); // "fmt "
       wavView.setUint32(16, fmtSize, true);
 
-      // Copy formatting data from original if possible, otherwise write standard PCM
-      wavView.setUint16(20, 1, true); // PCM format
+      // Preserve original WAV format tag (e.g. 1 = integer PCM, 3 = IEEE float)
+      wavView.setUint16(20, this.audioFormat, true);
       wavView.setUint16(22, this.channels, true);
       wavView.setUint32(24, this.sampleRate, true);
       wavView.setUint32(28, this.sampleRate * this.channels * (this.bitsPerSample / 8), true);
@@ -152,12 +154,7 @@ export class AudioStreamingBuffer {
       // Copy PCM bytes
       new Uint8Array(wavBuffer, headerSize).set(new Uint8Array(pcmSlice));
 
-      try {
-        buffer = await this.ctx.decodeAudioData(wavBuffer);
-      } catch {
-        // Fallback: create silent buffer
-        buffer = this.ctx.createBuffer(this.channels, numFrames, this.sampleRate);
-      }
+      buffer = await this.ctx.decodeAudioData(wavBuffer);
     } else {
       // Non-WAV: Decode full track into cache on first request
       if (this.cache.has(-1)) {
@@ -165,17 +162,14 @@ export class AudioStreamingBuffer {
         return this.sliceAudioBuffer(fullBuffer, roundedStart, durationSec);
       }
 
-      try {
-        const fullBuffer = await this.ctx.decodeAudioData(this.rawData.slice(0));
-        this.cache.set(-1, fullBuffer);
-        return this.sliceAudioBuffer(fullBuffer, roundedStart, durationSec);
-      } catch {
-        buffer = this.ctx.createBuffer(
-          this.channels,
-          Math.floor(durationSec * this.sampleRate),
-          this.sampleRate
-        );
-      }
+      const fullBuffer = await this.ctx.decodeAudioData(this.rawData.slice(0));
+      // Update format metadata from the decoded buffer so missing/broken
+      // container headers never truncate the track to a fabricated duration.
+      if (fullBuffer.duration > 0) this.duration = fullBuffer.duration;
+      if (fullBuffer.sampleRate > 0) this.sampleRate = fullBuffer.sampleRate;
+      if (fullBuffer.numberOfChannels > 0) this.channels = fullBuffer.numberOfChannels;
+      this.cache.set(-1, fullBuffer);
+      return this.sliceAudioBuffer(fullBuffer, roundedStart, Math.min(durationSec, fullBuffer.duration));
     }
 
     this.cache.set(cacheKey, buffer);

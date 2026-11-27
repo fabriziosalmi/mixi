@@ -5,7 +5,13 @@
 //! envelope is applied to the slave signal. Maximum duck depth is 12 dB
 //! (gain factor 0.25) when `depth` = 1.0 and the envelope is fully open.
 
-/// Kick-triggered sidechain compressor targeting sub-bass frequencies.
+/// Kick-triggered **true spectral** sidechain compressor targeting sub-bass (<150 Hz).
+///
+/// SE-10 fix:
+/// - Sidechain detector filters the trigger signal through a 150 Hz one-pole LP
+///   before computing energy, so hi-hats/vocals/snares never trigger false ducking.
+/// - Slave signal is split into sub-bass (<150 Hz) and upper band (>150 Hz);
+///   only the sub-bass band is ducked while mids and highs stay untouched.
 pub struct SpectralSidechainCompressor {
     /// One-pole attack coefficient (per-sample).
     attack_coeff: f32,
@@ -13,7 +19,13 @@ pub struct SpectralSidechainCompressor {
     release_coeff: f32,
     /// Current gain-reduction envelope, 0.0 = no duck, 1.0 = full duck.
     envelope: f32,
-    /// Low-pass filtered energy of the sidechain signal (kick detector).
+    /// Low-pass filtered audio state for the sidechain detector (~150 Hz).
+    det_lp_state: f32,
+    /// Low-pass filtered audio state for the slave crossover (~150 Hz).
+    slave_lp_state: f32,
+    /// One-pole audio LP coefficient (~150 Hz).
+    audio_lp_alpha: f32,
+    /// Low-pass filtered energy of the sub-bass sidechain signal (kick detector).
     lp_energy: f32,
     /// LP coefficient for energy smoothing (~20 Hz cutoff).
     lp_coeff: f32,
@@ -32,22 +44,29 @@ impl SpectralSidechainCompressor {
     /// * `depth`       — duck amount 0.0..=1.0
     /// * `mix`         — wet/dry 0.0..=1.0
     ///
-    /// Defaults: attack = 3 ms, release = 80 ms, threshold = 0.35.
+    /// Defaults: attack = 3 ms, release = 80 ms, threshold = 0.35, crossover = 150 Hz.
     pub fn new(sample_rate: f32, depth: f32, mix: f32) -> Self {
+        let sr = sample_rate.max(1000.0);
         let attack_ms = 3.0_f32;
         let release_ms = 80.0_f32;
 
         // One-pole coefficient from time constant: coeff = 1 - exp(-1 / (ms * sr / 1000))
-        let attack_coeff = Self::time_to_coeff(attack_ms, sample_rate);
-        let release_coeff = 1.0 - Self::time_to_coeff(release_ms, sample_rate);
+        let attack_coeff = Self::time_to_coeff(attack_ms, sr);
+        let release_coeff = 1.0 - Self::time_to_coeff(release_ms, sr);
+
+        // Audio low-pass (~150 Hz) for sub-bass detector & slave crossover
+        let audio_lp_alpha = 1.0 - (-2.0 * std::f32::consts::PI * 150.0 / sr).exp();
 
         // LP cutoff ~20 Hz for energy smoothing
-        let lp_coeff = 1.0 - (2.0 * std::f32::consts::PI * 20.0 / sample_rate).min(1.0);
+        let lp_coeff = (-2.0 * std::f32::consts::PI * 20.0 / sr).exp();
 
         Self {
             attack_coeff,
             release_coeff,
             envelope: 0.0,
+            det_lp_state: 0.0,
+            slave_lp_state: 0.0,
+            audio_lp_alpha,
             lp_energy: 0.0,
             lp_coeff,
             threshold: 0.35,
@@ -70,35 +89,41 @@ impl SpectralSidechainCompressor {
     /// Process one block of audio.
     ///
     /// `sidechain` — the source signal used for kick detection (deck A or B).
-    /// `slave`     — the signal to apply gain reduction to (in-place).
-    ///
-    /// Both slices should have the same length; if they differ, the shorter
-    /// length is used.
+    /// `slave`     — the signal to apply sub-bass gain reduction to (in-place).
     pub fn process_block(&mut self, sidechain: &[f32], slave: &mut [f32]) {
         let len = sidechain.len().min(slave.len());
+        let alpha = self.audio_lp_alpha;
         for i in 0..len {
-            // 1. Instantaneous energy of sidechain sample
-            let energy = sidechain[i] * sidechain[i];
+            // 1. Sub-bass band extraction on sidechain trigger (~150 Hz LP)
+            self.det_lp_state += alpha * (sidechain[i] - self.det_lp_state);
+            let energy = self.det_lp_state * self.det_lp_state;
 
             // 2. Low-pass filter energy (~20 Hz, smoothed RMS proxy)
             self.lp_energy = self.lp_energy * self.lp_coeff + energy * (1.0 - self.lp_coeff);
 
             // 3. Kick detection & envelope follow
             if self.lp_energy > self.threshold * self.threshold {
-                // Attack: envelope rises toward 1.0
                 self.envelope += (1.0 - self.envelope) * self.attack_coeff;
             } else {
-                // Release: envelope decays toward 0.0
                 self.envelope *= self.release_coeff;
             }
 
-            // 4. Gain reduction: at envelope=1 and depth=1, gain = 0.25 (≈ –12 dB)
-            //    gain = 1.0 - envelope * depth * 0.75
+            // 4. Gain reduction on sub-bass band ONLY (max -12 dB → 0.25)
             let gain = 1.0 - self.envelope * self.depth * 0.75;
+            let low_gain = 1.0 - self.mix + gain * self.mix;
 
-            // 5. Wet/dry mix
-            slave[i] *= 1.0 - self.mix + gain * self.mix;
+            // 5. Split slave into sub-bass (<150 Hz) + upper band (>150 Hz)
+            let x = slave[i];
+            self.slave_lp_state += alpha * (x - self.slave_lp_state);
+            let low = self.slave_lp_state;
+            let high = x - low;
+
+            slave[i] = low * low_gain + high;
         }
+        self.det_lp_state = super::flush_denorm(self.det_lp_state);
+        self.slave_lp_state = super::flush_denorm(self.slave_lp_state);
+        self.lp_energy = super::flush_denorm(self.lp_energy);
+        self.envelope = super::flush_denorm(self.envelope);
     }
 
     /// Set the duck depth. Clamped to 0.0..=1.0.
@@ -111,9 +136,11 @@ impl SpectralSidechainCompressor {
         self.mix = mix.clamp(0.0, 1.0);
     }
 
-    /// Reset all stateful accumulators (envelope and energy follower).
+    /// Reset all stateful accumulators (envelope and filter states).
     pub fn reset(&mut self) {
         self.envelope = 0.0;
+        self.det_lp_state = 0.0;
+        self.slave_lp_state = 0.0;
         self.lp_energy = 0.0;
     }
 }
@@ -179,5 +206,28 @@ mod tests {
                 s
             );
         }
+    }
+
+    /// SE-10 break-test: a high-frequency hi-hat (8 kHz) in the sidechain must
+    /// NOT trigger the sub-bass kick detector, and a kick must NOT duck highs.
+    #[test]
+    fn test_spectral_ignores_hihat_and_preserves_highs() {
+        let mut sc = SpectralSidechainCompressor::new(SR, 1.0, 1.0);
+        let n = 2048;
+        let hihat: Vec<f32> = (0..n)
+            .map(|i| (2.0 * std::f32::consts::PI * 8000.0 * i as f32 / SR).sin() * 0.9)
+            .collect();
+        let sub_orig: Vec<f32> = (0..n)
+            .map(|i| (2.0 * std::f32::consts::PI * 60.0 * i as f32 / SR).sin() * 0.8)
+            .collect();
+        let mut sub_slave = sub_orig.clone();
+
+        sc.process_block(&hihat, &mut sub_slave);
+        let max_diff = sub_orig
+            .iter()
+            .zip(sub_slave.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(max_diff < 1e-4, "8 kHz hi-hat must not trigger sub-bass ducking, max_diff={max_diff}");
     }
 }

@@ -567,6 +567,7 @@ export const useMixiStore = create<MixiStore>()(
               playbackRate: newRate,
               bpm: effectiveBpm,
               isSynced: true,
+              activeLoop: null,
             },
             // BUG-03: Clear sync on the other deck to prevent mutual sync.
             [deck === 'A' ? 'B' : 'A']: {
@@ -617,8 +618,9 @@ export const useMixiStore = create<MixiStore>()(
         // #43: Guard — no cue setting on empty deck.
         if (!d.isTrackLoaded) return s;
         const res = useSettingsStore.getState().quantizeResolution;
+        const nativeBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
         const snapped = d.quantize
-          ? quantizeTime(time, d.bpm, d.firstBeatOffset, res)
+          ? quantizeTime(time, nativeBpm, d.firstBeatOffset, res)
           : time;
         const newCues = [...d.hotCues];
         newCues[index] = snapped;
@@ -714,8 +716,9 @@ export const useMixiStore = create<MixiStore>()(
       if (master.bpm <= 0 || slave.bpm <= 0) return;
       if (!master.isPlaying) return;
 
-      // Find the next drop on the master
-      const masterBeatPeriod = 60 / master.bpm;
+      // Find the next drop on the master (buffer time uses originalBpm)
+      const masterNativeBpm = master.originalBpm > 0 ? master.originalBpm : master.bpm;
+      const masterBeatPeriod = 60 / masterNativeBpm;
       const masterTime = engine.getCurrentTime('A');
       const masterBeat = (masterTime - master.firstBeatOffset) / masterBeatPeriod;
       const masterDropBeat = master.dropBeats.find((d) => d > masterBeat);
@@ -729,7 +732,8 @@ export const useMixiStore = create<MixiStore>()(
       const masterBeatsToGo = masterDropBeat - masterBeat;
 
       // Position slave so both drops hit at the same time
-      const slaveBeatPeriod = 60 / slave.bpm;
+      const slaveNativeBpm = slave.originalBpm > 0 ? slave.originalBpm : slave.bpm;
+      const slaveBeatPeriod = 60 / slaveNativeBpm;
       const slaveStartBeat = slaveDropBeat - masterBeatsToGo;
       const slaveStartTime = slave.firstBeatOffset + slaveStartBeat * slaveBeatPeriod;
 
@@ -748,13 +752,14 @@ export const useMixiStore = create<MixiStore>()(
       const s = get();
       const d = s.decks[deck];
       if (!d.isTrackLoaded) return;
-      if (d.bpm <= 0) return;
+      const nativeBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
+      if (nativeBpm <= 0) return;
 
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized) return;
 
       const currentTime = engine.getCurrentTime(deck);
-      const beatPeriod = 60 / d.bpm;
+      const beatPeriod = 60 / nativeBpm;
       const jumpSeconds = beats * beatPeriod;
       const newTime = Math.max(0, Math.min(d.duration, currentTime + jumpSeconds));
       engine.seek(deck, newTime);
@@ -763,9 +768,10 @@ export const useMixiStore = create<MixiStore>()(
     shiftGrid: (deck, beats) => {
       const s = get();
       const d = s.decks[deck];
-      if (!d.isTrackLoaded || d.bpm <= 0) return;
+      const nativeBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
+      if (!d.isTrackLoaded || nativeBpm <= 0) return;
 
-      const beatPeriod = 60 / d.bpm;
+      const beatPeriod = 60 / nativeBpm;
       const newOffset = d.firstBeatOffset + beats * beatPeriod;
       set((st) => ({
         decks: {
@@ -805,21 +811,24 @@ export const useMixiStore = create<MixiStore>()(
       const d = s.decks[deck];
       // #43: Guard — no transport on empty deck.
       if (!d.isTrackLoaded) return;
-      if (d.bpm <= 0) return;
+      const nativeBpm = d.originalBpm > 0 ? d.originalBpm : d.bpm;
+      if (nativeBpm <= 0) return;
 
       const engine = MixiEngine.getInstance();
       if (!engine.isInitialized) return;
 
-      const beatPeriod = 60 / d.bpm;
+      const beatPeriod = 60 / nativeBpm;
       const loopLength = beatPeriod * beats;
       const currentTime = engine.getCurrentTime(deck);
 
-      // Snap loop start to the nearest beat on the grid.
+      // Snap loop start to the nearest beat on the grid (in original buffer time).
       const res = useSettingsStore.getState().quantizeResolution;
-      const start = d.quantize
-        ? quantizeTime(currentTime, d.bpm, d.firstBeatOffset, res)
+      const rawStart = d.quantize
+        ? quantizeTime(currentTime, nativeBpm, d.firstBeatOffset, res)
         : currentTime;
-      const end = start + loopLength;
+      const start = Math.max(0, d.duration > 0 ? Math.min(rawStart, d.duration) : rawStart);
+      const end = d.duration > 0 ? Math.min(d.duration, start + loopLength) : start + loopLength;
+      if (end <= start) return;
 
       // Update store.
       const loop: LoopState = { start, end, lengthInBeats: beats };

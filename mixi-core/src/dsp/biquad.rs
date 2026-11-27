@@ -86,6 +86,8 @@ impl Biquad {
 
     /// Configure as a low-pass filter.
     pub fn set_lowpass(&mut self, freq: f32, q: f32, sr: f32) {
+        let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
+        let q = q.max(0.05);
         let w0 = 2.0 * PI * freq / sr;
         let (sin_w0, cos_w0) = (w0.sin(), w0.cos());
         let alpha = sin_w0 / (2.0 * q);
@@ -102,6 +104,8 @@ impl Biquad {
 
     /// Configure as a high-pass filter.
     pub fn set_highpass(&mut self, freq: f32, q: f32, sr: f32) {
+        let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
+        let q = q.max(0.05);
         let w0 = 2.0 * PI * freq / sr;
         let (sin_w0, cos_w0) = (w0.sin(), w0.cos());
         let alpha = sin_w0 / (2.0 * q);

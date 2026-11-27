@@ -99,16 +99,17 @@ function createDriftTracker(): DriftTracker {
   return { samples: [], writeIdx: 0, tickCounter: 0, rateCorrection: 0 };
 }
 
-/** Simple linear regression slope on a ring buffer. */
-function linearRegressionSlope(samples: number[]): number {
+/** Simple linear regression slope on a ring buffer (chronological order starting at `startIdx`). */
+export function linearRegressionSlope(samples: number[], startIdx = 0): number {
   const n = samples.length;
   if (n < 10) return 0;  // need minimum data
 
   let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
   for (let i = 0; i < n; i++) {
+    const y = samples[(startIdx + i) % n];
     sumX += i;
-    sumY += samples[i];
-    sumXY += i * samples[i];
+    sumY += y;
+    sumXY += i * y;
     sumX2 += i * i;
   }
   const denom = n * sumX2 - sumX * sumX;
@@ -441,8 +442,10 @@ class PhaseLockLoop {
     if (d.samples.length < 20) return;
 
     // Linear regression: slope = ms drift per sample interval
-    // Each sample interval = 500ms
-    const slope = linearRegressionSlope(d.samples);
+    // Each sample interval = 500ms. Once the ring buffer is full,
+    // `writeIdx` points to the oldest sample.
+    const startIdx = d.samples.length === DRIFT_BUFFER_SIZE ? d.writeIdx : 0;
+    const slope = linearRegressionSlope(d.samples, startIdx);
     const slopePerSecond = slope * (1000 / (DRIFT_SAMPLE_INTERVAL * TICK_INTERVAL_MS));
 
     if (Math.abs(slopePerSecond) > DRIFT_SLOPE_THRESHOLD) {
@@ -473,8 +476,8 @@ class PhaseLockLoop {
     const beatPeriod = 60 / masterBpm;
     const chunkDuration = beatPeriod * 2;  // 2 beats
 
-    const masterTime = engine.getCurrentTime(masterDeck);
-    const slaveTime = engine.getCurrentTime(slaveDeck);
+    const masterTime = engine.getCurrentTime(masterDeck) - engine.getSegmentStart(masterDeck);
+    const slaveTime = engine.getCurrentTime(slaveDeck) - engine.getSegmentStart(slaveDeck);
 
     const masterChunk = extractChunk(masterBuf, masterTime - chunkDuration, chunkDuration);
     const slaveChunk = extractChunk(slaveBuf, slaveTime - chunkDuration, chunkDuration);
@@ -523,8 +526,8 @@ class PhaseLockLoop {
     const beatPeriod = 60 / masterBpm;
     const chunkDuration = beatPeriod * 2;
 
-    const masterTime = engine.getCurrentTime(masterDeck);
-    const slaveTime = engine.getCurrentTime(slaveDeck);
+    const masterTime = engine.getCurrentTime(masterDeck) - engine.getSegmentStart(masterDeck);
+    const slaveTime = engine.getCurrentTime(slaveDeck) - engine.getSegmentStart(slaveDeck);
 
     const masterChunk = extractChunk(masterBuf, masterTime - chunkDuration, chunkDuration);
     const slaveChunk = extractChunk(slaveBuf, slaveTime - chunkDuration, chunkDuration);

@@ -99,6 +99,7 @@ export class MasterBus {
   readonly splitter: ChannelSplitterNode;
   readonly analyserL: AnalyserNode;
   readonly analyserR: AnalyserNode;
+  private readonly analyserSink: GainNode;
 
   // Edge-case #13: Fixed subsonic HPF to remove DC offset
   private readonly dcBlocker: BiquadFilterNode;
@@ -285,12 +286,12 @@ export class MasterBus {
     this.analyser.connect(this.splitter);
     this.splitter.connect(this.analyserL, 0);
     this.splitter.connect(this.analyserR, 1);
-    // Prevent dead-end: connect L/R analysers to a silent sink
-    const sink = ctx.createGain();
-    sink.gain.value = 0;
-    this.analyserL.connect(sink);
-    this.analyserR.connect(sink);
-    sink.connect(ctx.destination);
+    // Prevent dead-end: connect L/R analysers to a silent sink (stored so destroy() disconnects it)
+    this.analyserSink = ctx.createGain();
+    this.analyserSink.gain.value = 0;
+    this.analyserL.connect(this.analyserSink);
+    this.analyserR.connect(this.analyserSink);
+    this.analyserSink.connect(ctx.destination);
   }
 
   setVolume(value: number, ctx: AudioContext): void {
@@ -400,5 +401,6 @@ export class MasterBus {
     this.splitter.disconnect();
     this.analyserL.disconnect();
     this.analyserR.disconnect();
+    this.analyserSink.disconnect();
   }
 }

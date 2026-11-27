@@ -20,6 +20,7 @@ const LEAN_TARGET = 'mixi-dsp/target/wasm32-unknown-unknown/release/mixi_dsp.was
 const LEAN_PUBLIC = 'public/mixi_dsp.wasm';
 const REQUIRED_EXPORTS = [
   'dsp_engine_new', 'dsp_engine_free', 'dsp_process', 'dsp_engine_reset',
+  'dsp_in_a_l_ptr', 'dsp_in_a_r_ptr', 'dsp_in_b_l_ptr', 'dsp_in_b_r_ptr',
   'dsp_in_l_ptr', 'dsp_in_r_ptr', 'dsp_out_l_ptr', 'dsp_out_r_ptr',
   'dsp_param_ptr', 'dsp_limiter_gr', 'memory',
 ];

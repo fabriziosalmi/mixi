@@ -28,6 +28,7 @@ import { log } from '../../utils/logger';
 export class WasmDspBridge {
   private node: AudioWorkletNode | null = null;
   private buffers: DspSharedBuffers | null = null;
+  private meteringView: Float32Array | null = null;
   private _ready = false;
 
   get isReady(): boolean { return this._ready; }
@@ -68,6 +69,7 @@ export class WasmDspBridge {
 
       // 3. Create shared buffers
       this.buffers = createDspBuffers();
+      this.meteringView = new Float32Array(this.buffers.meteringBus);
       log.info('WasmDsp', `Shared buffers: params=${this.buffers.paramBus.byteLength}B`);
 
       // 4. Send buffers to worklet
@@ -157,10 +159,23 @@ export class WasmDspBridge {
     try { this.node.disconnect(); } catch { /* ok */ }
   }
 
+  /** Reset Rust DSP state (e.g. on deck eject). */
+  reset(): void {
+    this.node?.port.postMessage({ type: 'reset' });
+  }
+
+  /** Read real limiter gain reduction in dB from SharedArrayBuffer meteringBus[6]. */
+  getLimiterReduction(): number {
+    if (!this._ready || !this.meteringView) return 0;
+    return this.meteringView[6] ?? 0;
+  }
+
   destroy(): void {
+    try { this.node?.port.postMessage({ type: 'destroy' }); } catch { /* ok */ }
     this.disconnectAll();
     this.node = null;
     this.buffers = null;
+    this.meteringView = null;
     this._ready = false;
   }
 }

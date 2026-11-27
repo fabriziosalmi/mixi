@@ -78,6 +78,10 @@ export class DspParamWriter {
     this.bus.setFloat(deckParam(deck, DECK.COLOR_RES), res);
   }
 
+  setDeckColorMode(deck: DeckId, mode: -1 | 0 | 1): void {
+    this.bus.setFloat(deckParam(deck, DECK.COLOR_MODE), mode);
+  }
+
   setDeckCue(deck: DeckId, active: boolean): void {
     this.bus.setBool(deckParam(deck, DECK.CUE_ACTIVE), active);
   }
@@ -125,6 +129,11 @@ export class DspParamWriter {
 
   setMasterGain(gain: number): void {
     this.bus.setFloat(MASTER.GAIN, gain);
+  }
+
+  setMasterEq(band: EqBand, db: number): void {
+    const offset = band === 'low' ? MASTER.EQ_LOW : band === 'mid' ? MASTER.EQ_MID : MASTER.EQ_HIGH;
+    this.bus.setFloat(offset, db);
   }
 
   setMasterFilter(value: number): void {

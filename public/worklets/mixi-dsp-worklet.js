@@ -38,8 +38,10 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     this._memU8 = null;        // cached Uint8 view over _memory.buffer
 
     // Engine-owned buffer byte-offsets (from the dsp_*_ptr accessors)
-    this._inL = 0;
-    this._inR = 0;
+    this._inAL = 0;
+    this._inAR = 0;
+    this._inBL = 0;
+    this._inBR = 0;
     this._outL = 0;
     this._outR = 0;
     this._paramPtr = 0;
@@ -48,6 +50,22 @@ class MixiDspProcessor extends AudioWorkletProcessor {
   }
 
   async _handleMessage(data) {
+    if (data.type === 'reset') {
+      if (this.wasmReady && this._exports && this._engine && typeof this._exports.dsp_engine_reset === 'function') {
+        this._exports.dsp_engine_reset(this._engine);
+      }
+      return;
+    }
+
+    if (data.type === 'destroy') {
+      if (this._exports && this._engine && typeof this._exports.dsp_engine_free === 'function') {
+        this._exports.dsp_engine_free(this._engine);
+      }
+      this._engine = 0;
+      this.wasmReady = false;
+      return;
+    }
+
     if (data.type === 'init') {
       if (data.paramBus) {
         this.paramView = new Uint8Array(data.paramBus);
@@ -82,11 +100,13 @@ class MixiDspProcessor extends AudioWorkletProcessor {
         this._exports = ex;
         this._memory = ex.memory;
 
-        // Create the engine; cache its owned I/O buffer byte-offsets.
+        // Create the engine; cache its owned stereo I/O buffer byte-offsets.
         // `sampleRate` is a global in AudioWorkletGlobalScope.
         this._engine = ex.dsp_engine_new(sampleRate);
-        this._inL = ex.dsp_in_l_ptr(this._engine);
-        this._inR = ex.dsp_in_r_ptr(this._engine);
+        this._inAL = typeof ex.dsp_in_a_l_ptr === 'function' ? ex.dsp_in_a_l_ptr(this._engine) : ex.dsp_in_l_ptr(this._engine);
+        this._inAR = typeof ex.dsp_in_a_r_ptr === 'function' ? ex.dsp_in_a_r_ptr(this._engine) : this._inAL;
+        this._inBL = typeof ex.dsp_in_b_l_ptr === 'function' ? ex.dsp_in_b_l_ptr(this._engine) : ex.dsp_in_r_ptr(this._engine);
+        this._inBR = typeof ex.dsp_in_b_r_ptr === 'function' ? ex.dsp_in_b_r_ptr(this._engine) : this._inBL;
         this._outL = ex.dsp_out_l_ptr(this._engine);
         this._outR = ex.dsp_out_r_ptr(this._engine);
         this._paramPtr = ex.dsp_param_ptr(this._engine);
@@ -112,11 +132,13 @@ class MixiDspProcessor extends AudioWorkletProcessor {
     const outputR = output[1] || output[0];
     const len = outputL.length; // typically 128
 
-    // Get deck inputs (2-input worklet)
+    // Get true stereo deck inputs (2-input worklet: Deck A L/R, Deck B L/R)
     const deckA = inputs[0];
     const deckB = inputs[1];
     const inAL = deckA && deckA[0] ? deckA[0] : null;
+    const inAR = deckA && deckA[1] ? deckA[1] : inAL;
     const inBL = deckB && deckB[0] ? deckB[0] : null;
+    const inBR = deckB && deckB[1] ? deckB[1] : inBL;
 
     // ── Wasm DSP Processing ─────────────────────────────────
     if (this.wasmReady && this._exports && this._engine) {
@@ -131,23 +153,19 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       const mem = this._memF32;
       const memU8 = this._memU8;
 
-      // Engine-owned buffer offsets (bytes → f32 index; ptrs are 4-aligned).
-      const inLOff = this._inL / 4;
-      const inROff = this._inR / 4;
+      // Engine-owned stereo buffer offsets (bytes → f32 index; ptrs are 4-aligned).
+      const inALOff = this._inAL / 4;
+      const inAROff = this._inAR / 4;
+      const inBLOff = this._inBL / 4;
+      const inBROff = this._inBR / 4;
       const outLOff = this._outL / 4;
       const outROff = this._outR / 4;
 
-      // Deck A → in_l, Deck B → in_r.
-      if (inAL) {
-        mem.set(inAL, inLOff);
-      } else {
-        mem.fill(0, inLOff, inLOff + len);
-      }
-      if (inBL) {
-        mem.set(inBL, inROff);
-      } else {
-        mem.fill(0, inROff, inROff + len);
-      }
+      // Deck A (L/R) → in_a_l / in_a_r; Deck B (L/R) → in_b_l / in_b_r.
+      if (inAL) mem.set(inAL, inALOff); else mem.fill(0, inALOff, inALOff + len);
+      if (inAR) mem.set(inAR, inAROff); else mem.fill(0, inAROff, inAROff + len);
+      if (inBL) mem.set(inBL, inBLOff); else mem.fill(0, inBLOff, inBLOff + len);
+      if (inBR) mem.set(inBR, inBROff); else mem.fill(0, inBROff, inBROff + len);
 
       // Param bus (SharedArrayBuffer snapshot) → engine param buffer.
       // Seqlock: read into a local scratch and only promote it to lastGood when
@@ -175,22 +193,23 @@ class MixiDspProcessor extends AudioWorkletProcessor {
         }
       }
 
-      // Run the Rust DSP engine on its owned buffers (stable C ABI).
+      // Run the Rust DSP engine on its owned stereo buffers (stable C ABI).
       this._exports.dsp_process(this._engine, len);
 
-      // Copy processed output back to the worklet output.
+      // Copy processed stereo output back to the worklet output.
       outputL.set(mem.subarray(outLOff, outLOff + len));
       outputR.set(mem.subarray(outROff, outROff + len));
 
     } else {
-      // ── Passthrough mode (Wasm not ready) ───────────────────
-      // Mix both deck inputs to output (simple sum)
+      // ── Passthrough mode (Wasm not ready) — preserve true stereo ──
       if (inAL) outputL.set(inAL); else outputL.fill(0);
       if (inBL) {
         for (let i = 0; i < len; i++) outputL[i] += inBL[i];
       }
-      // Mono → stereo copy
-      outputR.set(outputL);
+      if (inAR) outputR.set(inAR); else outputR.fill(0);
+      if (inBR) {
+        for (let i = 0; i < len; i++) outputR[i] += inBR[i];
+      }
     }
 
     // ── Metering (always, regardless of Wasm state) ──────────
@@ -214,10 +233,15 @@ class MixiDspProcessor extends AudioWorkletProcessor {
       this.meteringView[4] = Math.max(peakL, peakR);
       this.meteringView[5] = Math.max(rmsL, rmsR);
 
-      const masterPeak = Math.max(peakL, peakR);
-      this.meteringView[6] = masterPeak > 0.89
-        ? -20 * Math.log10(0.89 / Math.max(masterPeak, 0.001))
-        : 0;
+      // SE-09: Read real limiter gain reduction in dB from Rust PredictiveLimiter
+      if (this.wasmReady && this._exports && this._engine && typeof this._exports.dsp_limiter_gr === 'function') {
+        this.meteringView[6] = this._exports.dsp_limiter_gr(this._engine);
+      } else {
+        const masterPeak = Math.max(peakL, peakR);
+        this.meteringView[6] = masterPeak > 0.89
+          ? -20 * Math.log10(0.89 / Math.max(masterPeak, 0.001))
+          : 0;
+      }
     }
 
     return true;

@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.20] - 2026-11-27
+
+### Fixed
+- **Wasm DSP now processes true stereo instead of collapsing to dual-mono.**
+  `mixi-dsp-worklet.js`, `LeanDsp`, and `DspEngine::process_stereo` carry all
+  four deck channels (`A_L`, `A_R`, `B_L`, `B_R`) into independent stereo deck
+  chains and stereo master output, with a stereo-linked `PredictiveLimiter`.
+- **Wasm DSP no longer squares deck trim gain.** `MixiEngine` passes unity trim
+  to the Wasm param bus because WebAudio `trimGain` already applies user trim
+  and auto-gain upstream for PFL and VU metering.
+- **ColorFX high-pass mode works in Wasm DSP.** Added `DECK.COLOR_MODE` and
+  resonance forwarding so turning ColorFX right engages a high-pass filter
+  instead of a low-pass filter, with clean bypass reset at center.
+- **Key Lock pitch shifting is block-size invariant.** `GrainPitchShift` anchors
+  each grain start pointer on grain reset, removing the 128-sample quantum
+  boundary jump.
+- **Schroeder Reverb uses exact coprime comb and allpass lengths.** Removed
+  power-of-2 rounding that collapsed all four combs to 2048 samples, and added
+  denormal flushing in feedback loops.
+- **Delay interpolation, range, and smoothing fixed.** Linear interpolation now
+  interpolates toward the older sample, buffer capacity is raised to 2000 ms,
+  and delay-time changes slew smoothly.
+- **Predictive limiter uses causal Hermite points and sample-rate-independent
+  time constants**, and `DspEngine` now supports `DECK_FX_FLT`, 3-band Master
+  EQ, limiter threshold/enable, `dsp_engine_reset` on deck eject, and real
+  limiter gain-reduction metering.
+- **Spectral sidechain filters sub-bass (<150 Hz) only**, with unidirectional
+  deck arbitration so both decks do not duck each other simultaneously.
+- **AudioWorklet hot paths avoid per-quantum and per-sample allocations.**
+  `pitch-shift-wasm-processor.js` caches its `Float32Array` Wasm memory view,
+  throttles glitch telemetry, and cleans up via explicit `destroy` messages;
+  `diode-ladder-processor.js` computes coefficients in place.
+- **Beatgrid actions use original track BPM on pitched decks.** `setAutoLoop`,
+  `beatJump`, `setHotCue`, `shiftGrid`, `alignDrops`, and synced `play()` now
+  compute buffer-time beat periods from `originalBpm`.
+- **Failed track loads no longer lock a deck permanently.** `loadTrack()` clears
+  `_loadInProgress` in a `finally` block, and `AudioStreamingBuffer` propagates
+  decode failures instead of returning silent buffers, preserves WAV format tags
+  (fixing 32-bit IEEE float WAVs), and updates duration from decoded buffers.
+- **Seek, looping past 5 minutes, PLL drift regression, and parameter smoothing
+  hardened.** `_seekLocked` stops the old source after the 5 ms fade-out, loops
+  and PLL chunks use segment-relative offsets, `syncDeck()` clears `activeLoop`
+  in the store, `linearRegressionSlope` unwraps the circular drift buffer
+  chronologically, `smoothParam` uses `cancelAndHoldAtTime`, `AudioContext`
+  uses the native hardware sample rate, and worklet URLs resolve relative to
+  `document.baseURI` for Electron `file://`.
+
 ## [0.5.19] - 2026-10-01
 
 ### Security

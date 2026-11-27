@@ -29,29 +29,6 @@ const LOOKAHEAD: usize = 9;
 const RING_SIZE: usize = 16; // >= LOOKAHEAD, power of 2
 const RING_MASK: usize = RING_SIZE - 1;
 
-/// Pre-computed cosine window for gain envelope (9 samples).
-/// `w[n] = 0.5 * (1 - cos(π * n / LOOKAHEAD))`
-/// This gives a smooth S-curve with zero derivative at boundaries.
-const fn compute_cosine_window() -> [f32; LOOKAHEAD] {
-    let mut w = [0.0f32; LOOKAHEAD];
-    let mut i = 0;
-    while i < LOOKAHEAD {
-        // Manual cosine approximation for const fn (no libm in const)
-        // cos(x) ≈ 1 - x²/2 + x⁴/24 (Taylor, good for 0..π)
-        let t = (i as f64) / (LOOKAHEAD as f64); // 0..1
-        let x = std::f64::consts::PI * t;
-        let x2 = x * x;
-        let x4 = x2 * x2;
-        let x6 = x4 * x2;
-        let cos_x = 1.0 - x2 / 2.0 + x4 / 24.0 - x6 / 720.0;
-        w[i] = (0.5 * (1.0 - cos_x)) as f32;
-        i += 1;
-    }
-    w
-}
-
-static COSINE_WINDOW: [f32; LOOKAHEAD] = compute_cosine_window();
-
 // ── Stage 2: Hermite Interpolation for True Peak Detection ──
 
 /// Estimate the true inter-sample peak using cubic Hermite interpolation.
@@ -93,13 +70,17 @@ pub struct PredictiveLimiter {
     // Stage 1: RMS Gravity Compressor
     rms_squared: f32,          // running RMS² accumulator
     rms_coeff: f32,            // smoothing coefficient (~10ms window)
+    rms_attack: f32,           // SR-independent RMS attack coeff (~45ms)
+    rms_release: f32,          // SR-independent RMS release coeff (~110ms)
     rms_gain: f32,             // current RMS-based gain reduction
 
-    // Stage 2 + 3: Lookahead ring buffer
+    // Stage 2 + 3: Lookahead ring buffers (stereo-linked: L and R share one gain envelope)
     ring: [f32; RING_SIZE],
+    ring_r: [f32; RING_SIZE],
     write_pos: usize,
     // Peak track over lookahead window
     peak_ahead: f32,
+    peak_decay: f32,           // SR-independent peak decay (~2.2ms)
 
     // Stage 4: Adaptive release
     gain_reduction: f32,       // current gain multiplier (0..1)
@@ -123,9 +104,14 @@ impl PredictiveLimiter {
         let threshold = 10.0f32.powf(threshold_db / 20.0);
         let ceiling = threshold * 0.999; // tiny margin
 
-        // RMS window: ~10ms
+        // RMS window: ~10ms (guard sr > 0)
+        let sr = sr.max(1000.0);
         let rms_window = 0.010 * sr;
         let rms_coeff = 1.0 - (-1.0 / rms_window).exp();
+        // SR-independent RMS attack (~45ms) / release (~110ms) & peak decay (~2.2ms)
+        let rms_attack = 1.0 - (-1.0 / (0.045 * sr)).exp();
+        let rms_release = 1.0 - (-1.0 / (0.110 * sr)).exp();
+        let peak_decay = (-1.0 / (0.0022 * sr)).exp();
 
         // Release: fast = 2ms, slow = 50ms
         let release_fast = (-1.0 / (0.002 * sr)).exp();
@@ -139,10 +125,14 @@ impl PredictiveLimiter {
             ceiling,
             rms_squared: 0.0,
             rms_coeff,
+            rms_attack,
+            rms_release,
             rms_gain: 1.0,
             ring: [0.0; RING_SIZE],
+            ring_r: [0.0; RING_SIZE],
             write_pos: 0,
             peak_ahead: 0.0,
+            peak_decay,
             gain_reduction: 1.0,
             // ~0.15ms attack — fast enough to catch peaks within the 0.2ms
             // lookahead, but not an instant step (which distorts bass transients).
@@ -172,10 +162,10 @@ impl PredictiveLimiter {
                 // Start gently reducing when RMS approaches threshold
                 let target_gain = (self.threshold * 0.7) / rms.max(1e-10);
                 // Slow attack for RMS (don't kill transients)
-                self.rms_gain += 0.0005 * (target_gain - self.rms_gain);
+                self.rms_gain += self.rms_attack * (target_gain - self.rms_gain);
             } else {
                 // Release back to unity
-                self.rms_gain += 0.0002 * (1.0 - self.rms_gain);
+                self.rms_gain += self.rms_release * (1.0 - self.rms_gain);
             }
             self.rms_gain = self.rms_gain.clamp(0.1, 1.0);
 
@@ -185,11 +175,13 @@ impl PredictiveLimiter {
             // Write into lookahead ring buffer
             self.ring[self.write_pos] = rms_output;
 
-            // Read 4 consecutive samples for Hermite interpolation
-            let i0 = (self.write_pos + RING_SIZE - 2) & RING_MASK;
-            let i1 = (self.write_pos + RING_SIZE - 1) & RING_MASK;
-            let i2 = self.write_pos;
-            let i3 = (self.write_pos + 1) & RING_MASK;
+            // Read 4 causal consecutive samples for Hermite interpolation
+            // (y0=t-3, y1=t-2, y2=t-1, y3=t) — never wrap forward to write_pos+1
+            // which holds the oldest (15-samples-ago) sample in the ring.
+            let i0 = (self.write_pos + RING_SIZE - 3) & RING_MASK;
+            let i1 = (self.write_pos + RING_SIZE - 2) & RING_MASK;
+            let i2 = (self.write_pos + RING_SIZE - 1) & RING_MASK;
+            let i3 = self.write_pos;
 
             let true_peak = hermite_true_peak(
                 self.ring[i0], self.ring[i1],
@@ -242,10 +234,88 @@ impl PredictiveLimiter {
             // (smoothly transitions to avoid clicks)
             *s = delayed * self.gain_reduction;
 
-            // Decay peak tracker
-            self.peak_ahead *= 0.99;
+            // Decay peak tracker (sample-rate independent)
+            self.peak_ahead *= self.peak_decay;
 
             // Advance write position
+            self.write_pos = (self.write_pos + 1) & RING_MASK;
+        }
+    }
+
+    /// Process a stereo pair with **stereo-linked** gain reduction (SE-06).
+    /// Both L and R share the same peak detector and gain envelope so transient
+    /// limiting on one channel never shifts the stereo image.
+    #[inline]
+    pub fn process_block_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
+        let len = left.len().min(right.len());
+        for i in 0..len {
+            let in_l = left[i];
+            let in_r = right[i];
+
+            // Stage 1: Stereo-linked RMS Gravity Compressor (max energy of L/R)
+            let power = 0.5 * (in_l * in_l + in_r * in_r);
+            self.rms_squared += self.rms_coeff * (power - self.rms_squared);
+            let rms = self.rms_squared.max(0.0).sqrt();
+
+            if rms > self.threshold * 0.7 {
+                let target_gain = (self.threshold * 0.7) / rms.max(1e-10);
+                self.rms_gain += self.rms_attack * (target_gain - self.rms_gain);
+            } else {
+                self.rms_gain += self.rms_release * (1.0 - self.rms_gain);
+            }
+            self.rms_gain = self.rms_gain.clamp(0.1, 1.0);
+
+            let rms_l = in_l * self.rms_gain;
+            let rms_r = in_r * self.rms_gain;
+
+            // Stage 2: Causal Hermite True Peak Detection across both channels
+            self.ring[self.write_pos] = rms_l;
+            self.ring_r[self.write_pos] = rms_r;
+
+            let i0 = (self.write_pos + RING_SIZE - 3) & RING_MASK;
+            let i1 = (self.write_pos + RING_SIZE - 2) & RING_MASK;
+            let i2 = (self.write_pos + RING_SIZE - 1) & RING_MASK;
+            let i3 = self.write_pos;
+
+            let peak_l = hermite_true_peak(self.ring[i0], self.ring[i1], self.ring[i2], self.ring[i3]);
+            let peak_r = hermite_true_peak(self.ring_r[i0], self.ring_r[i1], self.ring_r[i2], self.ring_r[i3]);
+            self.peak_ahead = self.peak_ahead.max(peak_l.max(peak_r));
+
+            // Stage 3: Read delayed stereo pair
+            let read_pos = (self.write_pos + RING_SIZE - LOOKAHEAD) & RING_MASK;
+            let del_l = self.ring[read_pos];
+            let del_r = self.ring_r[read_pos];
+
+            let target_reduction = if self.peak_ahead > self.ceiling {
+                self.ceiling / self.peak_ahead
+            } else {
+                1.0
+            };
+
+            // Stage 4: Adaptive Release (mono sum derivative)
+            let mono = 0.5 * (rms_l + rms_r);
+            let diff = (mono - self.prev_sample).abs();
+            self.prev_sample = mono;
+            let high_freq_indicator = (diff * 10.0).min(1.0);
+            self.low_energy_ratio +=
+                self.low_energy_coeff * ((1.0 - high_freq_indicator) - self.low_energy_ratio);
+
+            let release = self.release_slow * self.low_energy_ratio
+                + self.release_fast * (1.0 - self.low_energy_ratio);
+
+            if target_reduction < self.gain_reduction {
+                self.gain_reduction =
+                    self.attack * self.gain_reduction + (1.0 - self.attack) * target_reduction;
+            } else {
+                self.gain_reduction =
+                    release * self.gain_reduction + (1.0 - release) * target_reduction;
+            }
+
+            // Apply identical gain reduction to BOTH channels (stereo-linked)
+            left[i] = del_l * self.gain_reduction;
+            right[i] = del_r * self.gain_reduction;
+
+            self.peak_ahead *= self.peak_decay;
             self.write_pos = (self.write_pos + 1) & RING_MASK;
         }
     }
@@ -283,6 +353,7 @@ impl PredictiveLimiter {
 
     pub fn reset(&mut self) {
         self.ring = [0.0; RING_SIZE];
+        self.ring_r = [0.0; RING_SIZE];
         self.write_pos = 0;
         self.peak_ahead = 0.0;
         self.gain_reduction = 1.0;
@@ -403,17 +474,24 @@ mod tests {
     }
 
     #[test]
-    fn cosine_window_properties() {
-        // Window should start at 0 and end near 1
-        assert!(COSINE_WINDOW[0] < 0.01, "Window should start near 0: {}", COSINE_WINDOW[0]);
-        assert!(COSINE_WINDOW[LOOKAHEAD - 1] > 0.95,
-            "Window should end near 1: {}", COSINE_WINDOW[LOOKAHEAD - 1]);
+    fn stereo_linked_limiting_preserves_lr_balance() {
+        // SE-06 break-test: when Left peaks above threshold (1.4) and Right is
+        // below threshold (0.4), both channels must be attenuated by the SAME
+        // gain factor so stereo imaging never shifts.
+        let mut lim = PredictiveLimiter::new(-1.0, SR);
+        let mut left = vec![1.4f32; 256];
+        let mut right = vec![0.4f32; 256];
+        lim.process_block_stereo(&mut left, &mut right);
 
-        // Window should be monotonically increasing
-        for i in 1..LOOKAHEAD {
-            assert!(COSINE_WINDOW[i] >= COSINE_WINDOW[i - 1],
-                "Window should be monotonic at {i}");
-        }
+        // After lookahead + attack settle, ratio out_l / out_r must stay 1.4 / 0.4 = 3.5.
+        let ratio = left[200] / right[200];
+        assert!(
+            (ratio - 3.5).abs() < 0.05,
+            "Stereo-linked limiter must preserve L/R ratio 3.5, got {ratio} (L={}, R={})",
+            left[200],
+            right[200]
+        );
+        assert!(right[200] < 0.35, "Right channel must be attenuated alongside Left, got {}", right[200]);
     }
 
     #[test]

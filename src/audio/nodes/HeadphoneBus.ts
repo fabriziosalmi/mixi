@@ -211,6 +211,8 @@ export class HeadphoneBus {
     // Re-establish master tap (safe to call multiple times).
     masterBusOutput.connect(this.masterTapInput);
 
+    this.stereoPathGain.gain.cancelScheduledValues(now);
+    this.splitPathGain.gain.cancelScheduledValues(now);
     if (enabled) {
       // Crossfade: stereo → split
       this.stereoPathGain.gain.setValueAtTime(this.stereoPathGain.gain.value, now);

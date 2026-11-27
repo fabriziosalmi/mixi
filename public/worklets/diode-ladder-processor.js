@@ -147,21 +147,14 @@ class DiodeLadderProcessor extends AudioWorkletProcessor {
   }
 
   /**
-   * Derive filter coefficients from cutoff (Hz) and resonance (0-1).
-   * All values mathematically determined — see header derivations.
+   * Derive filter coefficients in-place from cutoff (Hz) and resonance (0-1).
+   * Zero-alloc: writes directly to _g / _k / _compGain so a-rate automation
+   * never allocates 48 000 objects/sec on the audio thread (SE-08).
    */
   computeCoefficients(cutoff, res, sr2) {
-    // g: TPT integrator gain (exact bilinear transform)
-    const g = Math.tan(Math.PI * Math.min(cutoff, sr2 * 0.45) / sr2);
-
-    // k: quadratic resonance curve for musical control
-    // k = res² · K_MAX (see derivation in header)
-    const k = res * res * K_MAX;
-
-    // compGain: √(1+k) resonance compensation (see derivation)
-    const compGain = Math.sqrt(1 + k);
-
-    return { g, k, compGain };
+    this._g = Math.tan(Math.PI * Math.min(cutoff, sr2 * 0.45) / sr2);
+    this._k = res * res * K_MAX;
+    this._compGain = Math.sqrt(1 + this._k);
   }
 
   process(inputs, outputs, parameters) {
@@ -190,10 +183,7 @@ class DiodeLadderProcessor extends AudioWorkletProcessor {
       if (fc !== this._prevCutoff || r !== this._prevRes) {
         this._prevCutoff = fc;
         this._prevRes = r;
-        const c = this.computeCoefficients(fc, r, sr2);
-        this._g = c.g;
-        this._k = c.k;
-        this._compGain = c.compGain;
+        this.computeCoefficients(fc, r, sr2);
       }
       g = this._g;
       k = this._k;
@@ -201,14 +191,14 @@ class DiodeLadderProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < N; i++) {
-      // Per-sample coefficients for automated params
+      // Per-sample coefficients for automated params (zero heap allocation)
       if (!cutoffConst || !resConst) {
         const fc = cutoffConst ? cutoffP[0] : cutoffP[i];
         const r = resConst ? resP[0] : resP[i];
-        const c = this.computeCoefficients(fc, r, sr2);
-        g = c.g;
-        k = c.k;
-        compGain = c.compGain;
+        this.computeCoefficients(fc, r, sr2);
+        g = this._g;
+        k = this._k;
+        compGain = this._compGain;
       }
 
       // Left channel: 2× oversampling (process twice per sample)

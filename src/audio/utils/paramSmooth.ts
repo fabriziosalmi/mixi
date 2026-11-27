@@ -44,7 +44,19 @@ export function smoothParam(
   // Skip if already at (or very close to) the target value.
   // Avoids redundant cancel+schedule cycles during 60fps drags.
   if (Math.abs(param.value - value) < 1e-6) return;
-  // Cancel any previously scheduled ramp so we don't fight it.
-  param.cancelScheduledValues(ctx.currentTime);
-  param.setTargetAtTime(value, ctx.currentTime, tau);
+  const now = ctx.currentTime;
+  // Hold the current interpolated value before starting the new target ramp so
+  // rapid drags never snap back to the pre-ramp intrinsic value (zipper noise).
+  if (typeof param.cancelAndHoldAtTime === 'function') {
+    try {
+      param.cancelAndHoldAtTime(now);
+    } catch {
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+    }
+  } else {
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+  }
+  param.setTargetAtTime(value, now, tau);
 }
