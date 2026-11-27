@@ -140,12 +140,14 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
     this.wasmReady = false;
     this._exports = null;
     this._memory = null;
+    this._memF32 = null;
     this._shifterL = null;
     this._shifterR = null;
     this._inPtr = 0;
     this._outPtr = 0;
     this._allocatedFrames = 0;
     this._lastProcessTime = 0;
+    this._lastGlitchReportMs = 0;
 
     // Pitch shifter state
     this.pitchRatio = 1.0;
@@ -255,8 +257,21 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
         this.pllTarget = e.data.value;
       } else if (type === 'updateOnsetOffset') {
         this.onsetOffset = e.data.value;
+      } else if (type === 'destroy') {
+        this._cleanupWasm();
       }
     };
+  }
+
+  _cleanupWasm() {
+    if (this._exports) {
+      if (this._shifterL) { this._shifterL.destroy(); this._shifterL = null; }
+      if (this._shifterR) { this._shifterR.destroy(); this._shifterR = null; }
+      if (this._inPtr) { this._exports.wasm_free(this._inPtr, this._allocatedFrames); this._inPtr = 0; }
+      if (this._outPtr) { this._exports.wasm_free(this._outPtr, this._allocatedFrames); this._outPtr = 0; }
+    }
+    this.wasmReady = false;
+    this._memF32 = null;
   }
 
   async _initWasm(source) {
@@ -302,15 +317,6 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
       this.port.postMessage({ type: 'ready' });
     } catch (err) {
       this.port.postMessage({ type: 'error', message: String(err) });
-    }
-  }
-
-  disconnectedCallback() {
-    if (this.wasmReady && this._exports) {
-      if (this._shifterL) this._shifterL.destroy();
-      if (this._shifterR) this._shifterR.destroy();
-      if (this._inPtr) this._exports.wasm_free(this._inPtr, this._allocatedFrames);
-      if (this._outPtr) this._exports.wasm_free(this._outPtr, this._allocatedFrames);
     }
   }
 
@@ -439,25 +445,32 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
       this._outPtr = this._exports.wasm_alloc(frames);
     }
 
-    // Process Left Channel
-    const wasmIn = new Float32Array(this._memory.buffer, this._inPtr, frames);
-    const wasmOut = new Float32Array(this._memory.buffer, this._outPtr, frames);
+    // Cache Float32Array view over Wasm linear memory (SE-08: zero per-quantum GC)
+    if (!this._memF32 || this._memF32.buffer !== this._memory.buffer) {
+      this._memF32 = new Float32Array(this._memory.buffer);
+    }
+    const mem = this._memF32;
+    const inOff = this._inPtr >> 2;
+    const outOff = this._outPtr >> 2;
 
-    wasmIn.set(input[0]);
+    // Process Left Channel
+    mem.set(input[0], inOff);
     this._exports.pitch_shifter_process(this._shifterL.pointer, this._inPtr, this._outPtr, frames);
-    output[0].set(wasmOut);
+    output[0].set(mem.subarray(outOff, outOff + frames));
 
     // Process Right Channel
     if (input[1] && output[1]) {
-      wasmIn.set(input[1]);
+      mem.set(input[1], inOff);
       this._exports.pitch_shifter_process(this._shifterR.pointer, this._inPtr, this._outPtr, frames);
-      output[1].set(wasmOut);
+      output[1].set(mem.subarray(outOff, outOff + frames));
     } else if (output[1]) {
       output[1].set(output[0]);
     }
 
-    const cpuDuration = nowMs() - startCpu;
-    if (cpuDuration > 2.0) {
+    const endCpu = nowMs();
+    const cpuDuration = endCpu - startCpu;
+    if (cpuDuration > 2.0 && endCpu - this._lastGlitchReportMs >= 500) {
+      this._lastGlitchReportMs = endCpu;
       this.port.postMessage({
         type: 'glitch',
         durationMs: cpuDuration,
