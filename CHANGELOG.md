@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.21] - 2026-11-27
+
+### Added
+- **Fine-tuning, scroll wheel, and keyboard controls on Knob and Fader.**
+  Holding Shift while dragging gives 4x finer precision; scroll wheel adjusts
+  values in small increments (4x finer with Shift); `role="slider"` controls
+  now support Arrow keys, PageUp/PageDown, Home/End, Backspace/Delete reset,
+  and visible keyboard focus rings.
+- **Direct track click and double-click reset on Fader.** Clicking anywhere on
+  a fader track jumps immediately and starts dragging; double-clicking resets
+  to center (horizontal) or explicit defaultValue.
+
+### Fixed
+- **EQ KILL buttons are reachable on touch devices** with accessible labels and
+  `aria-pressed` state instead of being hidden at `opacity-0` until hover.
+- **Playlist deletion no longer blocks the audio UI thread.** Replaced
+  `window.confirm` in `TrackBrowser` with a non-blocking two-click inline
+  confirmation (`DEL?` with 2.5s auto-reset).
+- **BPM x2 and /2 buttons use original track BPM** instead of pitched BPM so
+  halving or doubling on a pitched deck never corrupts `originalBpm`.
+
 ## [0.5.20] - 2026-11-27
 
 ### Fixed
