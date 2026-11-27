@@ -92,6 +92,8 @@ export const DECK = {
   AUTO_GAIN:      96,
   /** Track BPM (current/effective) — used by the beat-locked gate FX. */
   BPM:            100,
+  /** Color FX filter mode: 0 = bypass, -1 = lowpass, +1 = highpass. */
+  COLOR_MODE:     104,
 } as const;
 
 // ── Deck Base Addresses ──────────────────────────────────────
@@ -121,6 +123,16 @@ export const MASTER = {
   LIMITER_ACTIVE: 280,
   /** Limiter threshold in dB (-20..0, default -1). */
   LIMITER_THRESH: 284,
+  /** Spectral sidechain duck depth (0.0–1.0). */
+  SIDECHAIN_DEPTH: 288,
+  /** Spectral sidechain wet/dry mix (0.0–1.0). */
+  SIDECHAIN_MIX:   292,
+  /** Master 3-band EQ low shelf gain in dB (-12..+12). */
+  EQ_LOW:          296,
+  /** Master 3-band EQ mid peaking gain in dB (-12..+12). */
+  EQ_MID:          300,
+  /** Master 3-band EQ high shelf gain in dB (-12..+12). */
+  EQ_HIGH:         304,
 } as const;
 
 // ── Global Parameters ────────────────────────────────────────

@@ -156,6 +156,8 @@ export class MixiEngine {
   private _meterKeepAlive: GainNode | null = null;
   /** Wasm DSP bridge — manages AudioWorklet lifecycle. */
   private _wasmBridge: WasmDspBridge | null = null;
+  /** Master brick-wall limiter active flag (synced to both WebAudio and Wasm DSP). */
+  private _limiterEnabled = true;
 
   // ── Native Audio I/O ──────────────────────────────────────
   private _nativeOutputActive = false;
@@ -193,17 +195,17 @@ export class MixiEngine {
 
   private constructor() {}
 
-  /** Port of DeckChannel.setColorFx → (freq Hz, Q) for the Wasm color filter.
-   *  CRITICAL: colorFx===0 must map to 20000 Hz (open), NOT 0 — the Rust engine
-   *  only (re)applies the lowpass when freq>20, so writing 0 would leave a stale
-   *  narrow filter engaged and muffle/kill the signal. */
-  private colorFxToFilter(cf: number): { freq: number; q: number } {
-    if (cf === 0) return { freq: 20000, q: 0.707 };
+  /** Port of DeckChannel.setColorFx → (freq Hz, Q, mode) for the Wasm color filter.
+   *  SE-03: explicit mode (0 = bypass, -1 = lowpass, +1 = highpass) + resonance Q
+   *  so turning ColorFX right applies HPF instead of muting via 25 Hz LPF. */
+  private colorFxToFilter(cf: number): { freq: number; q: number; mode: -1 | 0 | 1 } {
+    if (cf === 0) return { freq: 20000, q: 0.707, mode: 0 };
+    const mode: -1 | 1 = cf < 0 ? -1 : 1;
     const t = cf < 0 ? 1 + cf : cf;
     const freq = 20 * Math.pow(1000, t);
     const norm = Math.log(Math.max(20, freq) / 20) / Math.log(1000);
     const taper = 1 - 0.6 * Math.pow(2 * Math.abs(norm - 0.5), 2);
-    return { freq, q: 1.5 * Math.max(0.3, taper) };
+    return { freq, q: 1.5 * Math.max(0.3, taper), mode };
   }
 
   /**
@@ -226,10 +228,13 @@ export class MixiEngine {
     try {
     // ── Master ──
     w.setMasterGain(s.master.volume);
+    w.setMasterEq('low', s.master.eq.low);
+    w.setMasterEq('mid', s.master.eq.mid);
+    w.setMasterEq('high', s.master.eq.high);
     w.setMasterFilter(s.master.filter);
     w.setMasterDistortion(s.master.distortion, s.master.distortion > 0.01);
     w.setMasterPunch(s.master.punch, s.master.punch > 0.01);
-    w.setMasterLimiter(true, -0.5);
+    w.setMasterLimiter(this._limiterEnabled, -0.5);
 
     // ── Crossfader → per-deck gains (CRITICAL: 0 = silence) ──
     const curve = s.crossfaderCurve;
@@ -243,13 +248,16 @@ export class MixiEngine {
     for (const deck of ['A', 'B'] as const) {
       const d = s.decks[deck];
       w.setDeckFader(deck, d.volume);                                   // CRITICAL — Rust cubes it
-      w.setDeckTrim(deck, this.autoGain[deck] * Math.pow(10, d.gain / 20));
+      // SE-02: WebAudio trimGain is upstream of the Wasm worklet tap (needed for
+      // PFL headphones & VU analysers), so pass unity 1.0 to Rust to avoid gain².
+      w.setDeckTrim(deck, 1.0);
       w.setDeckEq(deck, 'low', d.eq.low);                              // dB, NOT linear
       w.setDeckEq(deck, 'mid', d.eq.mid);
       w.setDeckEq(deck, 'high', d.eq.high);
-      const { freq, q } = this.colorFxToFilter(d.colorFx);
+      const { freq, q, mode } = this.colorFxToFilter(d.colorFx);
       w.setDeckColorFreq(deck, freq);
       w.setDeckColorRes(deck, q);
+      w.setDeckColorMode(deck, mode);
       w.setDeckPlaybackRate(deck, d.playbackRate);
       w.setDeckCue(deck, d.cueActive);
       w.setDeckAutoGain(deck, this.autoGain[deck]);
@@ -303,7 +311,9 @@ export class MixiEngine {
     }
 
     try {
-      this.ctx = new AudioContext({ sampleRate: 44_100, latencyHint: 'interactive' });
+      // SE-12: Let the browser pick native hardware sample rate (typically 48 kHz)
+      // instead of forcing 44.1 kHz and triggering an OS/browser resampler.
+      this.ctx = new AudioContext({ latencyHint: 'interactive' });
     } catch (err) {
       log.error('Engine', 'AudioContext creation failed — browser may have denied audio access', err);
       throw new Error(`Audio not available: ${err instanceof Error ? err.message : err}`);
@@ -518,6 +528,12 @@ export class MixiEngine {
     return this.transports[deck].buffer;
   }
 
+  /** Start time (in absolute track seconds) of the currently loaded segment buffer. */
+  getSegmentStart(deck: DeckId): number {
+    if (!this.initialized) return 0;
+    return this.transports[deck].currentSegmentStart;
+  }
+
   /** Raw AudioContext.currentTime (for clock reconciliation). */
   getAudioContextTime(): number {
     return this.initialized ? this.ctx.currentTime : 0;
@@ -608,6 +624,7 @@ export class MixiEngine {
     for (const id of ['A', 'B'] as DeckId[]) {
       this.stopSource(id);
       if (this.pitchShifters[id]) {
+        try { this.pitchShifters[id]!.port.postMessage({ type: 'destroy' }); } catch { /* ok */ }
         this.pitchShifters[id]!.disconnect();
         this.pitchShifters[id] = null;
       }
@@ -649,113 +666,117 @@ export class MixiEngine {
     // BUG-21: Increment load generation so stale async loads are discarded.
     const gen = ++this._loadGen[deck];
 
-    // Edge-case #17: Reject huge files before decodeAudioData OOMs the tab.
-    if (arrayBuffer.byteLength > MixiEngine.MAX_FILE_SIZE) {
-      setStage(null);
-      throw new Error(`File too large (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2000MB.`);
-    }
-
-    setStage('parsing format');
-
-    const streamingBuffer = new AudioStreamingBuffer(this.ctx, arrayBuffer);
     try {
-      await streamingBuffer.initialize();
-    } catch (err) {
-      setStage(null);
-      throw new Error(`Failed to parse track format: ${err}`);
-    }
-
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
-
-    setStage('decoding initial chunk');
-
-    const SEGMENT_DURATION = 300; // 5 minutes
-    const initialDuration = Math.min(streamingBuffer.duration, SEGMENT_DURATION);
-    let buffer: AudioBuffer;
-    try {
-      buffer = await streamingBuffer.decodeSegment(0, initialDuration);
-    } catch (err) {
-      setStage(null);
-      throw new Error(`Failed to decode initial chunk: ${err}`);
-    }
-
-    // BUG-21: If another load or eject happened while we were decoding, bail.
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
-
-    const transport = this.transports[deck];
-    // #2: Serialize the source swap against in-flight seek/crossfade/transition
-    // ops so a queued op can't start the *previous* track's source over the
-    // freshly-loaded one. The locked ops also bail via the loadGen/streamingBuffer
-    // guard (loadGen was bumped at the top of this method).
-    await this.runDeckExclusive(deck, async () => {
-      if (this._loadGen[deck] !== gen) return; // superseded while awaiting the lock
-      this.stopSource(deck);
-
-      // Edge-case #18: Explicitly release previous buffer for GC.
-      transport.buffer = null;
-
-      transport.streamingBuffer = streamingBuffer;
-      transport.currentSegmentStart = 0;
-      transport.currentSegmentDuration = initialDuration;
-      transport.totalDuration = streamingBuffer.duration;
-      transport.buffer = buffer;
-      transport.offset = 0;
-      transport.startedAt = 0;
-    });
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
-
-    setStage('analyzing waveform');
-
-    // Serialize analysis to avoid 6 concurrent OfflineAudioContext jobs
-    // when two tracks load simultaneously. Each analysis uses 3 offline
-    // renders, so running them in parallel saturates the CPU for 2+ seconds.
-    // 15s timeout guards against a hung OfflineAudioContext or Wasm stall —
-    // without it a deadlocked queue would block all subsequent track loads.
-    let analysis!: Awaited<ReturnType<typeof analyzeWaveform>>;
-    await (this._analysisQueue = this._analysisQueue.then(async () => {
-      const ANALYSIS_TIMEOUT_MS = 15_000;
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('analyzeWaveform timeout')), ANALYSIS_TIMEOUT_MS),
-      );
-      try {
-        analysis = await Promise.race([analyzeWaveform(streamingBuffer), timeout]);
-      } catch (err) {
-        log.warn('Engine', 'Waveform analysis timed out or failed — using safe defaults', err);
-        analysis = {
-          waveform: [], bpm: 0, firstBeatOffset: 0, bpmConfidence: 0,
-          dropBeats: [], musicalKey: '', musicalKeyName: '', peakLevel: 1,
-        } as Awaited<ReturnType<typeof analyzeWaveform>>;
+      // Edge-case #17: Reject huge files before decodeAudioData OOMs the tab.
+      if (arrayBuffer.byteLength > MixiEngine.MAX_FILE_SIZE) {
+        throw new Error(`File too large (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2000MB.`);
       }
-    }));
 
-    // BUG-21: Check generation again after second await.
-    if (this._loadGen[deck] !== gen) { this._loadInProgress[deck] = false; setStage(null); return; }
+      setStage('parsing format');
 
-    setStage('detecting BPM & key');
+      const streamingBuffer = new AudioStreamingBuffer(this.ctx, arrayBuffer);
+      try {
+        await streamingBuffer.initialize();
+      } catch (err) {
+        throw new Error(`Failed to parse track format: ${err}`);
+      }
 
-    const store = useMixiStore.getState();
-    store.setDeckWaveform(deck, analysis.waveform, transport.totalDuration);
-    store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset, analysis.bpmConfidence);
-    store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
+      if (this._loadGen[deck] !== gen) return;
 
-    setStage('setting cue point');
+      setStage('decoding initial chunk');
 
-    // ── Smart Auto-Cue: seek to first energetic downbeat ──
-    const autoCue = findAutoCuePoint(buffer, analysis.bpm, analysis.firstBeatOffset);
-    if (autoCue > 0.01) {
-      transport.offset = autoCue;
-    }
+      const SEGMENT_DURATION = 300; // 5 minutes
+      const initialDuration = Math.min(streamingBuffer.duration, SEGMENT_DURATION);
+      let buffer: AudioBuffer;
+      try {
+        buffer = await streamingBuffer.decodeSegment(0, initialDuration);
+      } catch (err) {
+        throw new Error(`Failed to decode initial chunk: ${err instanceof Error ? err.message : err}`);
+      }
 
-    // ── Auto-gain: normalise trim so all tracks peak at 0 dBFS ──
-    this.autoGain[deck] = Math.min(2.0, Math.max(0.5, 1 / analysis.peakLevel));
-    this.applyTrimGain(deck, useMixiStore.getState().decks[deck].gain);
+      // BUG-21: If another load or eject happened while we were decoding, bail.
+      if (this._loadGen[deck] !== gen) return;
 
-    this._loadInProgress[deck] = false;
-    setStage(null);
+      const transport = this.transports[deck];
+      // #2: Serialize the source swap against in-flight seek/crossfade/transition
+      // ops so a queued op can't start the *previous* track's source over the
+      // freshly-loaded one. The locked ops also bail via the loadGen/streamingBuffer
+      // guard (loadGen was bumped at the top of this method).
+      await this.runDeckExclusive(deck, async () => {
+        if (this._loadGen[deck] !== gen) return; // superseded while awaiting the lock
+        this.stopSource(deck);
 
-    // BUG-09: If the deck was playing before load, restart playback.
-    if (wasPlaying) {
-      this.play(deck);
+        // Edge-case #18: Explicitly release previous buffer for GC.
+        transport.buffer = null;
+
+        transport.streamingBuffer = streamingBuffer;
+        transport.currentSegmentStart = 0;
+        transport.currentSegmentDuration = buffer.duration;
+        transport.totalDuration = streamingBuffer.duration;
+        transport.buffer = buffer;
+        transport.offset = 0;
+        transport.startedAt = 0;
+      });
+      if (this._loadGen[deck] !== gen) return;
+
+      setStage('analyzing waveform');
+
+      // Serialize analysis to avoid 6 concurrent OfflineAudioContext jobs
+      // when two tracks load simultaneously. Each analysis uses 3 offline
+      // renders, so running them in parallel saturates the CPU for 2+ seconds.
+      // 15s timeout guards against a hung OfflineAudioContext or Wasm stall —
+      // without it a deadlocked queue would block all subsequent track loads.
+      let analysis!: Awaited<ReturnType<typeof analyzeWaveform>>;
+      await (this._analysisQueue = this._analysisQueue.then(async () => {
+        const ANALYSIS_TIMEOUT_MS = 15_000;
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('analyzeWaveform timeout')), ANALYSIS_TIMEOUT_MS),
+        );
+        try {
+          analysis = await Promise.race([analyzeWaveform(streamingBuffer), timeout]);
+        } catch (err) {
+          log.warn('Engine', 'Waveform analysis timed out or failed — using safe defaults', err);
+          analysis = {
+            waveform: [], bpm: 0, firstBeatOffset: 0, bpmConfidence: 0,
+            dropBeats: [], musicalKey: '', musicalKeyName: '', peakLevel: 1,
+          } as Awaited<ReturnType<typeof analyzeWaveform>>;
+        }
+      }));
+
+      // BUG-21: Check generation again after second await.
+      if (this._loadGen[deck] !== gen) return;
+
+      setStage('detecting BPM & key');
+
+      const store = useMixiStore.getState();
+      store.setDeckWaveform(deck, analysis.waveform, transport.totalDuration);
+      store.setDeckBpm(deck, analysis.bpm, analysis.firstBeatOffset, analysis.bpmConfidence);
+      store.setDeckAnalysis(deck, analysis.dropBeats, analysis.musicalKey);
+
+      setStage('setting cue point');
+
+      // ── Smart Auto-Cue: seek to first energetic downbeat ──
+      const autoCue = findAutoCuePoint(buffer, analysis.bpm, analysis.firstBeatOffset);
+      if (autoCue > 0.01) {
+        transport.offset = autoCue;
+      }
+
+      // ── Auto-gain: normalise trim so all tracks peak at 0 dBFS ──
+      this.autoGain[deck] = Math.min(2.0, Math.max(0.5, 1 / analysis.peakLevel));
+      this.applyTrimGain(deck, useMixiStore.getState().decks[deck].gain);
+
+      this._loadInProgress[deck] = false;
+      setStage(null);
+
+      // BUG-09: If the deck was playing before load, restart playback.
+      if (wasPlaying) {
+        this.play(deck);
+      }
+    } finally {
+      if (this._loadGen[deck] === gen) {
+        this._loadInProgress[deck] = false;
+        setStage(null);
+      }
     }
   }
 
@@ -776,18 +797,20 @@ export class MixiEngine {
     const other = store.decks[otherDeckId];
 
     if (thisDeck.isSynced && other.isPlaying) {
-      const masterBpm = other.bpm > 0 ? other.bpm : other.originalBpm;
-      const effectiveBpm = thisDeck.bpm > 0 ? thisDeck.bpm : thisDeck.originalBpm;
-      if (masterBpm > 0 && effectiveBpm > 0) {
+      // Buffer times (masterTime / transport.offset) are in ORIGINAL-track seconds,
+      // so beat periods MUST use originalBpm (not pitched bpm).
+      const masterNativeBpm = other.originalBpm > 0 ? other.originalBpm : other.bpm;
+      const thisNativeBpm = thisDeck.originalBpm > 0 ? thisDeck.originalBpm : thisDeck.bpm;
+      if (masterNativeBpm > 0 && thisNativeBpm > 0) {
         const masterTime = this.getCurrentTime(otherDeckId);
-        const masterBeatPeriod = 60 / masterBpm;
+        const masterBeatPeriod = 60 / masterNativeBpm;
         if (masterBeatPeriod > 0 && isFinite(masterBeatPeriod)) {
           // Master's fractional position within current beat (0-1)
           const masterFrac = (((masterTime - other.firstBeatOffset) / masterBeatPeriod) % 1 + 1) % 1;
 
           // This deck's current time (transport.offset because it's paused/starting) and beat period
           const thisTime = transport.offset;
-          const thisBeatPeriod = 60 / effectiveBpm;
+          const thisBeatPeriod = 60 / thisNativeBpm;
           const thisFrac = (((thisTime - thisDeck.firstBeatOffset) / thisBeatPeriod) % 1 + 1) % 1;
 
           // Phase delta
@@ -1372,9 +1395,13 @@ export class MixiEngine {
   /**
    * Read the current limiter gain reduction in dB (0 = no reduction,
    * negative = compressing). Used by MasterLedScreen.
+   * SE-09: Reads real Rust PredictiveLimiter GR when Wasm DSP is active.
    */
   getLimiterReduction(): number {
     if (!this.initialized) return 0;
+    if (this.wasmDspActive && this._wasmBridge) {
+      return this._wasmBridge.getLimiterReduction();
+    }
     return this.master.limiter.reduction;
   }
 
@@ -1385,7 +1412,9 @@ export class MixiEngine {
    */
   setLimiterEnabled(enabled: boolean): void {
     if (!this.initialized) return;
+    this._limiterEnabled = enabled;
     smoothParam(this.master.limiter.threshold, enabled ? -0.5 : 0, this.ctx);
+    this._paramWriter?.setMasterLimiter(enabled, -0.5);
   }
 
   // ── Stereo Spatializer Data ────────────────────────────────
@@ -1449,10 +1478,16 @@ export class MixiEngine {
     this._paramWriter?.setDeckFx(deck, fx, amount, active);
   }
 
-  /** BUG-13/19: Reset all FX on a deck (used by ejectDeck). */
+  /** BUG-13/19 + SE-09: Reset all FX on a deck (both WebAudio and Wasm DSP). */
   resetDeckFx(deck: DeckId): void {
     if (!this.initialized) return;
     this.channels[deck].fx.resetAllFx(this.ctx);
+    if (this._paramWriter) {
+      for (const fx of ['flt', 'dly', 'rev', 'pha', 'flg', 'gate'] as const) {
+        this._paramWriter.setDeckFx(deck, fx, 0, false);
+      }
+    }
+    this._wasmBridge?.reset();
   }
 
   /** BUG-21: Bump load generation so in-flight decodes are discarded. */
@@ -1563,12 +1598,25 @@ export class MixiEngine {
     trim.linearRampToValueAtTime(0, now + FADE);
 
     // ── Prepare new source immediately (no setTimeout jitter)
-    // It will start at the precise audio-thread time after the fade.
+    // LG-04: Stop old source at `startAt` (AFTER the 5 ms fade-out hits 0),
+    // NOT synchronously at `now`, so the waveform never cuts mid-cycle.
     const startAt = now + FADE;
+    const oldSource = transport.source;
+    const oldGain = transport.gain;
+    if (oldSource) {
+      oldSource.onended = null;
+      oldSource.loop = false;
+      try { oldSource.stop(startAt); } catch { /* already stopped */ }
+    }
+    transport.source = null;
+    transport.gain = null;
+    this._transportEpoch[deck]++;
 
-    // Stop & disconnect old source *after* the fade completes.
-    // We rely on the old source's gain being 0 at startAt.
-    this.stopSource(deck);
+    this.scheduleCleanup(() => {
+      try { oldSource?.disconnect(); } catch { /* ok */ }
+      try { if (oldSource) oldSource.buffer = null; } catch { /* ok */ }
+      try { oldGain?.disconnect(); } catch { /* ok */ }
+    }, (FADE + 0.015) * 1000);
 
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
@@ -1752,15 +1800,23 @@ export class MixiEngine {
     // (seek/cue/resume/segment) reuses them instead of the un-snapped store
     // values. Computed even while paused so the next play() picks them up.
     const buf = transport.buffer;
-    const loopStart = buf ? this.snapToZeroCrossing(buf, startTime) : startTime;
-    const loopEnd = buf ? this.snapToZeroCrossing(buf, endTime) : endTime;
-    transport.snappedLoop = { start: loopStart, end: loopEnd };
+    const segStart = transport.currentSegmentStart;
+    // LG-06: Buffer positions are relative to currentSegmentStart; snap in
+    // buffer-relative time and store absolute track times in snappedLoop.
+    const relStart = Math.max(0, startTime - segStart);
+    const relEnd = Math.max(relStart, endTime - segStart);
+    const snappedRelStart = buf ? this.snapToZeroCrossing(buf, relStart) : relStart;
+    const snappedRelEnd = buf ? this.snapToZeroCrossing(buf, relEnd) : relEnd;
+    transport.snappedLoop = {
+      start: segStart + snappedRelStart,
+      end: segStart + snappedRelEnd,
+    };
 
     if (!transport.source) return;
 
     transport.source.loop = true;
-    transport.source.loopStart = loopStart;
-    transport.source.loopEnd = loopEnd;
+    transport.source.loopStart = snappedRelStart;
+    transport.source.loopEnd = snappedRelEnd;
     this.updateWorkletLoopState(deck);
 
     const currentPos = this.getCurrentTime(deck);
@@ -1778,12 +1834,20 @@ export class MixiEngine {
     this.updateWorkletLoopState(deck);
   }
 
-  /** Resolve the loop bounds to apply on a source rebuild: the snapped bounds
-   *  if present (#13), else the store's logical activeLoop. */
+  /** Resolve segment-relative loop bounds to apply on a source rebuild:
+   *  uses snapped bounds if present (#13), else the store's logical activeLoop,
+   *  converted from absolute track seconds to currentSegmentStart-relative seconds (LG-06). */
   private resolveLoopBounds(deck: DeckId): { start: number; end: number } | null {
     const active = useMixiStore.getState().decks[deck].activeLoop;
     if (!active) return null;
-    return this.transports[deck].snappedLoop ?? active;
+    const transport = this.transports[deck];
+    const abs = transport.snappedLoop ?? active;
+    const segStart = transport.currentSegmentStart;
+    const bufDur = transport.buffer?.duration ?? transport.totalDuration;
+    const relStart = Math.max(0, abs.start - segStart);
+    const relEnd = Math.min(bufDur, abs.end - segStart);
+    if (relEnd <= relStart) return null;
+    return { start: relStart, end: relEnd };
   }
 
   // ── Playback Position ──────────────────────────────────────
@@ -1799,11 +1863,11 @@ export class MixiEngine {
       let pos = transport.offset + elapsed;
 
       // When looping, the Web Audio API wraps playback internally
-      // but our elapsed calculation keeps counting linearly.
-      // Wrap pos to the loop region so the UI stays in sync.
+      // (in segment-relative seconds) while `pos` is in absolute track seconds.
       if (transport.source.loop && transport.source.loopEnd > transport.source.loopStart) {
-        const loopStart = transport.source.loopStart;
-        const loopEnd = transport.source.loopEnd;
+        const segStart = transport.currentSegmentStart;
+        const loopStart = segStart + transport.source.loopStart;
+        const loopEnd = segStart + transport.source.loopEnd;
         const loopLen = loopEnd - loopStart;
         if (pos >= loopEnd) {
           pos = loopStart + ((pos - loopStart) % loopLen);
@@ -1875,7 +1939,8 @@ export class MixiEngine {
     // Try Rust/Wasm pitch shift first (runs at native speed on audio thread)
     let useWasm = false;
     try {
-      const wasmWorkletUrl = new URL('/worklets/pitch-shift-wasm-processor.js', import.meta.url);
+      // LG-08: Resolve relative to document.baseURI so Electron file:// works.
+      const wasmWorkletUrl = new URL('worklets/pitch-shift-wasm-processor.js', document.baseURI);
       await this.ctx.audioWorklet.addModule(wasmWorkletUrl.href);
 
       // Fetch the Wasm bytes. We send raw bytes (not a compiled Module): cloning
@@ -2283,8 +2348,8 @@ export class MixiEngine {
       new Uint32Array(ringBuffer, 0, 2).fill(0);
 
       // 2. Register AudioWorklet processor
-      // C4 fix: relative worklet path
-      const nativeTapUrl = new URL('/worklets/native-output-tap.js', import.meta.url);
+      // LG-08: Resolve relative to document.baseURI so Electron file:// works.
+      const nativeTapUrl = new URL('worklets/native-output-tap.js', document.baseURI);
       await this.ctx.audioWorklet.addModule(nativeTapUrl.href);
 
       // 3. Create AudioWorklet node (inserts as a tap in the audio graph)

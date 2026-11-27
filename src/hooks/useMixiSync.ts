@@ -27,6 +27,7 @@ const EQ_BANDS: EqBand[] = ['low', 'mid', 'high'];
 
 export function useMixiSync() {
   const isReady = useRef(false);
+  const initPromiseRef = useRef<Promise<void> | null>(null);
   // Stabilise the engine reference for the component's lifetime. getInstance()
   // is an idempotent singleton, but capturing it once via useMemo guarantees the
   // identity never changes across re-renders, so the [engine]-keyed effects below
@@ -38,35 +39,46 @@ export function useMixiSync() {
 
   const initEngine = useCallback(async () => {
     if (isReady.current) return;
-    log.info('Engine', 'Initialising AudioContext (user gesture)…');
-    await engine.init();
-    isReady.current = true;
-    log.success('Engine', 'AudioContext running – sample rate 44 100 Hz');
+    if (initPromiseRef.current) return initPromiseRef.current;
 
-    // Push the full current state into the engine.
-    const state = useMixiStore.getState();
-    engine.setMasterVolume(state.master.volume);
-    engine.setMasterFilter(state.master.filter);
-    engine.setDistortion(state.master.distortion);
-    engine.setPunch(state.master.punch);
-    engine.setCrossfader(state.crossfader);
+    const run = (async () => {
+      log.info('Engine', 'Initialising AudioContext (user gesture)…');
+      await engine.init();
+      isReady.current = true;
+      log.success('Engine', `AudioContext running – sample rate ${engine.getAudioContext().sampleRate} Hz`);
 
-    // Headphones
-    engine.setHeadphoneLevel(state.headphones.level);
-    engine.setHeadphoneMix(state.headphones.mix);
-    engine.setSplitMode(state.headphones.splitMode);
+      // Push the full current state into the engine.
+      const state = useMixiStore.getState();
+      engine.setMasterVolume(state.master.volume);
+      engine.setMasterFilter(state.master.filter);
+      engine.setDistortion(state.master.distortion);
+      engine.setPunch(state.master.punch);
+      engine.setCrossfader(state.crossfader);
 
-    for (const deck of DECK_IDS) {
-      const d = state.decks[deck];
-      engine.setDeckGain(deck, d.gain);
-      engine.setDeckVolume(deck, d.volume);
-      for (const band of EQ_BANDS) {
-        engine.setEq(deck, band, d.eq[band]);
+      // Headphones
+      engine.setHeadphoneLevel(state.headphones.level);
+      engine.setHeadphoneMix(state.headphones.mix);
+      engine.setSplitMode(state.headphones.splitMode);
+
+      for (const deck of DECK_IDS) {
+        const d = state.decks[deck];
+        engine.setDeckGain(deck, d.gain);
+        engine.setDeckVolume(deck, d.volume);
+        for (const band of EQ_BANDS) {
+          engine.setEq(deck, band, d.eq[band]);
+        }
+        engine.setColorFx(deck, d.colorFx);
+        engine.setPlaybackRate(deck, d.playbackRate);
+        engine.setCueActive(deck, d.cueActive);
+        engine.setKeyLock(deck, d.keyLock);
       }
-      engine.setColorFx(deck, d.colorFx);
-      engine.setPlaybackRate(deck, d.playbackRate);
-      engine.setCueActive(deck, d.cueActive);
-      engine.setKeyLock(deck, d.keyLock);
+    })();
+
+    initPromiseRef.current = run;
+    try {
+      await run;
+    } finally {
+      initPromiseRef.current = null;
     }
   }, [engine]);
 
