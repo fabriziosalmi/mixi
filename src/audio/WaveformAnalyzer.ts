@@ -405,8 +405,10 @@ export async function analyzeWaveform(
     peakLevelPromise,
   ]);
 
-  // ── BPM detection (runs on the low-band buffer) ────────────
-  // Safe mode: limit BPM/key analysis to first 3 min for long files
+  // ── BPM detection ──────────────────────────────────────────
+  // Rust/Wasm open-bpm uses multi-band SuperFlux + acoustic passport + judge_router
+  // trained on FULL-BAND audio; feeding 250Hz low-passed audio blinds its mid/high
+  // estimators and tanks confidence. Only the JS fallback uses lowBuf.
   const isLongFile = totalDuration > SAFE_MODE_THRESHOLD;
   if (isLongFile && !(buffer instanceof AudioStreamingBuffer)) {
     log.warn(
@@ -417,12 +419,13 @@ export async function analyzeWaveform(
     );
   }
 
-  const bpmSource = (isLongFile && !(buffer instanceof AudioStreamingBuffer))
-    ? sliceBuffer(lowBuf, SAFE_MODE_ANALYSIS_SECONDS)
-    : lowBuf;
   const keySource = (isLongFile && !(buffer instanceof AudioStreamingBuffer))
     ? sliceBuffer(targetBuffer, SAFE_MODE_ANALYSIS_SECONDS)
     : targetBuffer;
+  const lowSource = (isLongFile && !(buffer instanceof AudioStreamingBuffer))
+    ? sliceBuffer(lowBuf, SAFE_MODE_ANALYSIS_SECONDS)
+    : lowBuf;
+  const bpmSource = getWasm() ? keySource : lowSource;
 
   const bpmPreset = BPM_RANGE_PRESETS[useSettingsStore.getState().bpmRange];
   const bpmResult: BpmResult = detectBpm(bpmSource, {

@@ -43,13 +43,16 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
     this.pitchRatio = 1.0;
     this.enabled = false;
 
-    // Circular input buffer
+    // Circular stereo input buffers
     this.inputBuf = new Float32Array(GRAIN_SIZE * 4);
+    this.inputBufR = new Float32Array(GRAIN_SIZE * 4);
     this.inputWrite = 0;
 
-    // Grain output positions
+    // Grain output positions & fixed circular-buffer anchors (eliminates 375Hz quantum warble)
     this.grainAPos = 0;
-    this.grainBPos = HALF_GRAIN; // offset by half
+    this.grainBPos = HALF_GRAIN;
+    this.grainAStart = 0;
+    this.grainBStart = 0;
 
     // Hann window (precomputed)
     this.window = new Float32Array(GRAIN_SIZE);
@@ -164,7 +167,10 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
         const masterRate = this.masterOriginalBpm > 0 ? (this.masterBpm / this.masterOriginalBpm) : 1.0;
         this.masterTime += dt * masterRate;
 
-        const slaveRate = this.baseRate * (1.0 + this.pllCorrection);
+        const slaveRate = Math.max(
+          0.001,
+          this.baseRate * (1.0 + this.pllCorrection + this.driftCorrection) + this.nudge,
+        );
         this.slaveTime += dt * slaveRate;
 
         // Wrap slaveTime if looping
@@ -175,13 +181,14 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
           }
         }
 
-        // Calculate phase delta
-        const masterPeriod = 60 / this.masterBpm;
-        const slaveBpm = this.slaveOriginalBpm * this.baseRate;
+        // Calculate phase delta using original (buffer-time) beat periods
+        // because masterTime/slaveTime advance in original-track seconds.
+        const masterPeriod = this.masterOriginalBpm > 0 ? 60 / this.masterOriginalBpm : 0;
+        const slaveBpm = this.slaveOriginalBpm;
         const ratio = findBestRatio(this.masterBpm, this.slaveOriginalBpm);
         const slavePeriod = ratio !== 1
           ? virtualBeatPeriod(slaveBpm, ratio)
-          : 60 / slaveBpm;
+          : (slaveBpm > 0 ? 60 / slaveBpm : 0);
 
         if (masterPeriod > 0 && slavePeriod > 0) {
           const masterFrac = (((this.masterTime - this.masterFirstBeatOffset) / masterPeriod) % 1 + 1) % 1;
@@ -248,43 +255,52 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    // Process mono (channel 0)
-    const inCh = input[0];
-    const frames = inCh.length;
+    // Stereo granular overlap-add with per-grain anchors & ratio-safe lookBack
+    const inL = input[0];
+    const inR = (input.length > 1 && input[1]) ? input[1] : input[0];
+    const frames = inL.length;
     const bufLen = this.inputBuf.length;
+    const bufMask = bufLen - 1;
+    const lookBack = Math.ceil(GRAIN_SIZE * Math.max(1, this.pitchRatio));
+    const outR = output.length > 1 ? output[1] : null;
 
-    // Write input to circular buffer
     for (let i = 0; i < frames; i++) {
-      this.inputBuf[this.inputWrite % bufLen] = inCh[i];
-      this.inputWrite++;
-    }
+      const w = this.inputWrite & bufMask;
+      this.inputBuf[w] = inL[i];
+      this.inputBufR[w] = inR[i];
+      this.inputWrite = (this.inputWrite + 1) & bufMask;
 
-    // Generate output by overlap-adding two resampled grains
-    for (let i = 0; i < frames; i++) {
+      if (this.grainAPos === 0) {
+        this.grainAStart = (this.inputWrite - lookBack + bufLen) & bufMask;
+      }
+      if (this.grainBPos === 0) {
+        this.grainBStart = (this.inputWrite - lookBack + bufLen) & bufMask;
+      }
+
       const aIdx = this.grainAPos;
       const aFrac = aIdx * this.pitchRatio;
       const aInt = Math.floor(aFrac);
       const aT = aFrac - aInt;
-      const aBase = (this.inputWrite - GRAIN_SIZE + aInt) % bufLen;
-      const s0 = this.inputBuf[(aBase + bufLen) % bufLen];
-      const s1 = this.inputBuf[(aBase + 1 + bufLen) % bufLen];
-      const aSample = s0 + (s1 - s0) * aT;
-      const aWin = this.window[aIdx];
+      const aI0 = (this.grainAStart + aInt) & bufMask;
+      const aI1 = (aI0 + 1) & bufMask;
+      const aw = this.window[aIdx];
 
       const bIdx = this.grainBPos;
       const bFrac = bIdx * this.pitchRatio;
       const bInt = Math.floor(bFrac);
       const bT = bFrac - bInt;
-      const bBase = (this.inputWrite - GRAIN_SIZE + bInt - HALF_GRAIN) % bufLen;
-      const t0 = this.inputBuf[(bBase + bufLen) % bufLen];
-      const t1 = this.inputBuf[(bBase + 1 + bufLen) % bufLen];
-      const bSample = t0 + (t1 - t0) * bT;
-      const bWin = this.window[bIdx];
+      const bI0 = (this.grainBStart + bInt) & bufMask;
+      const bI1 = (bI0 + 1) & bufMask;
+      const bw = this.window[bIdx];
 
-      const sample = aSample * aWin + bSample * bWin;
+      const aL = this.inputBuf[aI0] + (this.inputBuf[aI1] - this.inputBuf[aI0]) * aT;
+      const bL = this.inputBuf[bI0] + (this.inputBuf[bI1] - this.inputBuf[bI0]) * bT;
+      output[0][i] = aL * aw + bL * bw;
 
-      for (let ch = 0; ch < output.length; ch++) {
-        output[ch][i] = sample;
+      if (outR) {
+        const aR = this.inputBufR[aI0] + (this.inputBufR[aI1] - this.inputBufR[aI0]) * aT;
+        const bR = this.inputBufR[bI0] + (this.inputBufR[bI1] - this.inputBufR[bI0]) * bT;
+        outR[i] = aR * aw + bR * bw;
       }
 
       this.grainAPos++;
@@ -295,13 +311,6 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
       }
       if (this.grainBPos >= GRAIN_SIZE) {
         this.grainBPos = 0;
-      }
-    }
-
-    if (input.length > 1 && input[1]) {
-      const outR = output[1];
-      if (outR) {
-        outR.set(output[0]);
       }
     }
 

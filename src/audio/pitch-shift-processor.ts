@@ -74,9 +74,11 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
   private inputBufR = new Float32Array(GRAIN_SIZE * 4); // right channel (stereo key lock)
   private inputWrite = 0;
 
-  // Grain output positions
+  // Grain output positions & fixed circular-buffer anchors (eliminates 375Hz quantum warble)
   private grainAPos = 0;
   private grainBPos = HALF_GRAIN; // offset by half
+  private grainAStart = 0;
+  private grainBStart = 0;
 
   // Hann window (precomputed)
   private window = new Float32Array(GRAIN_SIZE);
@@ -210,7 +212,10 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
         const masterRate = this.masterOriginalBpm > 0 ? (this.masterBpm / this.masterOriginalBpm) : 1.0;
         this.masterTime += dt * masterRate;
 
-        const slaveRate = this.baseRate * (1.0 + this.pllCorrection);
+        const slaveRate = Math.max(
+          0.001,
+          this.baseRate * (1.0 + this.pllCorrection + this.driftCorrection) + this.nudge,
+        );
         this.slaveTime += dt * slaveRate;
 
         // Wrap slaveTime if looping
@@ -301,40 +306,43 @@ class PitchShiftProcessor extends AudioWorkletProcessor {
     const frames = inL.length;
     const bufLen = this.inputBuf.length;
 
-    // Write both channels to their circular buffers
-    for (let i = 0; i < frames; i++) {
-      const w = this.inputWrite % bufLen;
-      this.inputBuf[w] = inL[i];
-      this.inputBufR[w] = inR[i];
-      this.inputWrite++;
-    }
-
-    // A grain spans GRAIN_SIZE*ratio input samples — look back by that much
-    // (>= GRAIN_SIZE) so the read window never passes inputWrite into stale
-    // audio when ratio>1 (key lock + slowing). See pitch_shift.rs.
+    // A grain spans GRAIN_SIZE*ratio input samples — anchor each grain's start
+    // pointer when grain*Pos == 0 (Hann window == 0 -> click-free) so the read
+    // head advances smoothly at pitchRatio per sample with zero 128-sample
+    // quantum-boundary jump (matches mixi-core/src/dsp/pitch_shift.rs).
     const lookBack = Math.ceil(GRAIN_SIZE * Math.max(1, this.pitchRatio));
     const outR = output.length > 1 ? output[1] : null;
+    const bufMask = bufLen - 1;
 
-    // Generate output by overlap-adding two resampled grains, per channel.
     for (let i = 0; i < frames; i++) {
+      // Write current stereo sample to circular buffers
+      const w = this.inputWrite & bufMask;
+      this.inputBuf[w] = inL[i];
+      this.inputBufR[w] = inR[i];
+      this.inputWrite = (this.inputWrite + 1) & bufMask;
+
+      if (this.grainAPos === 0) {
+        this.grainAStart = (this.inputWrite - lookBack + bufLen) & bufMask;
+      }
+      if (this.grainBPos === 0) {
+        this.grainBStart = (this.inputWrite - lookBack + bufLen) & bufMask;
+      }
+
       const aIdx = this.grainAPos;
       const aFrac = aIdx * this.pitchRatio;
       const aInt = Math.floor(aFrac);
       const aT = aFrac - aInt;
-      const aBase = (this.inputWrite - lookBack + aInt) % bufLen;
+      const aI0 = (this.grainAStart + aInt) & bufMask;
+      const aI1 = (aI0 + 1) & bufMask;
       const aw = this.window[aIdx];
 
       const bIdx = this.grainBPos;
       const bFrac = bIdx * this.pitchRatio;
       const bInt = Math.floor(bFrac);
       const bT = bFrac - bInt;
-      const bBase = (this.inputWrite - lookBack + bInt - HALF_GRAIN) % bufLen;
+      const bI0 = (this.grainBStart + bInt) & bufMask;
+      const bI1 = (bI0 + 1) & bufMask;
       const bw = this.window[bIdx];
-
-      const aI0 = (aBase + bufLen) % bufLen;
-      const aI1 = (aBase + 1 + bufLen) % bufLen;
-      const bI0 = (bBase + bufLen) % bufLen;
-      const bI1 = (bBase + 1 + bufLen) % bufLen;
 
       // Left
       const aL = this.inputBuf[aI0] + (this.inputBuf[aI1] - this.inputBuf[aI0]) * aT;

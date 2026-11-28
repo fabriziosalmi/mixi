@@ -747,4 +747,35 @@ describe('Sync & Phase Alignment Bench', () => {
       expect(result.bpm).toBeLessThanOrEqual(250);
     });
   });
+
+  describe('Tight-tolerance precision & confidence regression (±0.05 BPM)', () => {
+    for (const targetBpm of [80, 100, 120, 128, 130, 140, 173, 180]) {
+      it(`locks ${targetBpm} BPM pure kick within ±0.05 BPM with high confidence`, () => {
+        const buf = new Float32Array(SAMPLES);
+        const beatInterval = (60 / targetBpm) * SR;
+        let pos = 0;
+        while (pos < SAMPLES) {
+          addKick(buf, Math.floor(pos));
+          pos += beatInterval;
+        }
+        const result = detectFromSamples(buf);
+        expect(Math.abs(result.bpm - targetBpm)).toBeLessThanOrEqual(0.05);
+        expect(result.confidence).toBeGreaterThanOrEqual(0.75);
+      });
+    }
+
+    it('preserves genuine fractional BPM (128.4) without false integer snap', () => {
+      const targetBpm = 128.4;
+      const buf = new Float32Array(SAMPLES);
+      const beatInterval = (60 / targetBpm) * SR;
+      let pos = 0;
+      while (pos < SAMPLES) {
+        addKick(buf, Math.floor(pos));
+        pos += beatInterval;
+      }
+      const result = detectFromSamples(buf);
+      expect(Math.abs(result.bpm - targetBpm)).toBeLessThanOrEqual(0.15);
+      expect(result.confidence).toBeGreaterThanOrEqual(0.75);
+    });
+  });
 });

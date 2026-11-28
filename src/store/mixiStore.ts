@@ -350,19 +350,43 @@ export const useMixiStore = create<MixiStore>()(
       set((s) => {
         const clamped = clamp(v, 0.5, 2.0);
         const d = s.decks[deck];
-        const effectiveBpm = d.originalBpm > 0
-          ? Math.round(d.originalBpm * clamped * 10) / 10
+        const exactMasterBpm = d.originalBpm > 0 ? d.originalBpm * clamped : 0;
+        const effectiveBpm = exactMasterBpm > 0
+          ? Math.round(exactMasterBpm * 10) / 10
           : 0;
-        // Auto-unsync: manual pitch fader change breaks sync contract.
-        // The PLL would overwrite the user's adjustment otherwise.
+        // Auto-unsync: manual pitch fader change breaks sync contract on THIS deck.
         const wasSynced = d.isSynced;
         if (wasSynced) {
           phaseLockLoop.reset(deck);
         }
+
+        // Master-follow: if the OTHER deck is synced to this deck, update its
+        // playbackRate & worklet masterBpm so it tracks Master pitch ramps smoothly.
+        const otherId = otherDeck(deck);
+        const other = s.decks[otherId];
+        let nextOther = other;
+        if (other.isSynced && exactMasterBpm > 0 && other.originalBpm > 0) {
+          const ratio = findBestRatio(exactMasterBpm, other.originalBpm);
+          const slaveTargetBpm = exactMasterBpm / ratio;
+          const slaveRate = clamp(slaveTargetBpm / other.originalBpm, 0.5, 2.0);
+          const slaveDisplayBpm = Math.round(other.originalBpm * slaveRate * 10) / 10;
+          const engine = MixiEngine.getInstance();
+          if (engine.isInitialized) {
+            engine.setPlaybackRate(otherId, slaveRate);
+            engine.postWorkletMessage(otherId, { type: 'updateMasterBpm', value: exactMasterBpm });
+          }
+          nextOther = {
+            ...other,
+            playbackRate: slaveRate,
+            bpm: slaveDisplayBpm,
+          };
+        }
+
         return {
           decks: {
             ...s.decks,
             [deck]: { ...d, playbackRate: clamped, bpm: effectiveBpm, isSynced: false },
+            [otherId]: nextOther,
           },
         };
       }),
@@ -476,12 +500,14 @@ export const useMixiStore = create<MixiStore>()(
         }
 
         // ── 1. Tempo match with harmonic sync ────────────────
-        // Use harmonic ratio (1:1, 2:1, 3:4, etc.) so DnB 170 can
-        // sync to House 128 without slingshot speed changes.
-        const masterBpm = other.bpm > 0 ? other.bpm : other.originalBpm;
+        // Use exact unrounded master tempo (originalBpm * playbackRate) so UI
+        // 1-decimal display rounding never injects permanent tempo drift.
+        const masterBpm = other.originalBpm > 0
+          ? other.originalBpm * other.playbackRate
+          : (other.bpm > 0 ? other.bpm : 0);
         const ratio = findBestRatio(masterBpm, thisDeck.originalBpm);
         const targetBpm = masterBpm / ratio;
-        const newRate = targetBpm / thisDeck.originalBpm;
+        const newRate = clamp(targetBpm / thisDeck.originalBpm, 0.5, 2.0);
         const effectiveBpm = Math.round(thisDeck.originalBpm * newRate * 10) / 10;
 
         const engine = MixiEngine.getInstance();
