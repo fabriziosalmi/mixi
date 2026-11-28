@@ -68,7 +68,8 @@ Always use "A" or "B" (uppercase strings) for deck parameters.
 """,
 )
 
-API_BASE = "http://localhost:8000"
+import os
+API_BASE = os.environ.get("MIXI_API_BASE") or f"http://127.0.0.1:{os.environ.get('MIXI_PORT', '8000')}"
 
 # ── Helper ────────────────────────────────────────────────────
 

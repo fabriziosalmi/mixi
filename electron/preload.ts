@@ -107,9 +107,13 @@ contextBridge.exposeInMainWorld('mixi', {
     }>>,
     /** Stop sync */
     stop: () => ipcRenderer.invoke('mixi-sync:stop'),
-    /** Listen for incoming packets (forwarded from main process) */
+    /** Listen for incoming packets (forwarded from main process). Returns unsubscribe fn (AUD-18). */
     onPacket: (cb: (data: ArrayBuffer) => void) => {
-      ipcRenderer.on('mixi-sync:packet', (_event, data: ArrayBuffer) => cb(data));
+      const listener = (_event: Electron.IpcRendererEvent, data: ArrayBuffer) => cb(data);
+      ipcRenderer.on('mixi-sync:packet', listener);
+      return () => {
+        ipcRenderer.removeListener('mixi-sync:packet', listener);
+      };
     },
   },
 });

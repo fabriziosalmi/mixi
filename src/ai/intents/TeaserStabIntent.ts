@@ -31,6 +31,16 @@ import type { MixiStore } from '../../store/mixiStore';
  *  not enough to create a full bass dump if bass isn't killed. */
 const STAB_VOLUME = 0.5;
 
+let pendingStabTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cancel any pending teaser stab timer when AI stops (AUD-15). */
+export function resetTeaserStabState(): void {
+  if (pendingStabTimer !== null) {
+    clearTimeout(pendingStabTimer);
+    pendingStabTimer = null;
+  }
+}
+
 export const TeaserStabIntent: BaseIntent = {
   name: 'rhythm.teaser_stab',
   domain: 'rhythm',
@@ -49,25 +59,22 @@ export const TeaserStabIntent: BaseIntent = {
     return 0.45;
   },
 
-  execute: (() => {
-    let pending: ReturnType<typeof setTimeout> | null = null;
-    return (bb: Blackboard, store: MixiStore): void => {
-      if (pending) return; // Don't stack stabs.
+  execute(bb: Blackboard, store: MixiStore): void {
+    if (pendingStabTimer) return; // Don't stack stabs.
 
-      // Double-check bass is still killed at execute time.
-      if (!bb.incomingBassKilled) return;
+    // Double-check bass is still killed at execute time.
+    if (!bb.incomingBassKilled) return;
 
-      // Capture the deck ID (not a reference to bb which may change).
-      const deckId = bb.incomingDeck;
+    // Capture the deck ID (not a reference to bb which may change).
+    const deckId = bb.incomingDeck;
 
-      store.setDeckVolume(deckId, STAB_VOLUME);
+    store.setDeckVolume(deckId, STAB_VOLUME);
 
-      // Quarter-beat duration in ms = beatPeriod(s) * 1000 / 4.
-      const quarterBeatMs = (bb.masterBeatPeriod * 1000) / 4;
-      pending = setTimeout(() => {
-        store.setDeckVolume(deckId, 0);
-        pending = null;
-      }, quarterBeatMs);
-    };
-  })(),
+    // Quarter-beat duration in ms = beatPeriod(s) * 1000 / 4.
+    const quarterBeatMs = (bb.masterBeatPeriod * 1000) / 4;
+    pendingStabTimer = setTimeout(() => {
+      pendingStabTimer = null;
+      store.setDeckVolume(deckId, 0);
+    }, quarterBeatMs);
+  },
 };

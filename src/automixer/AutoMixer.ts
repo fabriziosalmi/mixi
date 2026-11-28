@@ -70,6 +70,7 @@ export class AutoMixer {
   private _roles: DeckRoles = { outgoing: 'A', incoming: 'B' };
   private _intentStartBeat = 0;
   private _enabled = false;
+  private _preparedSeekDone = false;
 
   // ── Listeners (for React) ──────────────────────────────────
   private listeners = new Set<(state: AutoMixState) => void>();
@@ -94,6 +95,7 @@ export class AutoMixer {
     if (this._enabled) return;
     this._enabled = true;
     this._intent = 'MONITORING';
+    this._preparedSeekDone = false;
 
     // Determine initial roles: whichever deck is playing is outgoing.
     const s = useMixiStore.getState();
@@ -138,14 +140,27 @@ export class AutoMixer {
     const outDeck = store.decks[outgoing];
     const inDeck = store.decks[incoming];
 
+    // AUD-16: If outgoing track reaches EOF during late transition states, finish cleanup & swap
+    if (!outDeck.isPlaying) {
+      if (
+        this._intent === 'FILTER_WASHOUT' ||
+        this._intent === 'FADE_OUT_EXIT' ||
+        this._intent === 'CLEANUP_AND_SWAP'
+      ) {
+        this.tickCleanupAndSwap(outgoing);
+      }
+      return;
+    }
+
     // Can't do anything without BPM data on the outgoing deck.
-    if (outDeck.bpm <= 0 || !outDeck.isPlaying) return;
+    const outNativeBpm = outDeck.originalBpm > 0 ? outDeck.originalBpm : outDeck.bpm;
+    if (outNativeBpm <= 0) return;
 
     const outTime = engine.getCurrentTime(outgoing);
-    const outBeat = timeToBeat(outTime, outDeck.bpm, outDeck.firstBeatOffset);
+    const outBeat = timeToBeat(outTime, outNativeBpm, outDeck.firstBeatOffset);
     const mixOutBeat = calcMixOutBeat(
       outDeck.duration,
-      outDeck.bpm,
+      outNativeBpm,
       outDeck.firstBeatOffset,
     );
     const beatsToMixOut = mixOutBeat - outBeat;
@@ -229,9 +244,9 @@ export class AutoMixer {
       store.setDeckVolume(incoming, 0);
     }
 
-    // Seek to first beat (Hot Cue 0 if set, else firstBeatOffset).
-    // Only do this once.
-    if (!inDeck.isPlaying) {
+    // Seek to first beat (Hot Cue 0 if set, else firstBeatOffset) — strictly once per PREPARE_INCOMING.
+    if (!inDeck.isPlaying && !this._preparedSeekDone) {
+      this._preparedSeekDone = true;
       const cue0 = inDeck.hotCues[0];
       const seekTo = cue0 !== null ? cue0 : inDeck.firstBeatOffset;
       const engine = MixiEngine.getInstance();
@@ -380,14 +395,18 @@ export class AutoMixer {
   private transition(newIntent: AutoMixIntent): void {
     const prev = this._intent;
     this._intent = newIntent;
+    if (newIntent !== 'PREPARE_INCOMING') {
+      this._preparedSeekDone = false;
+    }
 
-    // Record the current beat position for progress-based intents.
+    // Record the current beat position for progress-based intents (using native buffer BPM — AUD-03).
     const engine = MixiEngine.getInstance();
     const store = useMixiStore.getState();
     const outDeck = store.decks[this._roles.outgoing];
-    if (engine.isInitialized && outDeck.bpm > 0) {
+    const outNativeBpm = outDeck.originalBpm > 0 ? outDeck.originalBpm : outDeck.bpm;
+    if (engine.isInitialized && outNativeBpm > 0) {
       const t = engine.getCurrentTime(this._roles.outgoing);
-      this._intentStartBeat = timeToBeat(t, outDeck.bpm, outDeck.firstBeatOffset);
+      this._intentStartBeat = timeToBeat(t, outNativeBpm, outDeck.firstBeatOffset);
     }
 
     if (prev !== newIntent) {

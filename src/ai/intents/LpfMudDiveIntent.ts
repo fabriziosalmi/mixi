@@ -35,7 +35,7 @@ const DIVE_BEATS = 16;
 export const LpfMudDiveIntent: BaseIntent = {
   name: 'dynamics.lpf_mud_dive',
   domain: 'dynamics',
-  exclusive: false,
+  exclusive: true, // AUD-14: mutually exclusive with other colorFx dynamics intents.
 
   evaluate(bb: Blackboard): number {
     if (!bb.bothPlaying) return 0;

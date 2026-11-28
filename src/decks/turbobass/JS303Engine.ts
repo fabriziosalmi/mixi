@@ -118,11 +118,15 @@ export class JS303Engine {
       const other = this.deckId === 'A' ? 'B' : 'A';
       const otherDeck = state.decks[other];
       if (otherDeck.isPlaying && otherDeck.bpm > 0) {
-        const beatPeriod = 60 / otherDeck.bpm;
-        const now = this.ctx.currentTime;
-        const elapsed = now - otherDeck.firstBeatOffset;
-        this.nextStepTime = otherDeck.firstBeatOffset +
-          Math.ceil(elapsed / beatPeriod) * beatPeriod;
+        // AUD-08: Quantize to actual track beatgrid position, not AudioContext uptime
+        const engine = MixiEngine.getInstance();
+        const nativeBpm = otherDeck.originalBpm > 0 ? otherDeck.originalBpm : otherDeck.bpm;
+        const trackTime = engine.isInitialized ? engine.getCurrentTime(other) : 0;
+        const nativeBeat = (trackTime - otherDeck.firstBeatOffset) * (nativeBpm / 60);
+        const fracBeat = ((nativeBeat % 1) + 1) % 1;
+        const beatsUntilNext = fracBeat < 0.01 ? 0 : 1 - fracBeat;
+        const wallBeatPeriod = 60 / otherDeck.bpm;
+        this.nextStepTime = this.ctx.currentTime + beatsUntilNext * wallBeatPeriod;
       } else {
         this.nextStepTime = this.ctx.currentTime;
       }
@@ -138,6 +142,9 @@ export class JS303Engine {
     this._playing = false;
     this._currentStep = -1;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    // AUD-07: Always release active synth gate on stop (prevents stuck tied drone)
+    this.synth.noteOff(this.ctx.currentTime, false);
+    this.bus.duckReverb(false);
     this.onStepChange?.(-1);
   }
 
@@ -147,7 +154,7 @@ export class JS303Engine {
   // ── BPM ───────────────────────────────────────────────────
 
   get bpm(): number { return this._syncToMaster ? this.getSyncBpm() : this._bpm; }
-  set bpm(v: number) { this._bpm = v; }
+  set bpm(v: number) { this._bpm = Math.max(30, Math.min(300, Number.isFinite(v) ? v : 130)); }
   get syncToMaster(): boolean { return this._syncToMaster; }
   set syncToMaster(v: boolean) { this._syncToMaster = v; }
   get swing(): number { return this._swing; }
@@ -511,12 +518,22 @@ export class JS303Engine {
     this.synth.setDelayTime(bpm);
     this.synth.setBpm(bpm);
 
-    while (this.nextStepTime < this.ctx.currentTime + LOOK_AHEAD_S) {
+    const now = this.ctx.currentTime;
+    // AUD-09: Prevent note burst storm after tab backgrounding or timer stall
+    if (this.nextStepTime < now - stepDur * 2) {
+      this.nextStepTime = now;
+    }
+
+    while (this.nextStepTime < now + LOOK_AHEAD_S) {
       // Polyrhythmic: wrap at patternLength instead of STEP_COUNT
       this._currentStep = (this._currentStep + 1) % this._patternLength;
       const step = this._steps[this._currentStep];
       const nextIdx = (this._currentStep + 1) % this._patternLength;
       const nextStep = this._steps[nextIdx];
+
+      // AUD-07: Apply swing only to note trigger timestamp; keep clock grid constant!
+      const swingOffset = this._currentStep % 2 === 1 ? this._swing * stepDur * 0.5 : 0;
+      const scheduleTime = this.nextStepTime + swingOffset;
 
       if (step.gate) {
         // TIE: if this step is tied, the previous note continues —
@@ -530,7 +547,7 @@ export class JS303Engine {
             const tuningOffset = (this._synthParams.tuning - 0.5) * 24;
             const freq = 440 * Math.pow(2, (semitones - 69 + tuningOffset) / 12);
             // Glide to new pitch without re-triggering envelope
-            this.synth.noteOn(freq, this.nextStepTime, false, true);
+            this.synth.noteOn(freq, scheduleTime, false, true);
           }
           // Don't schedule noteOff for tied steps — gate stays open
         } else {
@@ -540,7 +557,7 @@ export class JS303Engine {
           const tuningOffset = (this._synthParams.tuning - 0.5) * 24;
           const freq = 440 * Math.pow(2, (semitones - 69 + tuningOffset) / 12);
 
-          this.synth.noteOn(freq, this.nextStepTime, step.accent, step.slide);
+          this.synth.noteOn(freq, scheduleTime, step.accent, step.slide);
           this.bus.duckReverb(true);
         }
 
@@ -549,7 +566,7 @@ export class JS303Engine {
         if (!nextContinues) {
           // Gate Length: 0→10%, 0.75→80% (default), 1→100% of step
           const gateFrac = 0.1 + this._synthParams.gateLength * 0.9;
-          const offTime = this.nextStepTime + stepDur * gateFrac;
+          const offTime = scheduleTime + stepDur * gateFrac;
           this.synth.noteOff(offTime, false);
           setTimeout(() => this.bus.duckReverb(false),
             Math.max(0, (offTime - this.ctx.currentTime) * 1000));
@@ -557,19 +574,15 @@ export class JS303Engine {
 
         this.onTrigger?.(this._currentStep);
       } else {
-        this.synth.noteOff(this.nextStepTime, false);
+        this.synth.noteOff(scheduleTime, false);
         this.bus.duckReverb(false);
       }
 
       const stepToNotify = this._currentStep;
-      const delay = Math.max(0, (this.nextStepTime - this.ctx.currentTime) * 1000);
+      const delay = Math.max(0, (scheduleTime - this.ctx.currentTime) * 1000);
       setTimeout(() => this.onStepChange?.(stepToNotify), delay);
 
-      let swingOffset = 0;
-      if (this._currentStep % 2 === 1) {
-        swingOffset = this._swing * stepDur * 0.5;
-      }
-      this.nextStepTime += stepDur + swingOffset;
+      this.nextStepTime += stepDur;
     }
   };
 

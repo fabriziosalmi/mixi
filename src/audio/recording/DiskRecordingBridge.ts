@@ -158,9 +158,12 @@ export class DiskRecordingBridge {
         };
       });
 
-      // 5. Insert tap: masterOutput → tapNode → ctx.destination
+      // 5. Insert silent tap: masterOutput → tapNode → ctx.destination
+      // Assign refs immediately so catch{} always disconnects on api.open() error (AUD-01).
       masterOutput.connect(tapNode);
       tapNode.connect(ctx.destination);
+      this.tapNode = tapNode;
+      this._masterOutput = masterOutput;
 
       // 6. Open temp file via IPC
       const { filePath } = await this.api.open({
@@ -171,19 +174,21 @@ export class DiskRecordingBridge {
       // 7. Start flush interval
       this.flushInterval = setInterval(() => this.flushToDisk(), DiskRecordingBridge.FLUSH_INTERVAL_MS);
 
-      this.tapNode = tapNode;
       this._filePath = filePath;
       this._recording = true;
       this._totalFrames = 0;
-      this._masterOutput = masterOutput;
 
       return true;
     } catch (err) {
       // Cleanup partial state
       if (this.tapNode) {
-        this.tapNode.disconnect();
+        if (this._masterOutput) {
+          try { this._masterOutput.disconnect(this.tapNode); } catch { /* ok */ }
+        }
+        try { this.tapNode.disconnect(); } catch { /* ok */ }
         this.tapNode = null;
       }
+      this._masterOutput = null;
       this.headerView = null;
       this.ringView = null;
       this._recording = false;
@@ -198,10 +203,13 @@ export class DiskRecordingBridge {
   async stop(): Promise<{ filePath: string; durationSecs: number; fileSizeBytes: number } | null> {
     if (!this._recording || !this.api) return null;
 
-    // 1. Stop flush interval
+    // 1. Stop flush interval & await any in-flight flush before final drain (AUD-11)
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
       this.flushInterval = null;
+    }
+    if (this._flushInFlight) {
+      await this._flushInFlight;
     }
 
     // 2. Final drain
@@ -311,15 +319,26 @@ export class DiskRecordingBridge {
     return out.buffer;
   }
 
-  /** Drain ring and send PCM data to main process for disk write. */
+  private _flushInFlight: Promise<void> | null = null;
+
+  /** Drain ring and send PCM data to main process for disk write (serialized — AUD-11). */
   private async flushToDisk(): Promise<void> {
     if (!this.api) return;
+    if (this._flushInFlight) return this._flushInFlight;
 
-    const data = this.drainRing();
-    if (data && data.byteLength > 0) {
-      await this.api.flush(data);
-      this._totalFrames += data.byteLength / (4 * DiskRecordingBridge.RING_CHANNELS);
-    }
+    const run = async () => {
+      const data = this.drainRing();
+      if (data && data.byteLength > 0) {
+        await this.api!.flush(data);
+        this._totalFrames += data.byteLength / (4 * DiskRecordingBridge.RING_CHANNELS);
+      }
+    };
+
+    const p = run().finally(() => {
+      if (this._flushInFlight === p) this._flushInFlight = null;
+    });
+    this._flushInFlight = p;
+    return p;
   }
 
   /** Disconnect and destroy the recording tap worklet. */

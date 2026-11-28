@@ -52,18 +52,35 @@ export class AudioStreamingBuffer {
             this.dataSize = chunkSize;
             break;
           }
-          pos += 8 + chunkSize;
+          // AUD-19: RIFF chunks are word-aligned (odd chunkSize has 1 trailing pad byte)
+          pos += 8 + chunkSize + (chunkSize & 1);
         }
 
         if (fmtOffset !== -1 && this.dataSize > 0) {
-          this.audioFormat = view.getUint16(fmtOffset, true);
-          this.channels = view.getUint16(fmtOffset + 2, true);
-          this.sampleRate = view.getUint32(fmtOffset + 4, true);
-          this.bitsPerSample = view.getUint16(fmtOffset + 14, true);
+          let fmtTag = view.getUint16(fmtOffset, true);
+          // AUD-19: Resolve WAVE_FORMAT_EXTENSIBLE (0xFFFE) SubFormat GUID to PCM (1) or IEEE float (3)
+          if (fmtTag === 0xfffe) {
+            if (fmtOffset + 26 <= this.rawData.byteLength) {
+              const subFmt = view.getUint16(fmtOffset + 24, true);
+              if (subFmt === 1 || subFmt === 3) {
+                fmtTag = subFmt;
+              } else {
+                this.isWav = false;
+              }
+            } else {
+              this.isWav = false;
+            }
+          }
+          if (this.isWav) {
+            this.audioFormat = fmtTag;
+            this.channels = view.getUint16(fmtOffset + 2, true);
+            this.sampleRate = view.getUint32(fmtOffset + 4, true);
+            this.bitsPerSample = view.getUint16(fmtOffset + 14, true);
 
-          const bytesPerFrame = this.channels * (this.bitsPerSample / 8);
-          if (bytesPerFrame > 0 && this.sampleRate > 0) {
-            this.duration = this.dataSize / bytesPerFrame / this.sampleRate;
+            const bytesPerFrame = this.channels * (this.bitsPerSample / 8);
+            if (bytesPerFrame > 0 && this.sampleRate > 0) {
+              this.duration = this.dataSize / bytesPerFrame / this.sampleRate;
+            }
           }
         }
       }

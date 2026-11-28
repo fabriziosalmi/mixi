@@ -22,7 +22,7 @@
 import { app, BrowserWindow, screen, session, ipcMain, dialog, shell } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import { createServer } from 'net';
-import { join, resolve } from 'path';
+import { basename, join, resolve, sep } from 'path';
 import {
   existsSync, openSync, writeSync, closeSync, readSync,
   copyFileSync, unlinkSync, readdirSync, statSync,
@@ -247,7 +247,9 @@ function spawnEngine(port: number): ChildProcess {
       if (engineQuitting || apiPort === 0) return;
       pythonProcess = spawnEngine(apiPort);
       // A process that then survives a clean minute clears the burst counter.
-      setTimeout(() => {
+      if (engineRestartResetTimer) clearTimeout(engineRestartResetTimer);
+      engineRestartResetTimer = setTimeout(() => {
+        engineRestartResetTimer = null;
         if (pythonProcess && !engineQuitting) engineRestartCount = 0;
       }, ENGINE_RESTART_RESET_MS);
     }, delay);
@@ -256,12 +258,18 @@ function spawnEngine(port: number): ChildProcess {
   return child;
 }
 
+let engineRestartResetTimer: ReturnType<typeof setTimeout> | null = null;
+
 function killEngine(): void {
   // Mark shutdown so the exit handler doesn't respawn the engine we're killing.
   engineQuitting = true;
   if (engineRestartTimer) {
     clearTimeout(engineRestartTimer);
     engineRestartTimer = null;
+  }
+  if (engineRestartResetTimer) {
+    clearTimeout(engineRestartResetTimer);
+    engineRestartResetTimer = null;
   }
   if (!pythonProcess) return;
 
@@ -563,12 +571,25 @@ app.on('before-quit', () => {
     try {
       const totalFileSize = recState.totalBytes + WAV_HEADER_SIZE;
       patchWavHeaderSize(recState.fd, totalFileSize, { writeSync });
-      closeSync(recState.fd);
       console.log(`[mixi-rec] Finalized on quit: ${recState.filePath} (${totalFileSize} bytes)`);
     } catch (err) {
       console.error(`[mixi-rec] Failed to finalize on quit: ${err}`);
+    } finally {
+      try { closeSync(recState.fd); } catch { /* ok */ }
+      recState = null;
     }
-    recState = null;
+  }
+  // AUD-18: Clean up UDP sync socket and native audio stream on quit
+  if (syncAnnounceTimer) {
+    clearInterval(syncAnnounceTimer);
+    syncAnnounceTimer = null;
+  }
+  if (syncSocket) {
+    try { syncSocket.close(); } catch { /* ok */ }
+    syncSocket = null;
+  }
+  if (nativeAudio) {
+    try { nativeAudio.closeStream(); } catch { /* ok */ }
   }
   killEngine();
 });
@@ -608,6 +629,12 @@ function setupNativeAudioIPC(): void {
     ringChannels: number;
   }) => {
     if (!nativeAudio) throw new Error('Native audio not available');
+    // AUD-02: Electron IPC uses Structured Clone and cannot share a renderer SharedArrayBuffer across processes.
+    if (!args?.ringBuffer || !(args.ringBuffer instanceof ArrayBuffer || ArrayBuffer.isView(args.ringBuffer))) {
+      throw new Error(
+        'Native audio IPC cannot share a renderer SharedArrayBuffer across processes; OS shared memory transport is required',
+      );
+    }
     return nativeAudio.openStream(
       args.deviceIndex,
       args.sampleRate,
@@ -665,24 +692,25 @@ function setupDiskRecordingIPC(): void {
     return { bytesWritten: buf.length };
   });
 
-  // Finalize: patch WAV header and close file
+  // Finalize: patch WAV header and close file (AUD-11: always close FD and clear recState in finally)
   ipcMain.handle('disk-rec:finalize', () => {
     if (!recState) throw new Error('No recording in progress');
 
     const { filePath, fd, totalBytes, sampleRate, channels } = recState;
     const totalFileSize = totalBytes + WAV_HEADER_SIZE;
 
-    // Patch RIFF and data size fields
-    patchWavHeaderSize(fd, totalFileSize, { writeSync });
-    closeSync(fd);
+    try {
+      patchWavHeaderSize(fd, totalFileSize, { writeSync });
+    } finally {
+      try { closeSync(fd); } catch { /* ok */ }
+      recState = null;
+    }
 
     const durationSecs = totalBytes / (sampleRate * channels * 4);
 
     console.log(`[mixi-rec] Finalized: ${filePath} (${(totalFileSize / 1048576).toFixed(1)} MB, ${durationSecs.toFixed(1)}s)`);
 
-    const result = { filePath, durationSecs, fileSizeBytes: totalFileSize };
-    recState = null;
-    return result;
+    return { filePath, durationSecs, fileSizeBytes: totalFileSize };
   });
 
   // Cancel recording: close and delete temp file
@@ -720,13 +748,22 @@ function setupDiskRecordingIPC(): void {
     return result.filePath;
   });
 
+  const assertTempRecPath = (rawPath: string): string => {
+    // AUD-18: Enforce trailing path.sep + mixi-rec-*.wav filename to prevent prefix bypass (/tmp-evil) or arbitrary tmp deletion
+    const resolved = resolve(rawPath);
+    const tmpRoot = resolve(tmpdir());
+    const tmpPrefix = tmpRoot.endsWith(sep) ? tmpRoot : tmpRoot + sep;
+    const name = basename(resolved);
+    if (!resolved.startsWith(tmpPrefix) || !name.startsWith('mixi-rec-') || !name.endsWith('.wav')) {
+      throw new Error('Path must reference a mixi-rec-*.wav file inside temp directory');
+    }
+    return resolved;
+  };
+
   // Copy temp file to user-chosen destination
   ipcMain.handle('disk-rec:save-as', (_event, args: { src: string; dest: string }) => {
-    // SEC-1: Validate source path is inside temp directory (prevent path traversal)
-    const resolvedSrc = resolve(args.src);
-    if (!resolvedSrc.startsWith(tmpdir())) {
-      throw new Error('Source path outside temp directory');
-    }
+    // SEC-1: Validate source path is a mixi-rec-*.wav inside temp directory
+    const resolvedSrc = assertTempRecPath(args.src);
     // SEC-2: Destination must come from a prior `disk-rec:show-save-dialog`.
     const resolvedDest = resolve(args.dest);
     if (!_approvedSaveDests.delete(resolvedDest)) {
@@ -781,10 +818,7 @@ function setupDiskRecordingIPC(): void {
 
   // Recover an orphan recording: patch header and save
   ipcMain.handle('disk-rec:recover', (_event, args: { src: string; dest: string }) => {
-    const resolvedSrc = resolve(args.src);
-    if (!resolvedSrc.startsWith(tmpdir())) {
-      throw new Error('Source path outside temp directory');
-    }
+    const resolvedSrc = assertTempRecPath(args.src);
     // SEC-2: Destination must come from a prior `disk-rec:show-save-dialog`.
     const resolvedDest = resolve(args.dest);
     if (!_approvedSaveDests.delete(resolvedDest)) {
@@ -792,8 +826,11 @@ function setupDiskRecordingIPC(): void {
     }
     const stat = statSync(resolvedSrc);
     const fd = openSync(resolvedSrc, 'r+');
-    patchWavHeaderSize(fd, stat.size, { writeSync });
-    closeSync(fd);
+    try {
+      patchWavHeaderSize(fd, stat.size, { writeSync });
+    } finally {
+      try { closeSync(fd); } catch { /* ok */ }
+    }
 
     copyFileSync(resolvedSrc, resolvedDest);
     try { unlinkSync(resolvedSrc); } catch { /* temp cleanup */ }
@@ -804,10 +841,7 @@ function setupDiskRecordingIPC(): void {
 
   // Discard an orphan recording
   ipcMain.handle('disk-rec:discard', (_event, args: { path: string }) => {
-    const resolvedPath = resolve(args.path);
-    if (!resolvedPath.startsWith(tmpdir())) {
-      throw new Error('Path outside temp directory');
-    }
+    const resolvedPath = assertTempRecPath(args.path);
     try { unlinkSync(resolvedPath); } catch { /* may not exist */ }
     console.log(`[mixi-rec] Discarded: ${resolvedPath}`);
   });

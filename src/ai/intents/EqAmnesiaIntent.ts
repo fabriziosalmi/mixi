@@ -42,27 +42,39 @@ const RECOVERY_STEP_DB = 1;
 /** Target EQ level to restore to (0 dB = flat). */
 const TARGET_DB = 0;
 
+/** Active recovery ownership so recovery continues past -15 dB all the way to 0 dB (AUD-10). */
+let isRecovering = false;
+
+export function resetEqAmnesiaState(): void {
+  isRecovering = false;
+}
+
 export const EqAmnesiaIntent: BaseIntent = {
   name: 'safety.eq_amnesia_recovery',
   domain: 'safety',
   exclusive: false,
 
   evaluate(bb: Blackboard): number {
-    // ── Master deck bass forgotten? ────────────────────────
-    // Only trigger when:
-    //   1. Master is playing
-    //   2. Bass is killed (< -15 dB)
-    //   3. It's been killed for a long time (> threshold)
-    //   4. We're NOT actively blending (the cut might be intentional)
-    //   5. No other deck audible at high volume (solo performance)
-    if (!bb.masterState.isPlaying) return 0;
+    if (!bb.masterState.isPlaying) {
+      isRecovering = false;
+      return 0;
+    }
+    if (bb.isBlending || (bb.bothPlaying && bb.incomingState.volume > 0.15)) {
+      isRecovering = false;
+      return 0;
+    }
+
+    // Once recovery starts, keep scoring until bass reaches TARGET_DB (0 dB).
+    if (isRecovering) {
+      if (bb.masterState.eq.low >= TARGET_DB - 0.01) {
+        isRecovering = false;
+        return 0;
+      }
+      return 0.8;
+    }
+
     if (!bb.masterBassKilled) return 0;
     if (bb.masterBassKilledTicks < AMNESIA_THRESHOLD_TICKS) return 0;
-    // Don't recover if EITHER deck has significant volume overlap.
-    // isBlending checks both > 0.5, but even at 0.2 the incoming
-    // deck may be intentionally prepared (soft blend start).
-    if (bb.isBlending) return 0;
-    if (bb.bothPlaying && bb.incomingState.volume > 0.15) return 0;
 
     // Scale score: longer forgotten → higher urgency, cap at 0.85.
     const overshoot = bb.masterBassKilledTicks - AMNESIA_THRESHOLD_TICKS;
@@ -70,8 +82,12 @@ export const EqAmnesiaIntent: BaseIntent = {
   },
 
   execute(bb: Blackboard, store: MixiStore): void {
+    isRecovering = true;
     const current = bb.masterState.eq.low;
     const next = Math.min(TARGET_DB, current + RECOVERY_STEP_DB);
     store.setDeckEq(bb.masterDeck, 'low', next);
+    if (next >= TARGET_DB - 0.01) {
+      isRecovering = false;
+    }
   },
 };

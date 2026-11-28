@@ -208,20 +208,26 @@ export function computeBlackboard(): Blackboard {
   const incomingTime = engine.isInitialized
     ? engine.getCurrentTime(incomingDeck) : 0;
 
+  // Buffer-space native BPMs for beatgrid calculations (AUD-03: never use pitched bpm on buffer time)
+  const masterNativeBpm = ms.originalBpm > 0 ? ms.originalBpm : ms.bpm;
+  const incomingNativeBpm = is.originalBpm > 0 ? is.originalBpm : is.bpm;
+  const masterEffectiveBpm = ms.bpm > 0 ? ms.bpm : 120;
+
   // ── Wasm fast path (20 Hz tick) ─────────────────────────────
   // Pack raw deck state into Float64Array, compute all derived
   // metrics in Rust, then hydrate the remaining JS-only fields.
   const wasmModule = getWasm();
   if (wasmModule) {
     const raw = new Float64Array([
-      masterTime, ms.bpm, ms.firstBeatOffset, ms.duration,
+      masterTime, masterNativeBpm, ms.firstBeatOffset, ms.duration,
       ms.volume, ms.eq.low, ms.eq.mid, ms.colorFx,
-      incomingTime, is.bpm, is.firstBeatOffset, is.eq.low,
+      incomingTime, incomingNativeBpm, is.firstBeatOffset, is.eq.low,
       is.volume, is.colorFx, is.eq.mid, store.crossfader,
       ms.isPlaying ? 1.0 : 0.0, is.isPlaying ? 1.0 : 0.0,
+      masterEffectiveBpm,
     ]);
     const bb = wasmModule.compute_blackboard(raw);
-    const masterBpm = ms.bpm > 0 ? ms.bpm : 120;
+    const masterBpm = masterEffectiveBpm;
     const bothPlaying = ms.isPlaying && is.isPlaying;
     const incomingBeat = bb[5];
 
@@ -283,20 +289,20 @@ export function computeBlackboard(): Blackboard {
 
   // ── JS fallback ─────────────────────────────────────────────
 
-  const masterBpm = ms.bpm > 0 ? ms.bpm : 120;
+  const masterBpm = masterEffectiveBpm;
   const masterBeatPeriod = 60 / masterBpm;
 
-  const masterBeat = ms.bpm > 0
-    ? timeToBeat(masterTime, ms.bpm, ms.firstBeatOffset) : 0;
-  const masterTotalBeats = ms.bpm > 0
-    ? timeToBeat(ms.duration, ms.bpm, ms.firstBeatOffset) : 0;
+  const masterBeat = masterNativeBpm > 0
+    ? timeToBeat(masterTime, masterNativeBpm, ms.firstBeatOffset) : 0;
+  const masterTotalBeats = masterNativeBpm > 0
+    ? timeToBeat(ms.duration, masterNativeBpm, ms.firstBeatOffset) : 0;
 
-  const mixOutBeat = calcMixOutBeat(ms.duration, ms.bpm, ms.firstBeatOffset);
+  const mixOutBeat = calcMixOutBeat(ms.duration, masterNativeBpm, ms.firstBeatOffset);
   const beatsToOutro = mixOutBeat - masterBeat;
   const beatsToEnd = masterTotalBeats - masterBeat;
 
-  const incomingBeat = is.bpm > 0
-    ? timeToBeat(incomingTime, is.bpm, is.firstBeatOffset) : 0;
+  const incomingBeat = incomingNativeBpm > 0
+    ? timeToBeat(incomingTime, incomingNativeBpm, is.firstBeatOffset) : 0;
 
   // ── Phase alignment ────────────────────────────────────────
   //

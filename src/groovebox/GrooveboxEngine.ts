@@ -264,7 +264,12 @@ export class GrooveboxEngine {
 
     // Duration of one 16th-note step
     const stepDur = 60 / bpm / 4;
-    const deadline = this.ctx.currentTime + LOOK_AHEAD_S;
+    const now = this.ctx.currentTime;
+    // AUD-09: Prevent burst storm after tab backgrounding or timer stall
+    if (this.nextStepTime < now - stepDur * 2) {
+      this.nextStepTime = now;
+    }
+    const deadline = now + LOOK_AHEAD_S;
 
     while (this.nextStepTime < deadline) {
       this._currentStep = (this._currentStep + 1) % STEP_COUNT;

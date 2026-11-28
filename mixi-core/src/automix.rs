@@ -150,8 +150,14 @@ pub fn compute_blackboard(raw: &[f64]) -> Vec<f64> {
     let _crossfader = raw[15];
     let master_playing = raw[16] > 0.5;
     let incoming_playing = raw[17] > 0.5;
+    // Optional raw[18]: wall-clock effective master BPM (pitched). Falls back to master_bpm.
+    let master_effective_bpm = if raw.len() >= 19 && raw[18] > 0.0 {
+        raw[18]
+    } else {
+        master_bpm
+    };
 
-    let master_beat_period = 60.0 / master_bpm;
+    let master_beat_period = 60.0 / master_effective_bpm;
 
     // Beat calculations
     let master_beat = time_to_beat(master_time, master_bpm, master_offset);
@@ -170,8 +176,8 @@ pub fn compute_blackboard(raw: &[f64]) -> Vec<f64> {
         (0.0, 0.0)
     };
 
-    // Clash detection
-    let bass_clash = both_playing && master_eq_low > -10.0 && incoming_eq_low > -10.0;
+    // Clash detection (aligned with JS Blackboard threshold: -6 dB)
+    let bass_clash = both_playing && master_eq_low > -6.0 && incoming_eq_low > -6.0;
     let mid_clash = both_playing && master_eq_mid > -6.0 && incoming_eq_mid > -6.0;
 
     // Rhythmic position

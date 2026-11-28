@@ -75,8 +75,10 @@ export function patchWavHeaderSize(
   totalFileSize: number,
   fsModule: { writeSync: (fd: number, buf: Buffer, offset: number, length: number, position: number) => void },
 ): void {
-  const dataSize = totalFileSize - WAV_HEADER_SIZE;
-  const riffSize = totalFileSize - 8;
+  // AUD-11: Clamp to 32-bit RIFF max (0xFFFFFFFF) so >4 GB recordings never throw RangeError
+  const MAX_U32 = 0xffffffff;
+  const dataSize = Math.min(MAX_U32, Math.max(0, Math.floor(totalFileSize - WAV_HEADER_SIZE)));
+  const riffSize = Math.min(MAX_U32, Math.max(0, Math.floor(totalFileSize - 8)));
 
   const buf4 = Buffer.alloc(4);
 
