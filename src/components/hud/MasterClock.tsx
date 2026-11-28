@@ -23,6 +23,7 @@
 import { useState, useCallback, useEffect, useRef, useSyncExternalStore, type FC } from 'react';
 import { useMixiStore } from '../../store/mixiStore';
 import { MixiEngine } from '../../audio/MixiEngine';
+import { isHarmonicMatch } from '../../audio/KeyDetector';
 import { COLOR_MASTER } from '../../theme';
 
 // ── Shared MIDI Clock active state (used by MasterClock + MidiClockToggle) ──
@@ -79,6 +80,9 @@ export const MasterClock: FC = () => {
   const playingB = useMixiStore((s) => s.decks.B.isPlaying);
   const syncA = useMixiStore((s) => s.decks.A.isSynced);
   const syncB = useMixiStore((s) => s.decks.B.isSynced);
+  const keyA = useMixiStore((s) => s.decks.A.musicalKey);
+  const keyB = useMixiStore((s) => s.decks.B.musicalKey);
+  const harmonicCompatible = Boolean(keyA && keyB && isHarmonicMatch(keyA, keyB));
 
   const midiActive = useMidiClockActive();
   const [midiPort, setMidiPort] = useState<string>('');
@@ -243,6 +247,25 @@ export const MasterClock: FC = () => {
       >
         {masterBpm > 0 ? masterBpm.toFixed(1) : '---.-'}
       </span>
+
+      {/* Camelot Harmonic Match indicator when Deck A & B keys are compatible */}
+      {keyA && keyB && (
+        <span
+          className="text-[7px] font-mono font-bold tracking-wider uppercase rounded px-1 py-0.5 select-none"
+          style={{
+            color: harmonicCompatible ? 'var(--status-ok, #4ade80)' : 'var(--txt-dim)',
+            background: harmonicCompatible ? 'rgba(74, 222, 128, 0.12)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${harmonicCompatible ? 'rgba(74, 222, 128, 0.45)' : 'rgba(255,255,255,0.08)'}`,
+          }}
+          title={
+            harmonicCompatible
+              ? `Harmonic match: ${keyA} + ${keyB}`
+              : `Keys: ${keyA} vs ${keyB} (non-adjacent on Camelot wheel)`
+          }
+        >
+          {harmonicCompatible ? 'KEY ✓' : 'KEY'}
+        </span>
+      )}
 
       {/* Port selector (visible when MIDI available and ports exist) */}
       {hasMidi && midiPorts.length > 1 && (

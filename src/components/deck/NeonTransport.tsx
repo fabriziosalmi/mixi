@@ -108,6 +108,82 @@ export const NeonPlayButton: FC<PlayButtonProps> = ({
   );
 };
 
+// ── CDJ Cue Button (Sacred left-of-Play hardware button) ────
+
+interface CueButtonProps {
+  hasCue: boolean;
+  isPreviewing: boolean;
+  disabled?: boolean;
+  onPointerDown: () => void;
+  onPointerUp: () => void;
+  size?: number;
+  midiAction?: any;
+}
+
+export const NeonCueButton: FC<CueButtonProps> = ({
+  hasCue,
+  isPreviewing,
+  disabled = false,
+  onPointerDown,
+  onPointerUp,
+  size = 72,
+  midiAction,
+}) => {
+  const cueColor = 'var(--clr-cue, #f59e0b)';
+  const ringColor = isPreviewing
+    ? cueColor
+    : hasCue
+      ? 'rgba(245, 158, 11, 0.78)'
+      : 'rgba(245, 158, 11, 0.35)';
+
+  const handleDown = (e: React.PointerEvent) => {
+    if (disabled) return;
+    if (midiAction && (window as any).__MIXIMIDILEARN__ && useMidiStore.getState().isLearning) {
+      e.preventDefault();
+      e.stopPropagation();
+      (window as any).__MIXIMIDILEARN__(midiAction);
+      return;
+    }
+    onPointerDown();
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={handleDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+      onPointerCancel={onPointerUp}
+      title="CUE — Playing: return to cue & pause. Paused: set cue or hold to preview."
+      aria-label="Cue"
+      aria-pressed={isPreviewing}
+      className="relative rounded-full flex items-center justify-center transition-all duration-150 mixi-btn disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 select-none touch-none"
+      style={{
+        width: size,
+        height: size,
+        background: isPreviewing
+          ? 'radial-gradient(circle at 50% 35%, #2b2416, #16120b)'
+          : 'radial-gradient(circle at 50% 30%, #222328, #141418)',
+        border: `2px solid ${ringColor}`,
+        boxShadow: isPreviewing
+          ? 'inset 0 0 12px rgba(245, 158, 11, 0.28), 0 0 12px rgba(245, 158, 11, 0.45), 0 0 24px rgba(245, 158, 11, 0.18)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 10px rgba(0,0,0,0.65)',
+      }}
+    >
+      <span
+        className="text-[12px] font-mono font-black tracking-[0.14em] uppercase"
+        style={{
+          color: isPreviewing || hasCue ? cueColor : 'var(--txt-bright)',
+          textShadow: isPreviewing ? '0 0 8px rgba(245, 158, 11, 0.8)' : 'none',
+        }}
+      >
+        CUE
+      </span>
+    </button>
+  );
+};
+
 // ── Sync Button ─────────────────────────────────────────────
 
 interface SyncButtonProps {

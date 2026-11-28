@@ -21,45 +21,12 @@ import { Knob } from '../controls/Knob';
 import { COLOR_MASTER } from '../../theme';
 import { isGhost } from '../../ai/ghostFields';
 
-// ── SVG Icons (14×14, consistent with telemetry icons) ──────
+// ── SVG Icon for Limiter (exported for Telemetry pill) ──────
 
-/** Limiter — shield with exclamation */
+/** Limiter — shield */
 const LimIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
-
-/** Master volume — speaker */
-const MstIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-  </svg>
-);
-
-/** Filter — funnel */
-const FltIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-  </svg>
-);
-
-/** Distortion — lightning bolt */
-const DistIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-  </svg>
-);
-
-/** Punch — eye / wake lock */
-const PnchIcon: FC<{ color: string }> = ({ color }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
@@ -97,27 +64,23 @@ export const MasterHud: FC = () => {
   const filterActive = Math.abs(filterKnob) > 0.01;
   const distActive = distAmount > 0.01;
   const punchActive = punchAmount > 0.01;
-  const filterLabel = filterKnob < -0.01 ? 'LPF' : filterKnob > 0.01 ? 'HPF' : 'Flt';
+  const filterLabel = filterKnob < -0.01 ? 'LPF' : filterKnob > 0.01 ? 'HPF' : 'FLT';
 
   return (
-    <div className="flex items-center gap-2">
-      <LimiterDot />
+    <div className="flex items-center gap-3.5">
       <HudKnob
         value={volume} min={0} max={1}
         onChange={onVolumeChange}
         color={COLOR_MASTER}
-        icon={<MstIcon color={COLOR_MASTER} />}
-        label="Mst" valueText={dbLabel}
+        label="MST" valueText={dbLabel}
         ghost={isGhost('master.volume')}
         defaultValue={1}
-        iconScale={0.8}
       />
       <HudKnob
         value={filterKnob} min={-1} max={1}
         onChange={onFilterChange}
         color={filterActive ? 'var(--clr-filter)' : 'var(--txt-muted)'}
-        icon={<FltIcon color={filterActive ? 'var(--clr-filter)' : 'var(--txt-muted)'} />}
-        label="Flt" valueText={filterLabel}
+        label={filterLabel} valueText={filterLabel}
         defaultValue={0} bipolar
         ghost={isGhost('master.filter')}
         activeGlow={filterActive ? 'var(--clr-filter)' : undefined}
@@ -126,8 +89,7 @@ export const MasterHud: FC = () => {
         value={distAmount} min={0} max={1}
         onChange={onDistChange}
         color={distActive ? 'var(--status-error)' : 'var(--txt-muted)'}
-        icon={<DistIcon color={distActive ? 'var(--status-error)' : 'var(--txt-muted)'} />}
-        label="Dist" valueText={`${Math.round(distAmount * 100)}%`}
+        label="DIST" valueText={`${Math.round(distAmount * 100)}%`}
         defaultValue={0}
         ghost={isGhost('master.distortion')}
         activeGlow={distActive ? 'var(--status-error)' : undefined}
@@ -136,8 +98,7 @@ export const MasterHud: FC = () => {
         value={punchAmount} min={0} max={1}
         onChange={onPunchChange}
         color={punchActive ? 'var(--status-warn)' : 'var(--txt-muted)'}
-        icon={<PnchIcon color={punchActive ? 'var(--status-warn)' : 'var(--txt-muted)'} />}
-        label="Pnch" valueText={`${Math.round(punchAmount * 100)}%`}
+        label="PNCH" valueText={`${Math.round(punchAmount * 100)}%`}
         defaultValue={0}
         ghost={isGhost('master.punch')}
         activeGlow={punchActive ? 'var(--status-warn)' : undefined}
@@ -146,7 +107,7 @@ export const MasterHud: FC = () => {
   );
 };
 
-// ── HudKnob with icon ──────────────────────────────────────
+// ── HudKnob (clean text-only label + rotary knob) ──────────
 
 interface HudKnobProps {
   value: number;
@@ -154,49 +115,42 @@ interface HudKnobProps {
   max: number;
   onChange: (v: number) => void;
   color: string;
-  icon: React.ReactNode;
   label: string;
   valueText: string;
   ghost?: boolean;
   defaultValue?: number;
   bipolar?: boolean;
-  iconScale?: number;
   activeGlow?: string;
 }
 
 const HudKnob: FC<HudKnobProps> = ({
-  value, min, max, onChange, color, icon, label, valueText, ghost, defaultValue, bipolar, iconScale, activeGlow,
+  value, min, max, onChange, color, label, valueText, ghost, defaultValue, bipolar, activeGlow,
 }) => {
   return (
     <div
-      className="flex items-center gap-0.5"
+      className="flex items-center gap-1.5"
       title={`${label}: ${valueText}`}
       style={activeGlow ? { filter: `drop-shadow(0 0 4px ${activeGlow}44)` } : undefined}
     >
-      <div className="flex flex-col items-center justify-center leading-none gap-0.5">
-        <div style={iconScale ? { transform: `scale(${iconScale})` } : undefined}>
-          {icon}
-        </div>
-        <span
-          className="text-[6.5px] font-mono font-bold uppercase tracking-wider select-none"
-          style={{ color: activeGlow ? color : 'var(--txt-secondary)' }}
-        >
-          {label}
-        </span>
-      </div>
+      <span
+        className="text-[8px] font-mono font-bold uppercase tracking-wider select-none"
+        style={{ color: activeGlow ? color : 'var(--txt-secondary)' }}
+      >
+        {label}
+      </span>
       <Knob
         value={value} min={min} max={max}
         onChange={onChange} color={color}
-        scale={0.65} ghost={ghost}
+        scale={0.62} ghost={ghost}
         defaultValue={defaultValue} bipolar={bipolar}
       />
     </div>
   );
 };
 
-// ── Limiter Dot ────────────────────────────────────────────
+// ── Limiter Dot (sober monochrome when idle, amber/red only on GR) ──
 
-const LimiterDot: FC = () => {
+export const LimiterDot: FC = () => {
   const [enabled, setEnabled] = useState(true);
   const dotRef = useRef<HTMLButtonElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
@@ -247,7 +201,7 @@ const LimiterDot: FC = () => {
         const clip = document.getElementById('mixi-clip-flash');
         if (clip) clip.style.opacity = '0';
       } else {
-        el.style.backgroundColor = 'var(--clr-limiter-bg)';
+        el.style.backgroundColor = 'rgba(255,255,255,0.08)';
         el.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.5)';
         if (glow) glow.style.opacity = '0';
         const clip = document.getElementById('mixi-clip-flash');
@@ -263,7 +217,7 @@ const LimiterDot: FC = () => {
       const clip = document.getElementById('mixi-clip-flash');
       if (clip) clip.style.opacity = '0';
       if (cleanupDot) {
-        cleanupDot.style.backgroundColor = 'var(--clr-limiter-bg)';
+        cleanupDot.style.backgroundColor = 'rgba(255,255,255,0.08)';
         cleanupDot.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.5)';
       }
       if (cleanupGlow) cleanupGlow.style.opacity = '0';
@@ -271,13 +225,13 @@ const LimiterDot: FC = () => {
   }, [enabled]);
 
   return (
-    <div className="flex items-center gap-0.5 relative" title={`Limiter: ${enabled ? 'ON' : 'OFF'}`}>
-      <LimIcon color={enabled ? 'var(--txt-secondary)' : 'var(--brd-default)'} />
+    <div className="flex items-center gap-1 relative" title={`Master Limiter: ${enabled ? 'ON (nominal)' : 'BYPASSED'}`}>
+      <LimIcon color={enabled ? 'var(--txt-muted)' : 'var(--brd-default)'} />
       <div
         ref={glowRef}
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: 24, height: 24, top: '50%', right: -3, transform: 'translateY(-50%)',
+          width: 18, height: 18, top: '50%', right: -3, transform: 'translateY(-50%)',
           background: 'radial-gradient(circle, rgba(245,158,11,0.35) 0%, rgba(220,38,38,0.2) 50%, transparent 70%)',
           opacity: 0, transition: 'opacity 0.05s',
         }}
@@ -288,13 +242,13 @@ const LimiterDot: FC = () => {
         onClick={handleToggle}
         className="rounded-full shrink-0 cursor-pointer active:scale-90 transition-transform duration-75"
         style={{
-          width: 14, height: 14,
-          backgroundColor: enabled ? 'var(--clr-limiter-bg)' : 'var(--srf-inset)',
-          border: `1.5px solid ${enabled ? 'var(--clr-limiter-brd)' : 'var(--brd-subtle)'}`,
+          width: 8, height: 8,
+          backgroundColor: enabled ? 'rgba(255,255,255,0.12)' : 'var(--srf-inset)',
+          border: `1px solid ${enabled ? 'rgba(255,255,255,0.25)' : 'var(--brd-subtle)'}`,
           boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)',
           transition: 'background-color 0.08s',
         }}
-        title={`Limiter: ${enabled ? 'ON' : 'OFF'}`}
+        aria-label={`Master Limiter ${enabled ? 'enabled' : 'disabled'}`}
       />
     </div>
   );

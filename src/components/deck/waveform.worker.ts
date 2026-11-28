@@ -165,8 +165,9 @@ function draw() {
     ctx.fillRect(i * BAR_STEP, halfHeight - h, BAR_WIDTH, h * 2);
   }
 
-  // ── Waveform bands — additive 'screen' blend ──────────
-  ctx.globalCompositeOperation = 'screen';
+  // ── Waveform bands — dual luminance layering (outer spectral envelope + bright bass/transient core) ──
+  // Eliminates flat "barcode" look so kicks, transients and breakdowns read instantly.
+  ctx.globalCompositeOperation = 'source-over';
   for (let i = 0; i < totalBars; i++) {
     const dataIdx = (startIndex + i * zoom) | 0;
     if (dataIdx < 0 || dataIdx >= waveform.length) continue;
@@ -178,16 +179,38 @@ function draw() {
     const hMid = (point.mid * halfHeight) | 0;
     const hHigh = (point.high * halfHeight) | 0;
 
-    ctx.fillStyle = colors.COLOR_LOW;
-    ctx.fillRect(x, halfHeight - hLow, BAR_WIDTH, hLow * 2);
-
-    ctx.fillStyle = colors.COLOR_MID;
-    ctx.fillRect(x, halfHeight - hMid, BAR_WIDTH, hMid * 2);
-
+    // 1. Soft outer high/mid spectral envelope
+    ctx.globalAlpha = 0.34;
     ctx.fillStyle = colors.COLOR_HIGH;
-    ctx.fillRect(x, halfHeight - hHigh, BAR_WIDTH, hHigh * 2);
+    const hEnv = Math.max(hHigh, hMid);
+    if (hEnv > 0) ctx.fillRect(x, halfHeight - hEnv, BAR_WIDTH, hEnv * 2);
+
+    // 2. Saturated mid body
+    ctx.globalAlpha = 0.62;
+    ctx.fillStyle = colors.COLOR_MID;
+    if (hMid > 0) {
+      const midH = Math.max(1, (hMid * 0.85) | 0);
+      ctx.fillRect(x, halfHeight - midH, BAR_WIDTH, midH * 2);
+    }
+
+    // 3. Bright dense inner low-end / kick transient core
+    if (hLow > 0) {
+      const coreH = Math.max(1, (hLow * 0.72) | 0);
+      ctx.globalAlpha = 0.96;
+      ctx.fillStyle = colors.COLOR_LOW;
+      ctx.fillRect(x, halfHeight - coreH, BAR_WIDTH, coreH * 2);
+
+      // Subtle white-hot transient spine on strong bass peaks (> 0.65)
+      if (point.low > 0.65) {
+        const spineH = Math.max(1, (coreH * 0.38) | 0);
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, halfHeight - spineH, BAR_WIDTH, spineH * 2);
+      }
+    }
   }
 
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
 
   // ── Differential Phase Overlay (Ghost Deck Anaglifo) ─

@@ -197,6 +197,7 @@ const PitchStripBase: FC<PitchStripProps> = ({
   }, [softCenter]);
 
   const pitchPercent = ((value - 1) * 100).toFixed(1);
+  const isQuartzLocked = !isSynced && Math.abs(value - 1.0) < 0.0005;
   const pitchLabel = isSynced ? 'SYNC' : `${Number(pitchPercent) >= 0 ? '+' : ''}${pitchPercent}%`;
 
   const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -314,6 +315,21 @@ const PitchStripBase: FC<PitchStripProps> = ({
           {/* Tick marks — perpendicular to fader track (memoized) */}
           {ticksJsx}
 
+          {/* Technics SL-1200 Quartz Lock LED at 0.0% center detent */}
+          <div
+            className="absolute rounded-full pointer-events-none transition-all duration-150"
+            title={isQuartzLocked ? 'Quartz Lock (0.0%)' : undefined}
+            style={{
+              width: 5,
+              height: 5,
+              top: '50%',
+              right: 0,
+              transform: 'translateY(-50%)',
+              background: isQuartzLocked ? 'var(--status-ok, #4ade80)' : 'rgba(255,255,255,0.1)',
+              boxShadow: isQuartzLocked ? '0 0 6px rgba(74, 222, 128, 0.85)' : 'none',
+            }}
+          />
+
           {/* Cap */}
           <div
             className="absolute cursor-grab rounded-sm active:cursor-grabbing"
@@ -349,7 +365,7 @@ const PitchStripBase: FC<PitchStripProps> = ({
         {pitchLabel}
       </span>
 
-      {/* Soft-center toggle */}
+      {/* Pitch curve toggle — explicit LIN / SFT label instead of cryptic slash */}
       <button
         type="button"
         onClick={() => setSoftCenter((p) => !p)}
@@ -358,23 +374,16 @@ const PitchStripBase: FC<PitchStripProps> = ({
           width: 34,
           height: 18,
           background: softCenter ? `${color}22` : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${softCenter ? `${color}66` : 'var(--brd-default)33'}`,
+          border: `1px solid ${softCenter ? `${color}66` : 'var(--brd-default)'}`,
         }}
-        title={`Pitch curve: ${softCenter ? 'Soft center (high-res)' : 'Linear'}`}
+        title={`Pitch curve: ${softCenter ? 'Soft center (high-res near 0%)' : 'Linear'}`}
       >
-        {/* S-curve icon */}
-        <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
-          <path
-            d={softCenter
-              ? 'M1 9 C4 9, 6 1, 8 5 C10 9, 12 1, 15 1'  // S-curve
-              : 'M1 9 L15 1'                                 // straight line
-            }
-            stroke={softCenter ? color : 'var(--txt-secondary)'}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            opacity={softCenter ? 1 : 0.6}
-          />
-        </svg>
+        <span
+          className="text-[7.5px] font-mono font-bold tracking-wider uppercase"
+          style={{ color: softCenter ? color : 'var(--txt-secondary)' }}
+        >
+          {softCenter ? 'SFT' : 'LIN'}
+        </span>
       </button>
 
       <NudgeBtn direction={-1} color={color} onClick={() => handleNudge(-1)} />
@@ -404,11 +413,11 @@ const NudgeBtn: FC<{
       boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
     }}
   >
-    <svg width="14" height="10" viewBox="0 0 14 10">
+    <svg width="14" height="10" viewBox="0 0 14 10" className="opacity-35 hover:opacity-90 transition-opacity">
       {direction === 1 ? (
-        <path d="M2 7L7 3L12 7" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+        <path d="M2 7L7 3L12 7" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       ) : (
-        <path d="M2 3L7 7L12 3" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+        <path d="M2 3L7 7L12 3" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       )}
     </svg>
   </button>

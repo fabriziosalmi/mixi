@@ -133,11 +133,14 @@ export const FxUnitPanel: FC<{ deckId: DeckId; color: string }> = ({ deckId, col
     className="mixi-fx-strip flex flex-col items-center gap-2 shrink-0 py-1.5 px-1 rounded-lg"
     style={{
       width: 48,
-      background: 'rgba(20,20,22,0.7)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.02)',
+      background: 'rgba(20,20,22,0.72)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 1px 3px rgba(0,0,0,0.5)',
     }}
   >
+    <span className="text-[6.5px] font-mono font-bold tracking-widest uppercase" style={{ color: 'var(--txt-dim)' }}>
+      SEND
+    </span>
     <FxUnit unitKey="fx1" deckId={deckId} color={color} />
     <div className="w-6 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
     <FxUnit unitKey="fx2" deckId={deckId} color={color} />
