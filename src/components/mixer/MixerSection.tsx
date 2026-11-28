@@ -76,19 +76,20 @@ function useDeckControls(deckId: DeckId) {
 
 const VolumeLcd: FC<{ value: number; color: string }> = ({ value, color }) => {
   const db = value > 0.001 ? Math.round(20 * Math.log10(value)) : -60;
-  const label = db <= -60 ? '-∞' : `${db}`;
+  const label = db <= -60 ? '-∞ dB' : `${db} dB`;
   return (
     <span
-      className="text-[9px] font-mono font-medium rounded px-1.5 py-0.5"
+      className="text-[8.5px] font-mono font-semibold rounded px-1.5 py-0.5"
       style={{
         background: 'var(--srf-base)',
-        border: `1px solid ${color}18`,
+        border: `1px solid ${color}26`,
         color,
-        textShadow: `0 0 8px ${color}55`,
-        boxShadow: `inset 0 1px 3px rgba(0,0,0,0.6), 0 0 4px ${color}11`,
-        minWidth: 32,
+        textShadow: `0 0 6px ${color}44`,
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.6)',
+        minWidth: 38,
         textAlign: 'center' as const,
       }}
+      title="Channel fader level"
     >
       {label}
     </span>
@@ -356,8 +357,7 @@ export const MixerSection: FC = () => {
             <span style={{ color: ORANGE }}>B</span>
           </span>
 
-          {/* ── Row 2: GAIN (with band background) ───────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 2 }} />
+          {/* ── Row 2: GAIN ──────────────────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 2, zIndex: 1 }}>
             <GainCellA value={a.gain} onChange={a.onGainChange} color={CYAN} ghost={isGhost('A.gain')} midiAction={{ type: 'DECK_GAIN', deck: 'A' }} />
           </div>
@@ -366,8 +366,24 @@ export const MixerSection: FC = () => {
             <GainCellB value={b.gain} onChange={b.onGainChange} color={ORANGE} ghost={isGhost('B.gain')} midiAction={{ type: 'DECK_GAIN', deck: 'B' }} />
           </div>
 
-          {/* ── Row 4: HI (with EQ band background) ──────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 4 }} />
+          {/* Hairline acoustic divider: GAIN | 3-Band Isolator EQ */}
+          <div style={{ gridColumn: '1 / -1', gridRow: 3, width: '92%', height: 1, background: 'rgba(255,255,255,0.07)' }} />
+
+          {/* Unified 3-Band Isolator EQ surface (HI / MID / LOW) — replaces 5-box stack */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              gridRow: '4 / 9',
+              width: '100%',
+              height: '100%',
+              borderRadius: 8,
+              background: 'rgba(255,255,255,0.022)',
+              border: '1px solid rgba(255,255,255,0.055)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+            }}
+          />
+
+          {/* ── Row 4: HI ────────────────────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 4, zIndex: 1 }}>
             <EqCellA value={a.eq.high} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('high')} color={CYAN} ghost={isGhost('A.eq.high')} killed={a.kills.high !== null} onKill={a.onKill('high')} midiAction={{ type: 'DECK_EQ_HIGH', deck: 'A' }} />
           </div>
@@ -376,8 +392,7 @@ export const MixerSection: FC = () => {
             <EqCellB value={b.eq.high} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('high')} color={ORANGE} ghost={isGhost('B.eq.high')} killed={b.kills.high !== null} onKill={b.onKill('high')} midiAction={{ type: 'DECK_EQ_HIGH', deck: 'B' }} />
           </div>
 
-          {/* ── Row 6: MID (with EQ band background) ─────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 6 }} />
+          {/* ── Row 6: MID ───────────────────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 6, zIndex: 1 }}>
             <EqCellA value={a.eq.mid} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('mid')} color={CYAN} ghost={isGhost('A.eq.mid')} killed={a.kills.mid !== null} onKill={a.onKill('mid')} midiAction={{ type: 'DECK_EQ_MID', deck: 'A' }} />
           </div>
@@ -386,8 +401,7 @@ export const MixerSection: FC = () => {
             <EqCellB value={b.eq.mid} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('mid')} color={ORANGE} ghost={isGhost('B.eq.mid')} killed={b.kills.mid !== null} onKill={b.onKill('mid')} midiAction={{ type: 'DECK_EQ_MID', deck: 'B' }} />
           </div>
 
-          {/* ── Row 8: LOW (with EQ band background) ─────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 8 }} />
+          {/* ── Row 8: LOW ───────────────────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 8, zIndex: 1 }}>
             <EqCellA value={a.eq.low} min={a.eqRange.min} max={a.eqRange.max} onChange={a.onEqChange('low')} color={CYAN} ghost={isGhost('A.eq.low')} killed={a.kills.low !== null} onKill={a.onKill('low')} midiAction={{ type: 'DECK_EQ_LOW', deck: 'A' }} />
           </div>
@@ -396,8 +410,10 @@ export const MixerSection: FC = () => {
             <EqCellB value={b.eq.low} min={b.eqRange.min} max={b.eqRange.max} onChange={b.onEqChange('low')} color={ORANGE} ghost={isGhost('B.eq.low')} killed={b.kills.low !== null} onKill={b.onKill('low')} midiAction={{ type: 'DECK_EQ_LOW', deck: 'B' }} />
           </div>
 
-          {/* ── Row 10: COLOR (with EQ band background) ──────────── */}
-          <div className="mixi-eq-band" style={{ gridColumn: '1 / -1', gridRow: 10 }} />
+          {/* Hairline acoustic divider: 3-Band EQ | Color Filter */}
+          <div style={{ gridColumn: '1 / -1', gridRow: 9, width: '92%', height: 1, background: 'rgba(255,255,255,0.07)' }} />
+
+          {/* ── Row 10: COLOR FILTER ─────────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 10, zIndex: 1 }}>
             <Knob value={a.colorFx} min={-1} max={1} center={0} onChange={a.onColorFxChange} bipolar color={CYAN} scale={0.8} ghost={isGhost('A.colorFx')} midiAction={{ type: 'DECK_FILTER', deck: 'A' }} />
           </div>
@@ -405,6 +421,9 @@ export const MixerSection: FC = () => {
           <div style={{ gridColumn: 3, gridRow: 10, zIndex: 1 }}>
             <Knob value={b.colorFx} min={-1} max={1} center={0} onChange={b.onColorFxChange} bipolar color={ORANGE} scale={0.8} ghost={isGhost('B.colorFx')} midiAction={{ type: 'DECK_FILTER', deck: 'B' }} />
           </div>
+
+          {/* Hairline acoustic divider: Color Filter | Channel Faders & VU */}
+          <div style={{ gridColumn: '1 / -1', gridRow: 11, width: '92%', height: 1, background: 'rgba(255,255,255,0.07)' }} />
 
           {/* ── Row 12: Faders + VU Meters ────────────────────── */}
           <div style={{ gridColumn: 1, gridRow: 12 }} className="flex flex-col items-center gap-1">
@@ -431,18 +450,73 @@ export const MixerSection: FC = () => {
       <HpMasterStrip />
 
       {/* Crossfader */}
-      <div
-        className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/60 px-3 py-2 border border-zinc-800/60"
-        style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
-      >
-        <Fader value={crossfader} min={0} max={1} onChange={onCrossfaderChange} orientation="horizontal" length={260} color="#fff" ghost={isGhost('crossfader')} capSize={[40, 14]} midiAction={{ type: 'CROSSFADER' }} />
-        <div className="flex w-full items-center justify-between px-1 mt-0.5">
-          <span className="text-[11px] font-black" style={{ color: CYAN }}>A</span>
-          <span className="text-[8px] font-mono tracking-widest uppercase" style={{ color: 'var(--txt-dim)' }}>X-FADE</span>
-          <span className="text-[11px] font-black" style={{ color: ORANGE }}>B</span>
-        </div>
-      </div>
+      <CrossfaderBox crossfader={crossfader} onCrossfaderChange={onCrossfaderChange} />
 
+    </div>
+  );
+};
+
+// ── Crossfader Box with Center Detent & Curve Selector ───────
+
+const CrossfaderBox: FC<{
+  crossfader: number;
+  onCrossfaderChange: (v: number) => void;
+}> = ({ crossfader, onCrossfaderChange }) => {
+  const curve = useMixiStore((s) => s.crossfaderCurve);
+  const setCurve = useMixiStore((s) => s.setCrossfaderCurve);
+  const toggleCurve = useCallback(
+    () => setCurve(curve === 'smooth' ? 'sharp' : 'smooth'),
+    [curve, setCurve],
+  );
+  const isSharp = curve === 'sharp';
+
+  return (
+    <div
+      className="mixi-crossfader-area w-full flex flex-col items-center gap-0 rounded-md bg-zinc-900/60 px-3 py-2 border border-zinc-800/60"
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}
+    >
+      <Fader
+        value={crossfader}
+        min={0}
+        max={1}
+        onChange={onCrossfaderChange}
+        orientation="horizontal"
+        length={260}
+        color="#fff"
+        ghost={isGhost('crossfader')}
+        capSize={[40, 14]}
+        centerDetent
+        midiAction={{ type: 'CROSSFADER' }}
+      />
+      <div className="flex w-full items-center justify-between px-1 mt-0.5">
+        <span className="text-[11px] font-black" style={{ color: CYAN }}>A</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] font-mono tracking-widest uppercase" style={{ color: 'var(--txt-secondary)' }}>
+            X-FADE
+          </span>
+          <button
+            type="button"
+            onClick={toggleCurve}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[7.5px] font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer active:scale-95"
+            style={{
+              background: isSharp ? 'rgba(168,85,247,0.16)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${isSharp ? 'var(--clr-master)' : 'rgba(255,255,255,0.1)'}`,
+              color: isSharp ? 'var(--clr-master)' : 'var(--txt-secondary)',
+            }}
+            title={`Crossfader curve: ${isSharp ? 'CUT (Sharp Scratch)' : 'MIX (Smooth Constant Power)'} — Click to toggle`}
+          >
+            <svg width="10" height="8" viewBox="0 0 12 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              {isSharp ? (
+                <path d="M1 7 L3 1 L9 1 L11 7" />
+              ) : (
+                <path d="M1 7 Q6 0 11 7" />
+              )}
+            </svg>
+            {isSharp ? 'CUT' : 'MIX'}
+          </button>
+        </div>
+        <span className="text-[11px] font-black" style={{ color: ORANGE }}>B</span>
+      </div>
     </div>
   );
 };
@@ -518,8 +592,12 @@ const HpMasterStrip: FC = () => {
           {page === 'hp' ? (
             <>
               <StripBtn active={cueA} color={CYAN} onClick={() => toggleCue('A')} icon="cue" />
-              <div className="flex-1 flex justify-center [&_span]:!hidden">
-                <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.5} />
+              <div className="flex-1 flex items-center justify-center gap-0.5">
+                <span className="text-[7px] font-mono font-bold select-none" style={{ color: 'var(--txt-secondary)' }}>C</span>
+                <div className="[&_span]:!hidden">
+                  <Knob value={hpMix} min={0} max={1} onChange={setHpMix} color={COLOR_HP} scale={0.5} />
+                </div>
+                <span className="text-[7px] font-mono font-bold select-none" style={{ color: 'var(--txt-secondary)' }}>M</span>
               </div>
               <StripBtn active={splitMode} color={COLOR_HP} onClick={toggleSplit} icon="split" />
               <div className="flex-1 flex justify-center [&_span]:!hidden">

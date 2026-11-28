@@ -33,20 +33,19 @@ const DOT_COLORS: Record<AlertLevel, string> = {
 };
 
 function getAlertLevel(value: number): AlertLevel {
-  if (value > 0.85) return 'critical';
-  if (value > 0.60) return 'warn';
+  if (value > 0.90) return 'critical';
+  if (value > 0.75) return 'warn';
   return 'nominal';
 }
 
 function detectCpuAlert(history: number[], current: number): AlertLevel {
-  if (current > 0.9) return 'critical';
+  if (current > 0.90) return 'critical';
   let rising = 0;
   for (let i = history.length - 1; i > 0; i--) {
     if (history[i] > history[i - 1] + 0.01) rising++;
     else break;
   }
-  if (current > 0.7 && rising >= RISING_THRESHOLD) return 'warn';
-  if (current > 0.8) return 'warn';
+  if (current > 0.75 && rising >= RISING_THRESHOLD) return 'warn';
   return getAlertLevel(current);
 }
 
@@ -112,21 +111,16 @@ export const CpuBadge: FC = () => {
   const cpuColor = DOT_COLORS[cpuAlert];
 
   return (
-    <button
-      type="button"
-      className="text-[10px] font-mono font-black rounded px-1.5 py-0.5 tabular-nums transition-all"
+    <span
+      className="text-[9px] font-mono font-bold tabular-nums transition-colors"
       style={{
-        color: cpuAlert === 'nominal' ? 'var(--txt-muted)' : cpuAlert === 'warn' ? '#000' : '#fff',
-        backgroundColor: cpuAlert === 'nominal' ? 'transparent' : cpuColor,
-        border: `1px solid ${cpuAlert === 'nominal' ? 'rgba(255,255,255,0.1)' : cpuColor}`,
-        boxShadow: cpuAlert !== 'nominal' ? `0 0 8px ${cpuColor}66` : 'none',
-        minWidth: 32,
-        textAlign: 'center',
+        color: cpuAlert === 'nominal' ? 'var(--txt-secondary)' : cpuColor,
+        textShadow: cpuAlert !== 'nominal' ? `0 0 6px ${cpuColor}66` : 'none',
       }}
-      title={`CPU: ${cpuPct}%`}
+      title={`DSP CPU load: ${cpuPct}%`}
     >
-      {booting ? '...' : `${cpuPct}%`}
-    </button>
+      DSP {booting ? '…' : `${cpuPct}%`}
+    </span>
   );
 };
 

@@ -939,9 +939,129 @@ const JogEye: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLS
   );
 };
 
-// ── Centre Display (delegated to JogEye) ───────────────────
+// ── Centre Platter HUD (CDJ-3000 / SC6000 style) ───────────
+// Displays real-time circular track progress ring + active loop
+// badge (e.g. "4", "8") or deck ID / BPM in the platter center.
 
-const CentreDisplay: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLSpanElement | null> }> = (props) => {
-  return <JogEye {...props} />;
+const CentreDisplay: FC<{ deckId: DeckId; color: string; beatRef: React.RefObject<HTMLSpanElement | null> }> = ({
+  deckId,
+  color,
+  beatRef,
+}) => {
+  const isTrackLoaded = useMixiStore((s) => s.decks[deckId].isTrackLoaded);
+  const duration = useMixiStore((s) => s.decks[deckId].duration);
+  const activeLoop = useMixiStore((s) => s.decks[deckId].activeLoop);
+  const isPlaying = useMixiStore((s) => s.decks[deckId].isPlaying);
+  const ringRef = useRef<SVGCircleElement>(null);
+
+  const R = 26;
+  const C = 2 * Math.PI * R;
+
+  useEffect(() => {
+    if (!isTrackLoaded || duration <= 0) {
+      if (ringRef.current) ringRef.current.style.strokeDashoffset = String(C);
+      return;
+    }
+    let raf = 0;
+    let lastUpdate = 0;
+    const engine = MixiEngine.getInstance();
+    const tick = () => {
+      const now = performance.now();
+      if (now - lastUpdate > 120) {
+        lastUpdate = now;
+        if (engine.isInitialized && ringRef.current) {
+          const t = engine.getCurrentTime(deckId);
+          const frac = Math.max(0, Math.min(1, t / duration));
+          ringRef.current.style.strokeDashoffset = String(C * (1 - frac));
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [deckId, duration, isTrackLoaded, C]);
+
+  const sizePercent = (R_LABEL * 1.9 / VB) * 100;
+  const loopText = activeLoop
+    ? activeLoop.lengthInBeats < 1
+      ? `1/${Math.round(1 / activeLoop.lengthInBeats)}`
+      : String(activeLoop.lengthInBeats)
+    : null;
+
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: `${sizePercent}%`,
+          height: `${sizePercent}%`,
+          borderRadius: '50%',
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg viewBox="0 0 60 60" className="absolute inset-0 w-full h-full -rotate-90" aria-hidden="true">
+          {/* Background progress track */}
+          <circle
+            cx="30"
+            cy="30"
+            r={R}
+            fill="none"
+            stroke="rgba(255,255,255,0.1)"
+            strokeWidth="2.2"
+          />
+          {/* Live track position arc */}
+          <circle
+            ref={ringRef}
+            cx="30"
+            cy="30"
+            r={R}
+            fill="none"
+            stroke={loopText ? 'var(--status-ok, #4ade80)' : color}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C}
+            style={{ opacity: isTrackLoaded ? 0.9 : 0 }}
+          />
+        </svg>
+
+        {loopText ? (
+          <div className="flex flex-col items-center justify-center leading-none">
+            <span
+              className="text-[15px] font-mono font-black tabular-nums"
+              style={{
+                color: 'var(--status-ok, #4ade80)',
+                textShadow: '0 0 8px rgba(74, 222, 128, 0.7)',
+              }}
+            >
+              {loopText}
+            </span>
+            <span className="text-[6px] font-mono font-bold tracking-widest uppercase text-emerald-300/80 mt-0.5">
+              LOOP
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center leading-none">
+            <span
+              className="text-[11px] font-mono font-black tracking-widest"
+              style={{ color: isPlaying ? color : 'var(--txt-secondary)' }}
+            >
+              {deckId}
+            </span>
+            <span className="text-[5.5px] font-mono font-bold tracking-widest uppercase mt-0.5" style={{ color: 'var(--txt-dim)' }}>
+              {isPlaying ? 'LIVE' : 'CUE'}
+            </span>
+          </div>
+        )}
+      </div>
+      <JogEye deckId={deckId} color={color} beatRef={beatRef} />
+    </>
+  );
 };
 

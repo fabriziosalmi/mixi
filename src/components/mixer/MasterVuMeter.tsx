@@ -35,7 +35,7 @@ function applyLevel(
     if (!el) continue;
     const isLit = i < lit;
     el.style.backgroundColor = isLit ? colors[i] : offColor;
-    el.style.opacity = isLit ? '1' : '0.3';
+    el.style.opacity = '1';
     el.style.boxShadow = isLit ? glows[i] : 'none';
   }
 }
@@ -57,7 +57,7 @@ export const MasterVuMeter: FC = () => {
     const vuGreen = themeVar('vu-green', '#22c55e');
     const vuAmber = themeVar('vu-amber', '#f59e0b');
     const vuRed = themeVar('vu-red', '#ef4444');
-    const ledOff = themeVar('led-off', '#1a1a1a');
+    const ledOff = themeVar('vu-off-segment', 'rgba(255,255,255,0.075)');
     const segColors = Array.from({ length: SEGMENT_COUNT }, (_, i) =>
       i >= 10 ? vuRed : i >= 8 ? vuAmber : vuGreen,
     );
@@ -70,31 +70,45 @@ export const MasterVuMeter: FC = () => {
     });
   }, []);
 
+  const DB_MARKS = ['0', '-6', '-12', '-24', '-∞'];
+
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <div className="flex gap-[2px]">
+      <div className="flex items-stretch gap-1">
         {/* Column L */}
-        <div ref={colLRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 160 }}>
+        <div ref={colLRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 152 }}>
           {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
             <div
               key={i}
-              className="w-[8px] flex-1 rounded-[2px]"
-              style={{ backgroundColor: 'var(--led-off)', opacity: 0.3, boxShadow: 'none' }}
+              className="w-[7px] flex-1 rounded-[2px]"
+              style={{ backgroundColor: 'var(--vu-off-segment, rgba(255,255,255,0.075))', boxShadow: 'none' }}
             />
           ))}
         </div>
+        {/* Readable center dB scale (~45% contrast) */}
+        <div
+          className="flex flex-col justify-between py-0.5 text-[7px] font-mono font-semibold tabular-nums text-center select-none"
+          style={{ color: 'var(--scale-text, rgba(255,255,255,0.46))', height: 152, minWidth: 16 }}
+          aria-hidden="true"
+        >
+          {DB_MARKS.map((m) => (
+            <span key={m} className="leading-none">{m}</span>
+          ))}
+        </div>
         {/* Column R */}
-        <div ref={colRRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 160 }}>
+        <div ref={colRRef} className="flex flex-col-reverse gap-[3px]" style={{ height: 152 }}>
           {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
             <div
               key={i}
-              className="w-[8px] flex-1 rounded-[2px]"
-              style={{ backgroundColor: 'var(--led-off)', opacity: 0.3, boxShadow: 'none' }}
+              className="w-[7px] flex-1 rounded-[2px]"
+              style={{ backgroundColor: 'var(--vu-off-segment, rgba(255,255,255,0.075))', boxShadow: 'none' }}
             />
           ))}
         </div>
       </div>
-      <span className="text-[7px] text-zinc-400 uppercase tracking-wider">MST</span>
+      <span className="text-[7px] font-mono font-bold tracking-widest uppercase" style={{ color: 'var(--txt-secondary)' }}>
+        L · MST · R
+      </span>
     </div>
   );
 };

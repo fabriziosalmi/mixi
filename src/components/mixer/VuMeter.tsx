@@ -55,7 +55,7 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
     const vuGreen = themeVar('vu-green', '#22c55e');
     const vuAmber = themeVar('vu-amber', '#f59e0b');
     const vuRed = themeVar('vu-red', '#ef4444');
-    const ledOff = themeVar('led-off', '#1a1a1a');
+    const ledOff = themeVar('vu-off-segment', 'rgba(255,255,255,0.075)');
     const segColors = Array.from({ length: SEGMENT_COUNT }, (_, i) =>
       i >= 10 ? vuRed : i >= 8 ? vuAmber : vuGreen,
     );
@@ -66,7 +66,7 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
       seg.style.width = '10px';
       seg.style.borderRadius = '2px';
       seg.style.backgroundColor = ledOff;
-      seg.style.opacity = '0.5';
+      seg.style.opacity = '1';
       seg.style.marginBottom = '2px';
       container.appendChild(seg);
       segments.unshift(seg); // segments[0] = bottom, segments[11] = top
@@ -126,7 +126,7 @@ export const VuMeter: FC<VuMeterProps> = ({ deckId }) => {
           seg.style.boxShadow = `0 0 6px ${c}66`;
         } else {
           seg.style.backgroundColor = ledOff;
-          seg.style.opacity = '0.5';
+          seg.style.opacity = '1';
           seg.style.boxShadow = 'none';
         }
       }

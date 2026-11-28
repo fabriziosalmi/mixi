@@ -53,6 +53,17 @@ export function useKeyboardShortcuts() {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+      // ── Keyboard shortcut micro-hints: hold Alt or toggle with '?' ──
+      if (e.key === 'Alt') {
+        document.body.classList.add('mixi-show-keys');
+        return;
+      }
+      if (e.key === '?') {
+        e.preventDefault();
+        document.body.classList.toggle('mixi-show-keys');
+        return;
+      }
+
       const store = useMixiStore.getState();
       const engine = MixiEngine.getInstance();
 
@@ -229,6 +240,10 @@ export function useKeyboardShortcuts() {
     }
 
     function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === 'Alt') {
+        document.body.classList.remove('mixi-show-keys');
+        return;
+      }
       if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
         // Release nudge for both possible decks (shift state may have changed)
         const keyA = `${e.code}-A`;

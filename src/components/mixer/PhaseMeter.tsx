@@ -42,28 +42,29 @@ const CLR_WHITE = '#ffffff';  // locked
 
 export const PhaseMeter: FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const diffBarRef = useRef<HTMLDivElement>(null);
   const discARef = useRef<HTMLDivElement>(null);
   const discBRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const rafRef = useRef(0);
 
   useEffect(() => {
-    // Cached store fields
+    // Cached store fields (use native originalBpm for buffer-time beatgrid accuracy)
     let cachedPlayingA = false, cachedPlayingB = false;
     let cachedBpmA = 0, cachedBpmB = 0;
+    let cachedNativeBpmA = 0, cachedNativeBpmB = 0;
     let cachedOffsetA = 0, cachedOffsetB = 0;
     const syncCache = () => {
       const s = useMixiStore.getState();
       cachedPlayingA = s.decks.A.isPlaying; cachedPlayingB = s.decks.B.isPlaying;
       cachedBpmA = s.decks.A.bpm; cachedBpmB = s.decks.B.bpm;
+      cachedNativeBpmA = s.decks.A.originalBpm > 0 ? s.decks.A.originalBpm : s.decks.A.bpm;
+      cachedNativeBpmB = s.decks.B.originalBpm > 0 ? s.decks.B.originalBpm : s.decks.B.bpm;
       cachedOffsetA = s.decks.A.firstBeatOffset; cachedOffsetB = s.decks.B.firstBeatOffset;
     };
     syncCache();
-    // #15: selector on decks only — was a no-selector subscribe firing on every
-    // store mutation (master / crossfader / UI / AI ticks included).
     const unsub = useMixiStore.subscribe((s) => s.decks, syncCache);
 
-    // Change guards
     let prevZone = -1;
     let prevDiscALeft = '';
     let prevDiscBLeft = '';
@@ -72,34 +73,35 @@ export const PhaseMeter: FC = () => {
     function tick() {
       const discA = discARef.current;
       const discB = discBRef.current;
+      const diffBar = diffBarRef.current;
       const label = labelRef.current;
       const container = containerRef.current;
-      if (!discA || !discB || !label || !container) {
+      if (!discA || !discB || !diffBar || !label || !container) {
         rafRef.current = requestAnimationFrame(tick);
         return;
       }
 
       const bothPlaying = cachedPlayingA && cachedPlayingB && cachedBpmA > 0 && cachedBpmB > 0;
 
-      // ── Idle state ──────────────────────────────────────
+      // ── Idle state (grid & 0° center line remain crisp and legible) ──
       if (!bothPlaying) {
         if (prevZone !== 0) {
           prevZone = 0;
-          container.style.opacity = '0.3';
-          // A disc: left edge, small, dim cyan
-          discA.style.left = '8px';
-          discA.style.width = discA.style.height = `${DISC_MIN}px`;
+          container.style.opacity = '0.75';
+          diffBar.style.width = '0px';
+          discA.style.left = '14px';
+          discA.style.width = discA.style.height = '8px';
           discA.style.background = CLR_A;
-          discA.style.opacity = '0.3';
-          discA.style.boxShadow = 'none';
-          // B disc: right edge, small, dim orange
-          discB.style.left = `${METER_W - DISC_MIN - 8}px`;
-          discB.style.width = discB.style.height = `${DISC_MIN}px`;
+          discA.style.opacity = '0.65';
+          discA.style.boxShadow = `0 0 4px ${CLR_A}55`;
+          discB.style.left = `${METER_W - 22}px`;
+          discB.style.width = discB.style.height = '8px';
           discB.style.background = CLR_B;
-          discB.style.opacity = '0.3';
-          discB.style.boxShadow = 'none';
-          label.textContent = '';
-          prevDiscALeft = ''; prevDiscBLeft = ''; prevLabelText = '';
+          discB.style.opacity = '0.65';
+          discB.style.boxShadow = `0 0 4px ${CLR_B}55`;
+          label.textContent = '0° READY';
+          label.style.color = 'rgba(255,255,255,0.48)';
+          prevDiscALeft = ''; prevDiscBLeft = ''; prevLabelText = '0° READY';
         }
         rafRef.current = requestAnimationFrame(tick);
         return;
@@ -111,75 +113,63 @@ export const PhaseMeter: FC = () => {
 
       const timeA = engine.getCurrentTime('A');
       const timeB = engine.getCurrentTime('B');
-      const periodA = 60 / cachedBpmA;
-      const beatA = (timeA - cachedOffsetA) / periodA;
-      const beatB = (timeB - cachedOffsetB) / (60 / cachedBpmB);
+      const nativePeriodA = 60 / cachedNativeBpmA;
+      const nativePeriodB = 60 / cachedNativeBpmB;
+      const wallPeriodA = 60 / cachedBpmA;
+      const beatA = (timeA - cachedOffsetA) / nativePeriodA;
+      const beatB = (timeB - cachedOffsetB) / nativePeriodB;
       const fracA = ((beatA % 1) + 1) % 1;
       const fracB = ((beatB % 1) + 1) % 1;
       let delta = fracA - fracB;
       if (delta > 0.5) delta -= 1;
       if (delta < -0.5) delta += 1;
-      const deltaMs = delta * periodA * 1000;
+      const deltaMs = delta * wallPeriodA * 1000;
 
       container.style.opacity = '1';
 
-      // Clamp and normalize
       const clampedDelta = Math.max(-MAX_DELTA_MS, Math.min(MAX_DELTA_MS, deltaMs));
       const normDelta = clampedDelta / MAX_DELTA_MS; // -1 to +1
 
-      // ── Disc positions ──────────────────────────────────
-      // A starts from left, B from right. Both converge to center.
-      // normDelta > 0: A is ahead (B needs to catch up)
-      // At sync: both at center (HALF_TRACK)
+      // Differential bar expanding from 0° center line
+      const barPx = Math.abs(normDelta) * (HALF_TRACK - 14);
+      const barColor = Math.abs(clampedDelta) < 3 ? CLR_WHITE : Math.abs(clampedDelta) < 10 ? CLR_GREEN : normDelta > 0 ? CLR_A : CLR_B;
+      diffBar.style.width = `${Math.max(2, barPx | 0)}px`;
+      diffBar.style.left = normDelta >= 0 ? `${HALF_TRACK}px` : `${(HALF_TRACK - barPx) | 0}px`;
+      diffBar.style.background = barColor;
+      diffBar.style.boxShadow = `0 0 8px ${barColor}88`;
 
-      // A disc: center - offset (moves based on where A's phase is relative to center)
       const aOffset = normDelta * (HALF_TRACK - DISC_MAX);
       const aLeft = HALF_TRACK + aOffset - DISC_MAX / 2;
-
-      // B disc: mirrors A (opposite side)
       const bLeft = HALF_TRACK - aOffset - DISC_MAX / 2;
 
-      // ── Disc size: bigger when closer to center ─────────
       const absDelta = Math.abs(clampedDelta);
-      const proximity = 1 - (absDelta / MAX_DELTA_MS); // 0=edge, 1=center
+      const proximity = 1 - (absDelta / MAX_DELTA_MS);
       const discSize = DISC_MIN + proximity * (DISC_MAX - DISC_MIN);
       const sizeStr = `${discSize | 0}px`;
 
-      // ── Zone system ─────────────────────────────────────
       const zone = absDelta < 2 ? 1 : absDelta < 10 ? 2 : absDelta < 30 ? 3 : 4;
 
-      // ── Color blending ──────────────────────────────────
-      // Far apart: A=cyan, B=orange
-      // Approaching (< 30ms): both shift toward green
-      // Locked (< 2ms): both white with glow
       let colorA: string, colorB: string;
       let glowA = 'none', glowB = 'none';
 
       if (zone === 1) {
-        // LOCKED — bright white, strong glow
         colorA = colorB = CLR_WHITE;
         glowA = glowB = `0 0 14px rgba(255,255,255,0.7), 0 0 6px rgba(255,255,255,0.4)`;
       } else if (zone === 2) {
-        // NEAR — green tint, soft glow
         colorA = CLR_GREEN;
         colorB = CLR_GREEN;
         glowA = glowB = `0 0 8px rgba(34,197,94,0.5)`;
       } else if (zone === 3) {
-        // WARN — blending from native color toward green
-        // t: 0 at 30ms (pure native), 1 at 10ms (pure green)
-        const t = 1 - (absDelta - 10) / 20; // 0..1
+        const t = 1 - (absDelta - 10) / 20;
         colorA = t > 0.5 ? CLR_GREEN : CLR_A;
         colorB = t > 0.5 ? CLR_GREEN : CLR_B;
         glowA = `0 0 4px ${colorA}66`;
         glowB = `0 0 4px ${colorB}66`;
       } else {
-        // CRIT — native colors, no glow
         colorA = CLR_A;
         colorB = CLR_B;
       }
 
-      // ── Apply to DOM ────────────────────────────────────
-      // Disc A
       const newALeft = `${aLeft | 0}px`;
       if (newALeft !== prevDiscALeft) { discA.style.left = newALeft; prevDiscALeft = newALeft; }
       discA.style.width = discA.style.height = sizeStr;
@@ -187,7 +177,6 @@ export const PhaseMeter: FC = () => {
       discA.style.boxShadow = glowA;
       discA.style.opacity = '1';
 
-      // Disc B
       const newBLeft = `${bLeft | 0}px`;
       if (newBLeft !== prevDiscBLeft) { discB.style.left = newBLeft; prevDiscBLeft = newBLeft; }
       discB.style.width = discB.style.height = sizeStr;
@@ -195,9 +184,12 @@ export const PhaseMeter: FC = () => {
       discB.style.boxShadow = glowB;
       discB.style.opacity = '1';
 
-      // Label
       if (zone === 1) {
-        if (prevLabelText !== '') { label.textContent = ''; label.style.color = CLR_WHITE; prevLabelText = ''; }
+        if (prevLabelText !== 'LOCKED') {
+          label.textContent = 'LOCKED';
+          label.style.color = CLR_WHITE;
+          prevLabelText = 'LOCKED';
+        }
       } else {
         const ms = Math.round(deltaMs);
         const txt = `${ms > 0 ? '+' : ''}${ms}ms`;
@@ -220,89 +212,115 @@ export const PhaseMeter: FC = () => {
     <div
       ref={containerRef}
       className="relative flex items-center justify-center shrink-0"
-      style={{ width: METER_W, height: DISC_MAX + 8, opacity: 0.3 }}
+      style={{ width: METER_W, height: 48, opacity: 0.75 }}
     >
-      {/* Track line */}
-      <div
-        className="absolute"
-        style={{
-          width: METER_W - 16,
-          height: 1,
-          left: 8,
-          top: '50%',
-          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 20%, rgba(255,255,255,0.06) 80%, transparent)',
-        }}
-      />
+      {/* Beat alignment grid ticks (-50, -25, 0, +25, +50 ms) */}
+      {[0.08, 0.29, 0.5, 0.71, 0.92].map((pos) => {
+        const isCenter = pos === 0.5;
+        return (
+          <div
+            key={pos}
+            className="absolute pointer-events-none"
+            style={{
+              width: isCenter ? 1.5 : 1,
+              height: isCenter ? 28 : 14,
+              left: `${pos * 100}%`,
+              top: '44%',
+              transform: 'translate(-50%, -50%)',
+              background: isCenter
+                ? 'var(--phase-center-line, rgba(255,255,255,0.88))'
+                : 'var(--knob-tick, rgba(255,255,255,0.22))',
+            }}
+          />
+        );
+      })}
 
-      {/* Center tick */}
+      {/* Track rail */}
       <div
         className="absolute"
         style={{
-          width: 1,
-          height: DISC_MAX + 4,
-          left: HALF_TRACK,
-          top: '50%',
+          width: METER_W - 20,
+          height: 4,
+          left: 10,
+          top: '44%',
           transform: 'translateY(-50%)',
-          background: 'rgba(255,255,255,0.08)',
+          borderRadius: 2,
+          background: 'var(--vu-off-segment, rgba(255,255,255,0.075))',
         }}
       />
 
-      {/* Disc A (cyan, comes from left) */}
+      {/* Differential phase bar from 0° center */}
+      <div
+        ref={diffBarRef}
+        className="absolute rounded-full pointer-events-none"
+        style={{
+          height: 4,
+          width: 0,
+          left: HALF_TRACK,
+          top: '44%',
+          transform: 'translateY(-50%)',
+          background: CLR_A,
+        }}
+      />
+
+      {/* Disc A (cyan) */}
       <div
         ref={discARef}
         className="absolute rounded-full"
         style={{
-          width: DISC_MIN,
-          height: DISC_MIN,
-          left: 8,
-          top: '50%',
+          width: 8,
+          height: 8,
+          left: 14,
+          top: '44%',
           transform: 'translateY(-50%)',
           background: CLR_A,
-          opacity: 0.3,
+          opacity: 0.65,
         }}
       />
 
-      {/* Disc B (orange, comes from right) */}
+      {/* Disc B (orange) */}
       <div
         ref={discBRef}
         className="absolute rounded-full"
         style={{
-          width: DISC_MIN,
-          height: DISC_MIN,
-          left: METER_W - DISC_MIN - 8,
-          top: '50%',
+          width: 8,
+          height: 8,
+          left: METER_W - 22,
+          top: '44%',
           transform: 'translateY(-50%)',
           background: CLR_B,
-          opacity: 0.3,
+          opacity: 0.65,
         }}
       />
 
       {/* Deck labels */}
       <span
-        className="absolute text-[6px] font-mono font-bold"
-        style={{ left: 0, bottom: -1, color: CLR_A, opacity: 0.4 }}
+        className="absolute text-[7px] font-mono font-bold"
+        style={{ left: 2, bottom: 1, color: CLR_A, opacity: 0.85 }}
       >
         A
       </span>
       <span
-        className="absolute text-[6px] font-mono font-bold"
-        style={{ right: 0, bottom: -1, color: CLR_B, opacity: 0.4 }}
+        className="absolute text-[7px] font-mono font-bold"
+        style={{ right: 2, bottom: 1, color: CLR_B, opacity: 0.85 }}
       >
         B
       </span>
 
-      {/* Delta label */}
+      {/* Delta / LOCK label */}
       <span
         ref={labelRef}
-        className="absolute text-[7px] font-mono font-bold tabular-nums"
+        className="absolute text-[7.5px] font-mono font-bold tracking-wider tabular-nums"
         style={{
-          bottom: -2,
+          bottom: 1,
           left: '50%',
           transform: 'translateX(-50%)',
-          color: 'transparent',
+          color: 'rgba(255,255,255,0.48)',
           whiteSpace: 'nowrap',
         }}
-      />
+      >
+        0° READY
+      </span>
     </div>
   );
 };

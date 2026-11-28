@@ -51,11 +51,11 @@ const QUANTIZE_VALUES = [
 
 type PadMode = 'hotcue' | 'loop' | 'beatjump' | 'looproll';
 
-/** Beat lengths for the auto-loop pads. */
-const LOOP_BEATS = [1, 2, 4, 8, 16, 32, 0.5, 0.25] as const;
+/** Beat lengths for the auto-loop & loop-roll pads (ordered musically 1/4 -> 32). */
+const LOOP_BEATS = [0.25, 0.5, 1, 2, 4, 8, 16, 32] as const;
 
 /** Display labels for loop pads. */
-const LOOP_LABELS = ['1', '2', '4', '8', '16', '32', '1/2', '1/4'] as const;
+const LOOP_LABELS = ['1/4', '1/2', '1', '2', '4', '8', '16', '32'] as const;
 
 /** Beat jump amounts — top row backward, bottom row forward. */
 const JUMP_BEATS = [-32, -8, -4, -1, 1, 4, 8, 32] as const;
@@ -85,13 +85,15 @@ const PerformancePadsBase: FC<PerformancePadsProps> = ({ deckId, color }) => {
 
   const qVal = useMemo(() => QUANTIZE_VALUES[qValueIdx], [qValueIdx]);
 
+  const mirrorA = deckId === 'A';
+
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      {/* ── Header row: FX | mode tabs | QT ─────────────────── */}
-      <div className="flex gap-2 items-end w-full">
-        {/* FX label — same underline style as mode tabs but fixed gray */}
-        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
-          style={{ color: 'var(--txt-muted)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>FX</span>
+      {/* ── Header row: mirrored on Deck A so QT aligns under outer PitchStrip & FX ON under inner FxUnitPanel ── */}
+      <div className={`flex gap-2 items-end w-full ${mirrorA ? 'flex-row-reverse' : ''}`}>
+        {/* FX ON label — clearly distinguishes ON/OFF triggers from side FX SEND units */}
+        <span className="text-[8px] font-mono font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
+          style={{ color: 'var(--txt-secondary)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>FX ON</span>
 
         {/* Mode tabs */}
         <div className="flex gap-1 items-center flex-1">
@@ -101,13 +103,13 @@ const PerformancePadsBase: FC<PerformancePadsProps> = ({ deckId, color }) => {
           <ModeTab label="LOOP ROLL" active={mode === 'looproll'} onClick={() => setMode('looproll')} color="#22d3ee" />
         </div>
 
-        {/* QT label — same underline style as mode tabs but fixed gray */}
-        <span className="text-[8px] font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
-          style={{ color: 'var(--txt-muted)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>QT</span>
+        {/* QT label — deck quantize & beat grid size */}
+        <span className="text-[8px] font-mono font-bold tracking-widest text-center uppercase shrink-0 pb-[3px]"
+          style={{ color: 'var(--txt-secondary)', width: 48, borderBottom: '2px solid rgba(255,255,255,0.15)' }}>QUANT</span>
       </div>
 
-      {/* ── FX toggle + Pads + Quantize strip ──────────────── */}
-      <div className="flex gap-2 w-full">
+      {/* ── FX toggle + Pads + Quantize strip (mirrored on Deck A) ── */}
+      <div className={`flex gap-2 w-full ${mirrorA ? 'flex-row-reverse' : ''}`}>
         {/* FX ON/OFF — left column */}
         <div className="flex flex-col gap-2 shrink-0" style={{ width: 48 }}>
           <FxToggleButton deckId={deckId} unitKey="fx1" color={color} />
@@ -277,6 +279,9 @@ const HotCuePad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) => 
       >
         {index + 1}
       </span>
+      <span className="mixi-key-hint absolute bottom-0.5 right-1">
+        {deckId === 'A' ? `${index + 1}` : `⇧${index + 1}`}
+      </span>
     </button>
   );
 };
@@ -306,19 +311,24 @@ const LoopPad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) => {
     <button
       type="button"
       onClick={handleClick}
-      className="mixi-pad relative flex items-center justify-center rounded-[6px] h-11 text-[10px] font-bold transition-all select-none"
+      className="mixi-pad relative overflow-hidden flex items-center justify-center rounded-[6px] h-11 text-[11px] font-mono font-bold tabular-nums transition-all select-none"
       style={{
         background: isActive
-          ? `${LOOP_COLOR}08`
+          ? `${LOOP_COLOR}14`
           : 'var(--srf-mid)',
-        border: `1px solid ${isActive ? LOOP_COLOR : 'var(--srf-light)'}`,
-        color: isActive ? LOOP_COLOR : 'var(--txt-muted)',
+        border: `1px solid ${isActive ? LOOP_COLOR : 'var(--brd-default)'}`,
+        color: isActive ? '#fff' : 'var(--txt-primary)',
         boxShadow: isActive
-          ? `inset 0 0 25px ${LOOP_COLOR}b3, 0 0 10px ${LOOP_COLOR}44, 0 2px 4px rgba(0,0,0,0.4)`
-          : 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 0 #252525, 0 1px 0 rgba(255,255,255,0.015)',
+          ? `inset 0 0 22px ${LOOP_COLOR}88, 0 0 10px ${LOOP_COLOR}44, 0 2px 4px rgba(0,0,0,0.4)`
+          : 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 2px 6px rgba(0,0,0,0.55)',
         animation: isActive ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     >
+      <span
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0"
+        style={{ height: 2, background: LOOP_COLOR, opacity: isActive ? 1 : 0.32 }}
+      />
       {label}
     </button>
   );
@@ -356,17 +366,22 @@ const LoopRollPad: FC<{ deckId: DeckId; index: number }> = ({ deckId, index }) =
       onPointerUp={handleUp}
       onPointerLeave={handleUp}
       onPointerCancel={handleUp}
-      className="mixi-pad relative flex items-center justify-center rounded-[6px] h-11 text-[10px] font-bold transition-all select-none touch-none"
+      className="mixi-pad relative overflow-hidden flex items-center justify-center rounded-[6px] h-11 text-[11px] font-mono font-bold tabular-nums transition-all select-none touch-none"
       style={{
-        background: held ? `${ROLL_COLOR}15` : 'var(--srf-mid)',
-        border: `1px solid ${held ? ROLL_COLOR : 'var(--srf-light)'}`,
-        color: held ? ROLL_COLOR : 'var(--txt-muted)',
+        background: held ? `${ROLL_COLOR}18` : 'var(--srf-mid)',
+        border: `1px solid ${held ? ROLL_COLOR : 'var(--brd-default)'}`,
+        color: held ? '#fff' : 'var(--txt-primary)',
         boxShadow: held
-          ? `inset 0 0 25px ${ROLL_COLOR}88, 0 0 10px ${ROLL_COLOR}44, 0 2px 4px rgba(0,0,0,0.4)`
-          : 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 0 #252525, 0 1px 0 rgba(255,255,255,0.015)',
+          ? `inset 0 0 22px ${ROLL_COLOR}88, 0 0 10px ${ROLL_COLOR}44, 0 2px 4px rgba(0,0,0,0.4)`
+          : 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 2px 6px rgba(0,0,0,0.55)',
         animation: held ? 'pulse 0.5s ease-in-out infinite' : 'none',
       }}
     >
+      <span
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0"
+        style={{ height: 2, background: ROLL_COLOR, opacity: held ? 1 : 0.32 }}
+      />
       {label}
     </button>
   );
@@ -427,7 +442,7 @@ const FxToggleButton: FC<{ deckId: DeckId; unitKey: 'fx1' | 'fx2'; color: string
     fxUnitState.set(deckId, unitKey, { active: next });
   }, [deckId, unitKey]);
 
-  const label = unitKey.toUpperCase();
+  const label = unitKey === 'fx1' ? 'ON 1' : 'ON 2';
 
   return (
     <button

@@ -44,7 +44,7 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
 
   useEffect(() => {
     let lastUpdate = 0;
-    let prevElapsed = '', prevRemain = '', prevEnding = false;
+    let prevElapsed = '', prevRemain = '', prevUrgency: 'none' | 'warn' | 'crit' = 'none';
     function tick() {
       const now = performance.now();
       if (now - lastUpdate > 100) {
@@ -59,11 +59,21 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
           const remStr = `-${formatTime(rem)}`;
           if (remainRef.current) {
             if (remStr !== prevRemain) { remainRef.current.textContent = remStr; prevRemain = remStr; }
-            const ending = rem > 0 && rem < 30;
-            if (ending !== prevEnding) {
-              prevEnding = ending;
-              remainRef.current.style.color = ending ? 'var(--status-error)' : '';
-              remainRef.current.style.animation = ending ? 'pulse 1s ease-in-out infinite' : '';
+            // CDJ-style remaining time warning: amber < 30s, red fast pulse < 15s
+            const urgency: 'none' | 'warn' | 'crit' =
+              rem > 0 && rem < 15 ? 'crit' : rem > 0 && rem < 30 ? 'warn' : 'none';
+            if (urgency !== prevUrgency) {
+              prevUrgency = urgency;
+              if (urgency === 'crit') {
+                remainRef.current.style.color = 'var(--status-error)';
+                remainRef.current.style.animation = 'pulse 0.55s ease-in-out infinite';
+              } else if (urgency === 'warn') {
+                remainRef.current.style.color = 'var(--status-warn)';
+                remainRef.current.style.animation = 'pulse 1.1s ease-in-out infinite';
+              } else {
+                remainRef.current.style.color = '';
+                remainRef.current.style.animation = '';
+              }
             }
           }
         }
@@ -77,10 +87,10 @@ export const TrackInfo: FC<TrackInfoProps> = ({ deckId, color, compact = false }
 
   if (compact) {
     return (
-      <div className="shrink-0 flex items-baseline gap-1 font-mono">
-        <span ref={elapsedRef} className="text-[12px] font-bold text-white" style={{ fontFeatureSettings: '"tnum"' }}>0:00</span>
-        <span className="text-zinc-500 text-[10px]">/</span>
-        <span ref={remainRef} className="text-[11px] font-semibold text-zinc-300" style={{ fontFeatureSettings: '"tnum"' }}>-0:00</span>
+      <div className="shrink-0 flex items-baseline gap-1 font-mono" title="Elapsed / Remaining time">
+        <span ref={elapsedRef} className="text-[10px] font-medium text-zinc-400" style={{ fontFeatureSettings: '"tnum"' }}>0:00</span>
+        <span className="text-zinc-600 text-[9px]">/</span>
+        <span ref={remainRef} className="text-[13px] font-bold text-white" style={{ fontFeatureSettings: '"tnum"' }}>-0:00</span>
       </div>
     );
   }

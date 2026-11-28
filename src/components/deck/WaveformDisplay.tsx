@@ -39,8 +39,8 @@ import {
   PLAYHEAD_RATIO,
 } from './waveformConstants';
 
-const COLOR_DOWNBEAT = 'rgba(255, 255, 255, 0.3)';
-const COLOR_BEAT_NUM = 'rgba(255, 255, 255, 0.35)';
+const COLOR_DOWNBEAT = 'rgba(255, 255, 255, 0.42)';
+const COLOR_BEAT_NUM = 'rgba(255, 255, 255, 0.65)';
 const PLAYHEAD_COLOR = '#ff2222'; // Razor-red playhead (Traktor-style)
 
 // ── Component ────────────────────────────────────────────────

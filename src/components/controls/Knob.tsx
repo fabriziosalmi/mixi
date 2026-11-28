@@ -319,9 +319,28 @@ export const Knob: FC<KnobProps> = ({
 
   const s = SIZE * scale;
 
+  // Ephemeral on-drag formatted readout (#24)
+  const formattedDragValue = (() => {
+    if (unit) {
+      const sign = bipolar && value > 0.05 ? '+' : '';
+      return `${sign}${value.toFixed(1)}${unit}`;
+    }
+    if (bipolar && min === -1 && max === 1) {
+      if (Math.abs(value) < 0.02) return 'FLAT';
+      const pct = Math.round(Math.abs(value) * 100);
+      return value < 0 ? `LPF ${pct}%` : `HPF ${pct}%`;
+    }
+    if (min === 0 && max === 1) return `${Math.round(value * 100)}%`;
+    if (bipolar) {
+      const sign = value > 0.05 ? '+' : '';
+      return `${sign}${value.toFixed(1)} dB`;
+    }
+    return value.toFixed(1);
+  })();
+
   return (
     <div
-      className="group flex flex-col items-center gap-1 select-none touch-none rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+      className="group relative flex flex-col items-center gap-1 select-none touch-none rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
       role="slider"
       aria-valuemin={min}
       aria-valuemax={max}
@@ -331,6 +350,20 @@ export const Knob: FC<KnobProps> = ({
       onKeyDown={handleKeyDown}
       onWheel={handleWheel}
     >
+      {/* Ephemeral On-Drag Numeric HUD Popover (#24) */}
+      {isDragging && (
+        <span
+          className="absolute -top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-mono font-bold tabular-nums shadow-lg"
+          style={{
+            background: 'var(--srf-deep, #050505)',
+            border: `1px solid ${arcColor}`,
+            color: 'var(--txt-white, #ffffff)',
+            boxShadow: `0 2px 10px rgba(0,0,0,0.85), 0 0 8px ${arcColor}55`,
+          }}
+        >
+          {formattedDragValue}
+        </span>
+      )}
       <svg
         width={s}
         height={s}
@@ -341,60 +374,62 @@ export const Knob: FC<KnobProps> = ({
         onDoubleClick={handleDoubleClick}
         aria-hidden="true"
       >
-        {/* Outer ring – dark metallic body */}
+        {/* Scale ticks around 270° sweep (9 hardware ticks, stronger 12 o'clock zero-detent) */}
+        {[-135, -101.25, -67.5, -33.75, 0, 33.75, 67.5, 101.25, 135].map((deg) => {
+          const isZero = deg === 0;
+          const p1 = polarToXY(CX, CY, RADIUS + 2.5, deg);
+          const p2 = polarToXY(CX, CY, RADIUS + (isZero ? 5.2 : 4.2), deg);
+          return (
+            <line
+              key={deg}
+              x1={p1.x}
+              y1={p1.y}
+              x2={p2.x}
+              y2={p2.y}
+              stroke={
+                isZero
+                  ? (isAtCentre ? 'var(--knob-needle, #ffffff)' : 'var(--knob-tick-zero, rgba(255,255,255,0.58))')
+                  : 'var(--knob-tick, rgba(255,255,255,0.22))'
+              }
+              strokeWidth={isZero ? 1.5 : 0.9}
+              strokeLinecap="round"
+            />
+          );
+        })}
+
+        {/* Outer bevel ring */}
         <circle
           cx={CX}
           cy={CY}
-          r={RADIUS + 2}
+          r={RADIUS + 1.5}
           fill="none"
-          stroke="var(--brd-default)"
+          stroke="var(--brd-subtle, rgba(255,255,255,0.09))"
           strokeWidth={1}
-        />
-        {/* 12 o'clock zero-detent hardware tick for bipolar knobs */}
-        {bipolar && (
-          <line
-            x1={CX}
-            y1={1.5}
-            x2={CX}
-            y2={4.5}
-            stroke={isAtCentre ? 'var(--txt-bright)' : 'var(--txt-muted)'}
-            strokeWidth={1.4}
-            strokeLinecap="round"
-          />
-        )}
-        {/* Knob body — cylindrical with zenithal light */}
-        <circle cx={CX} cy={CY} r={RADIUS} fill="var(--srf-mid)" />
-        <circle
-          cx={CX}
-          cy={CY}
-          r={RADIUS}
-          fill={`url(#${gradId})`}
-          opacity={0.5}
         />
 
         {/* Track arc (recessed 270° groove, clearly visible at rest) */}
         <path
           d={trackPath}
           fill="none"
-          stroke="rgba(255,255,255,0.12)"
-          strokeWidth={3.2}
+          stroke="var(--knob-track, rgba(255,255,255,0.13))"
+          strokeWidth={3}
           strokeLinecap="round"
         />
 
-        {/* Active arc — subsurface scattering glow layer (wide, soft) */}
+        {/* Active arc — soft glow layer */}
         {arcPath && (
           <path
             d={arcPath}
             fill="none"
             stroke={arcColor}
-            strokeWidth={7}
+            strokeWidth={6}
             strokeLinecap="round"
-            opacity={ghost ? 0.3 : 0.2}
-            style={{ filter: `blur(3px)` }}
+            opacity={ghost ? 0.34 : 0.24}
+            style={{ filter: `blur(2.5px)` }}
           />
         )}
 
-        {/* Active arc — main bright line */}
+        {/* Active arc — crisp bipolar/unipolar LED line */}
         {arcPath && (
           <path
             d={arcPath}
@@ -402,36 +437,69 @@ export const Knob: FC<KnobProps> = ({
             stroke={arcColor}
             strokeWidth={3}
             strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 4px ${arcColor}) drop-shadow(0 0 1px ${arcColor})` }}
+            strokeDasharray={ghost ? '4 3' : undefined}
+            style={{ filter: `drop-shadow(0 0 4px ${arcColor})` }}
           />
         )}
 
-        {/* Indicator line */}
+        {/* AutoMixer Ghost Mutation signature — purple dashed outer orbit + ghost bead */}
+        {ghost && (() => {
+          const ghostOrbit = describeArc(CX, CY, RADIUS + 3.8, -HALF_ARC, HALF_ARC);
+          const ghostBead = polarToXY(CX, CY, RADIUS + 3.8, angleDeg);
+          return (
+            <g className="pointer-events-none" aria-label="AutoMixer ghost control active">
+              <path
+                d={ghostOrbit}
+                fill="none"
+                stroke={COLOR_GHOST}
+                strokeWidth={1.25}
+                strokeDasharray="3 2.5"
+                strokeLinecap="round"
+                opacity={0.75}
+                style={{ filter: `drop-shadow(0 0 4px ${COLOR_GHOST})` }}
+              />
+              <circle
+                cx={ghostBead.x}
+                cy={ghostBead.y}
+                r={2.3}
+                fill={COLOR_GHOST}
+                stroke="#ffffff"
+                strokeWidth={0.7}
+                style={{ filter: `drop-shadow(0 0 5px ${COLOR_GHOST})` }}
+              />
+            </g>
+          );
+        })()}
+
+        {/* Dark matte hardware knob cap (#181A1F -> #101216) — high contrast against indicator */}
+        <circle cx={CX} cy={CY} r={RADIUS - 2.5} fill={`url(#${gradId})`} stroke="rgba(255,255,255,0.1)" strokeWidth={0.8} />
+
+        {/* High-contrast indicator pointer */}
         <line
           x1={indInner.x}
           y1={indInner.y}
           x2={indOuter.x}
           y2={indOuter.y}
-          stroke={isAtCentre ? 'var(--txt-white)' : 'var(--txt-bright)'}
-          strokeWidth={2.5}
+          stroke={!isAtCentre && arcPath ? arcColor : 'var(--knob-needle, #ffffff)'}
+          strokeWidth={2.6}
           strokeLinecap="round"
           style={{
             filter: detentFlash
               ? 'drop-shadow(0 0 6px #fff) drop-shadow(0 0 2px #fff)'
-              : isAtCentre
-                ? 'drop-shadow(0 0 4px rgba(255,255,255,0.6)) drop-shadow(0 0 1px #fff)'
-                : 'drop-shadow(0 0 2px rgba(255,255,255,0.15))',
+              : !isAtCentre && arcPath
+                ? `drop-shadow(0 0 4px ${arcColor})`
+                : 'drop-shadow(0 0 3px rgba(255,255,255,0.45))',
             transition: 'filter 0.06s ease-out, stroke 0.1s ease-out',
           }}
         />
 
-        {/* Radial gradient — zenithal light reflection */}
+        {/* Tokenized matte anodized gradient (adapts across Dark / White / E-Ink skins) */}
         <defs>
-          <radialGradient id={gradId} cx="38%" cy="30%" r="60%">
-            <stop offset="0%" stopColor="var(--txt-secondary)" />
-            <stop offset="50%" stopColor="var(--srf-light)" />
-            <stop offset="100%" stopColor="var(--srf-base)" />
-          </radialGradient>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="var(--knob-cap-top, #1b1d23)" />
+            <stop offset="55%" stopColor="var(--knob-cap-mid, #14161b)" />
+            <stop offset="100%" stopColor="var(--knob-cap-bot, #0d0e12)" />
+          </linearGradient>
         </defs>
       </svg>
 

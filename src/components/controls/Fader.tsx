@@ -52,6 +52,8 @@ export interface FaderProps {
   capSize?: [number, number];
   /** Default value restored on double-click / Backspace. Defaults to midpoint for horizontal faders. */
   defaultValue?: number;
+  /** Magnetic center detent at 50% (used on Crossfader). */
+  centerDetent?: boolean;
   midiAction?: any;
 }
 
@@ -77,6 +79,7 @@ export const Fader: FC<FaderProps> = ({
   ghost = false,
   capSize,
   defaultValue,
+  centerDetent = false,
   midiAction,
 }) => {
   const glowColor = ghost ? COLOR_GHOST : color;
@@ -101,10 +104,14 @@ export const Fader: FC<FaderProps> = ({
       // UX-1: Shift + drag gives 4× finer precision
       const effectiveTravel = shiftKey ? travelPx * 4 : travelPx;
       const delta = (pixelDelta / effectiveTravel) * range;
-      const raw = valueAtDragStart.current + delta;
-      onChange(Math.min(max, Math.max(min, raw)));
+      let raw = Math.min(max, Math.max(min, valueAtDragStart.current + delta));
+      if (centerDetent && !shiftKey) {
+        const mid = (min + max) / 2;
+        if (Math.abs(raw - mid) < range * 0.025) raw = mid;
+      }
+      onChange(raw);
     },
-    [min, max, onChange, isVertical, length, capLen],
+    [min, max, onChange, isVertical, length, capLen, centerDetent],
   );
 
   const { onPointerDown } = useDrag({
@@ -316,6 +323,47 @@ export const Fader: FC<FaderProps> = ({
             />
           )}
         </div>
+
+        {/* AutoMixer Ghost Mutation signature — purple dashed parallel rail + ghost cursor */}
+        {ghost && (
+          <>
+            <div
+              className="absolute pointer-events-none"
+              style={
+                isVertical
+                  ? {
+                      right: 1,
+                      top: 2,
+                      bottom: 2,
+                      width: 0,
+                      borderRight: `1.5px dashed ${COLOR_GHOST}`,
+                      opacity: 0.7,
+                      filter: `drop-shadow(0 0 4px ${COLOR_GHOST})`,
+                    }
+                  : {
+                      bottom: 1,
+                      left: 2,
+                      right: 2,
+                      height: 0,
+                      borderBottom: `1.5px dashed ${COLOR_GHOST}`,
+                      opacity: 0.7,
+                      filter: `drop-shadow(0 0 4px ${COLOR_GHOST})`,
+                    }
+              }
+            />
+            <div
+              className="absolute pointer-events-none rounded-[3px]"
+              style={{
+                ...capStyle,
+                border: `1.5px dashed ${COLOR_GHOST}`,
+                boxShadow: `0 0 10px ${COLOR_GHOST}88, inset 0 0 6px ${COLOR_GHOST}33`,
+                transform: isVertical
+                  ? 'translateX(-50%) scale(1.16)'
+                  : 'translateY(-50%) scale(1.16)',
+              }}
+            />
+          </>
+        )}
 
         {/* Fader cap */}
         <div

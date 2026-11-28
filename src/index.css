@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Keyboard shortcut micro-hints (revealed via Alt hold or '?' toggle) ── */
+
+.mixi-key-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 7.5px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(8, 10, 14, 0.92);
+  color: var(--txt-white, #ffffff);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 30;
+}
+
+body.mixi-show-keys .mixi-key-hint {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Light / High-Contrast Skin Token Overrides (White, E-Ink) ── */
+
+body.mixi-skin-white,
+body[data-skin="white"],
+body.mixi-skin-eink,
+body.mixi-skin-e-ink,
+body[data-skin="eink"],
+body[data-skin="e-ink"] {
+  --knob-cap-top:      #f1f3f6;
+  --knob-cap-mid:      #e4e7ec;
+  --knob-cap-bot:      #d0d5dd;
+  --knob-needle:       #111318;
+  --knob-track:        rgba(17, 19, 24, 0.16);
+  --knob-tick:         rgba(17, 19, 24, 0.34);
+  --knob-tick-zero:    rgba(17, 19, 24, 0.82);
+  --vu-off-segment:    rgba(17, 19, 24, 0.12);
+  --scale-text:        rgba(17, 19, 24, 0.72);
+  --phase-center-line: rgba(17, 19, 24, 0.92);
+}
+
 /* ── Thin scrollbar for settings panels ─────────────────── */
 
 .mixi-settings-scroll::-webkit-scrollbar {
@@ -81,11 +129,21 @@ body {
   --status-error:       #ef4444;
   --status-error-dim:   #dc2626;
 
-  /* ── VU / LED ─────────────────────────────────────────── */
+  /* ── VU / LED & Hardware Micro-Tokens (multi-skin safe) ── */
   --vu-green: #22c55e;
   --vu-amber: #f59e0b;
   --vu-red:   #ef4444;
   --led-off:  #1a1a1a;
+  --vu-off-segment:    rgba(255, 255, 255, 0.075);
+  --scale-text:        rgba(255, 255, 255, 0.46);
+  --phase-center-line: rgba(255, 255, 255, 0.88);
+  --knob-cap-top:      #1b1d23;
+  --knob-cap-mid:      #14161b;
+  --knob-cap-bot:      #0d0e12;
+  --knob-needle:       #ffffff;
+  --knob-track:        rgba(255, 255, 255, 0.13);
+  --knob-tick:         rgba(255, 255, 255, 0.22);
+  --knob-tick-zero:    rgba(255, 255, 255, 0.58);
 
   /* ── Waveform: main ───────────────────────────────────── */
   --wave-low:      #991133;

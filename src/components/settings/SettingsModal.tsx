@@ -718,6 +718,10 @@ const CreditsTab: FC = () => (
 
     <SectionHeader label="Resources" />
     <div className="flex flex-col gap-2 text-[11px]">
+      <a href="https://github.com/fabriziosalmi/mixi" target="_blank" rel="noopener noreferrer"
+        className="hover:underline" style={{ color: 'var(--clr-a)' }}>
+        GitHub Repository (fabriziosalmi/mixi)
+      </a>
       <a href="https://fabriziosalmi.github.io/mixi/guide/getting-started" target="_blank" rel="noopener noreferrer"
         className="hover:underline" style={{ color: 'var(--clr-a)' }}>
         Documentation & Keyboard Shortcuts
