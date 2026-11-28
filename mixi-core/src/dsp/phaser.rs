@@ -45,6 +45,7 @@ impl AllpassStage {
 /// a1 = (tan(π·f/sr) - 1) / (tan(π·f/sr) + 1)
 #[inline]
 fn allpass_coeff(freq: f32, sr: f32) -> f32 {
+    let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
     let t = (PI * freq / sr).tan();
     (t - 1.0) / (t + 1.0)
 }

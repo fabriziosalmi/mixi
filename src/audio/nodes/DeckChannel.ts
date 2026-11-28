@@ -204,21 +204,22 @@ export class DeckChannel {
     // Don't connect/disconnect them uselessly.
   }
 
-  // ── Model 3: Xone Kill (48dB/oct full-kill isolator) ──────
-  //   Same topology as LR4 but 4th-order (4× cascaded) with
-  //   slightly resonant crossovers (Q=1.0) and tighter bands.
+  // ── Model 3: Xone Kill (48dB/oct LR8 full-kill isolator) ──
+  //   True 8th-order Linkwitz-Riley (two cascaded 4th-order Butterworth pairs):
+  //   section Qs [0.5412, 1.3066, 0.5412, 1.3066] give exact -6 dB (0.5) at fc
+  //   so Low + Mid + High sum to 0 dB flat with zero crossover spikes or ringing.
   //   Crossovers: 200Hz / 2500Hz (classic Xone voicing)
 
   private buildXoneKill(): void {
     const ctx = this.ctx;
     const LO = 200, HI = 2500;
-    const Q = 1.0; // slight resonance at crossover
+    const LR8_QS = [0.5412, 1.3066, 0.5412, 1.3066] as const;
 
     const make4th = (type: BiquadFilterType, freq: number) => {
       const filters: BiquadFilterNode[] = [];
       for (let i = 0; i < 4; i++) {
         const f = ctx.createBiquadFilter();
-        f.type = type; f.frequency.value = freq; f.Q.value = Q;
+        f.type = type; f.frequency.value = freq; f.Q.value = LR8_QS[i];
         this.eqFilters.push(f);
         filters.push(f);
         if (i > 0) filters[i - 1].connect(f);

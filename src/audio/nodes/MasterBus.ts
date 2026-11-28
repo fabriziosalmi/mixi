@@ -327,12 +327,12 @@ export class MasterBus {
       const freq = filterFreq(knob);
       smoothParam(this.filterLP.frequency, Math.min(20000, freq), ctx);
     } else {
-      // HPF active
+      // HPF active — sweep UP from 20 Hz (absK=0) to 20 kHz (absK=1)
       smoothParam(this.filterBypassGain.gain, 0, ctx);
       smoothParam(this.filterLPGain.gain, 0, ctx);
       smoothParam(this.filterHPGain.gain, 1, ctx);
-      const freq = filterFreq(knob);
-      smoothParam(this.filterHP.frequency, Math.max(20, freq), ctx);
+      const freq = 20 * Math.pow(1000, absK);
+      smoothParam(this.filterHP.frequency, Math.min(20000, Math.max(20, freq)), ctx);
     }
   }
 
@@ -341,7 +341,9 @@ export class MasterBus {
   setDistortion(amount: number, ctx: AudioContext): void {
     smoothParam(this.dryGain.gain, 1 - amount, ctx);
     smoothParam(this.wetGain.gain, amount, ctx);
-    smoothParam(this.bassMonoGain.gain, amount * 0.5, ctx);
+    // Negate bassMonoGain polarity to compensate for the 180° phase flip
+    // between single-stage 2nd-order Butterworth LP & HP at 300 Hz (avoids -∞ dB null).
+    smoothParam(this.bassMonoGain.gain, -amount * 0.5, ctx);
 
     // Toggle oversampling: '4x' when active, 'none' when off.
     // Saves CPU by avoiding 4x upsampling on a silent wet path.

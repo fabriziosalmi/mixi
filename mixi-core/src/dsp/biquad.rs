@@ -122,6 +122,8 @@ impl Biquad {
 
     /// Configure as a low-shelf filter.
     pub fn set_lowshelf(&mut self, freq: f32, gain_db: f32, sr: f32) {
+        let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
+        let gain_db = gain_db.clamp(-60.0, 60.0);
         let a = 10.0f32.powf(gain_db / 40.0); // sqrt of linear gain
         let w0 = 2.0 * PI * freq / sr;
         let (sin_w0, cos_w0) = (w0.sin(), w0.cos());
@@ -140,6 +142,8 @@ impl Biquad {
 
     /// Configure as a high-shelf filter.
     pub fn set_highshelf(&mut self, freq: f32, gain_db: f32, sr: f32) {
+        let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
+        let gain_db = gain_db.clamp(-60.0, 60.0);
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = 2.0 * PI * freq / sr;
         let (sin_w0, cos_w0) = (w0.sin(), w0.cos());
@@ -158,6 +162,9 @@ impl Biquad {
 
     /// Configure as a peaking (parametric) EQ filter.
     pub fn set_peaking(&mut self, freq: f32, gain_db: f32, q: f32, sr: f32) {
+        let freq = freq.clamp(1.0, (sr * 0.495).max(20.0));
+        let gain_db = gain_db.clamp(-60.0, 60.0);
+        let q = q.max(0.05);
         let a = 10.0f32.powf(gain_db / 40.0);
         let w0 = 2.0 * PI * freq / sr;
         let (sin_w0, cos_w0) = (w0.sin(), w0.cos());

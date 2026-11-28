@@ -94,6 +94,9 @@ pub struct Reverb {
     wet: f32,
     /// Internal energy tracker for auto-sleep
     energy: f32,
+    /// Remaining samples to keep awake so comb/allpass reflections can emerge on 128-sample blocks
+    sleep_hold_samples: usize,
+    max_hold_samples: usize,
     sleeping: bool,
 }
 
@@ -112,6 +115,8 @@ impl Reverb {
     /// Create a new reverb tuned for the given sample rate.
     pub fn new(sr: f32) -> Self {
         let scale = sr / 44100.0;
+        let max_hold_samples =
+            ((COMB_LENGTHS[3] + AP_LENGTHS[0] + AP_LENGTHS[1]) as f32 * scale) as usize + 256;
         Self {
             combs: [
                 CombFilter::new((COMB_LENGTHS[0] as f32 * scale) as usize, COMB_FEEDBACK, COMB_DAMP),
@@ -125,6 +130,8 @@ impl Reverb {
             ],
             wet: 0.0,
             energy: 0.0,
+            sleep_hold_samples: 0,
+            max_hold_samples,
             sleeping: true,
         }
     }
@@ -145,9 +152,10 @@ impl Reverb {
         // Auto-sleep: check if input has energy
         let input_energy: f32 = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
 
-        // Wake up if input has energy
+        // Wake up if input has energy and hold awake until longest comb+allpass reflection exits
         if input_energy > SLEEP_THRESHOLD {
             self.sleeping = false;
+            self.sleep_hold_samples = self.max_hold_samples;
         }
 
         // If sleeping (no input, tail decayed), skip processing
@@ -177,10 +185,11 @@ impl Reverb {
 
         // Track internal energy for sleep detection
         let output_energy: f32 = samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
-        self.energy = self.energy * 0.95 + output_energy * 0.05;
+        self.energy = super::flush_denorm(self.energy * 0.95 + output_energy * 0.05);
+        self.sleep_hold_samples = self.sleep_hold_samples.saturating_sub(samples.len());
 
-        // Go to sleep if both input and internal energy are silent
-        if input_energy < SLEEP_THRESHOLD && self.energy < SLEEP_THRESHOLD {
+        // Go to sleep only after the reflection hold window expires AND both input/output are silent
+        if self.sleep_hold_samples == 0 && input_energy < SLEEP_THRESHOLD && self.energy < SLEEP_THRESHOLD {
             self.sleeping = true;
         }
     }
@@ -189,6 +198,7 @@ impl Reverb {
         for c in &mut self.combs { c.reset(); }
         for a in &mut self.allpasses { a.reset(); }
         self.energy = 0.0;
+        self.sleep_hold_samples = 0;
         self.sleeping = true;
     }
 }

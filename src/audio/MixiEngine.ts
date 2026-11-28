@@ -1171,12 +1171,18 @@ export class MixiEngine {
    */
   nudgeStart(deck: DeckId, direction: 1 | -1, fine = false): void {
     if (!this.initialized) return;
+    const transport = this.transports[deck];
+    // Snapshot current position BEFORE changing _nudge so getCurrentTime()
+    // integrates the exact nudged advancement (no playhead/PLL desync).
+    if (transport.source) {
+      transport.offset = this.getCurrentTime(deck);
+      transport.startedAt = this.ctx.currentTime;
+    }
     // Freeze PLL during manual nudge (anti-windup layer 1)
     phaseLockLoop.freeze(deck);
     const amount = fine ? MixiEngine.FINE_NUDGE : MixiEngine.NUDGE_AMOUNT;
     this._nudge[deck] = direction * amount;
 
-    const transport = this.transports[deck];
     const shifter = this.pitchShifters[deck];
     if (shifter) {
       shifter.port.postMessage({ type: 'setNudge', value: this._nudge[deck] });
@@ -1193,11 +1199,17 @@ export class MixiEngine {
    */
   nudgeStop(deck: DeckId): void {
     if (!this.initialized) return;
+    const transport = this.transports[deck];
+    // Snapshot nudged playhead position BEFORE clearing _nudge so the manual
+    // pitch bend is permanently preserved in getCurrentTime() & PLL sync.
+    if (transport.source) {
+      transport.offset = this.getCurrentTime(deck);
+      transport.startedAt = this.ctx.currentTime;
+    }
     this._nudge[deck] = 0;
     // Unfreeze PLL after manual nudge
     phaseLockLoop.unfreeze(deck);
 
-    const transport = this.transports[deck];
     const shifter = this.pitchShifters[deck];
     if (shifter) {
       shifter.port.postMessage({ type: 'setNudge', value: 0 });
@@ -1828,9 +1840,15 @@ export class MixiEngine {
   exitLoop(deck: DeckId): void {
     this.assertReady();
     const transport = this.transports[deck];
+    // Snapshot wrapped loop position BEFORE disabling source.loop, otherwise
+    // getCurrentTime() stops wrapping and teleports forward by N × loopLen.
+    if (transport.source) {
+      transport.offset = this.getCurrentTime(deck);
+      transport.startedAt = this.ctx.currentTime;
+      transport.source.loop = false;
+    }
     transport.snappedLoop = null;
     if (!transport.source) return;
-    transport.source.loop = false;
     this.updateWorkletLoopState(deck);
   }
 
@@ -1858,8 +1876,9 @@ export class MixiEngine {
     if (!transport.buffer) return 0;
 
     if (transport.source) {
+      const effectiveRate = Math.max(0.001, transport.playbackRate + this._nudge[deck]);
       const elapsed =
-        (this.ctx.currentTime - transport.startedAt) * transport.playbackRate;
+        (this.ctx.currentTime - transport.startedAt) * effectiveRate;
       let pos = transport.offset + elapsed;
 
       // When looping, the Web Audio API wraps playback internally

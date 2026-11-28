@@ -383,10 +383,9 @@ impl MasterDsp {
         if punch_active && punch_amount > 0.01 {
             self.punch.process_block_mix(samples, punch_amount);
         }
-    }
 
-    fn process_post_limiter(&mut self, samples: &mut [f32]) {
-        // DC Blocker (10 Hz highpass) — protects speakers
+        // DC Blocker (10 Hz highpass) BEFORE stereo limiter & hard_clip so
+        // highpass phase rotation never creates post-clip overshoots above ceiling.
         for s in samples.iter_mut() {
             let x = *s;
             self.dc_y_prev = x - self.dc_x_prev + self.dc_coeff * self.dc_y_prev;
@@ -395,7 +394,9 @@ impl MasterDsp {
         }
         self.dc_y_prev = super::flush_denorm(self.dc_y_prev);
         self.dc_x_prev = super::flush_denorm(self.dc_x_prev);
+    }
 
+    fn process_post_limiter(&mut self, samples: &mut [f32]) {
         // Final denormal kill
         denormal_kill(samples);
     }
@@ -523,13 +524,19 @@ impl DspEngine {
                 if energy_a >= energy_b {
                     self.sidechain_a_to_b.set_depth(sc_depth);
                     self.sidechain_a_to_b.set_mix(sc_mix);
-                    self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b_l[..len]);
-                    self.sidechain_a_to_b.process_block(&self.sc_snap_a[..len], &mut self.scratch_b_r[..len]);
+                    self.sidechain_a_to_b.process_block_stereo(
+                        &self.sc_snap_a[..len],
+                        &mut self.scratch_b_l[..len],
+                        &mut self.scratch_b_r[..len],
+                    );
                 } else {
                     self.sidechain_b_to_a.set_depth(sc_depth);
                     self.sidechain_b_to_a.set_mix(sc_mix);
-                    self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a_l[..len]);
-                    self.sidechain_b_to_a.process_block(&self.sc_snap_b[..len], &mut self.scratch_a_r[..len]);
+                    self.sidechain_b_to_a.process_block_stereo(
+                        &self.sc_snap_b[..len],
+                        &mut self.scratch_a_l[..len],
+                        &mut self.scratch_a_r[..len],
+                    );
                 }
             }
         }
