@@ -344,7 +344,10 @@ class PitchShiftWasmProcessor extends AudioWorkletProcessor {
         const masterRate = this.masterOriginalBpm > 0 ? (this.masterBpm / this.masterOriginalBpm) : 1.0;
         this.masterTime += dt * masterRate;
 
-        const slaveRate = this.baseRate * (1.0 + this.pllCorrection);
+        const slaveRate = Math.max(
+          0.001,
+          this.baseRate * (1.0 + this.pllCorrection + this.driftCorrection) + this.nudge,
+        );
         this.slaveTime += dt * slaveRate;
 
         // Wrap slaveTime if looping

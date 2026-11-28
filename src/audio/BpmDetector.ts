@@ -235,10 +235,33 @@ function estimateBpm(onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT
   // Clamp to search range — parabolic interpolation can overshoot
   bpm = Math.max(bpmMin, Math.min(bpmMax, bpm));
 
-  // Confidence
+  // Confidence: in-band histogram concentration around the peak (±1.0 BPM)
+  // plus its octave harmonics (×2, ÷2) vs total votes.
+  // (Dividing single-bin peakVal by totalVotes had a mathematical ceiling of ~15-20%
+  // because Gaussian blur with σ=2 spreads a perfect impulse across ~5 bins.)
   let totalVotes = 0;
   for (let i = 0; i < numBins; i++) totalVotes += smoothed[i];
-  const confidence = totalVotes > 0 ? peakVal / totalVotes : 0;
+
+  let peakBandVotes = 0;
+  const bandRadius = 4; // ±1.0 BPM
+  const harmonicBins = [peakBin];
+  const doubleBin = Math.round((bpm * 2 - bpmMin) / BIN_RESOLUTION);
+  const halfBin = Math.round((bpm / 2 - bpmMin) / BIN_RESOLUTION);
+  if (doubleBin >= 0 && doubleBin < numBins) harmonicBins.push(doubleBin);
+  if (halfBin >= 0 && halfBin < numBins) harmonicBins.push(halfBin);
+
+  const counted = new Uint8Array(numBins);
+  for (const centerBin of harmonicBins) {
+    const lo = Math.max(0, centerBin - bandRadius);
+    const hi = Math.min(numBins - 1, centerBin + bandRadius);
+    for (let i = lo; i <= hi; i++) {
+      if (!counted[i]) {
+        counted[i] = 1;
+        peakBandVotes += smoothed[i];
+      }
+    }
+  }
+  const confidence = totalVotes > 0 ? Math.min(1, peakBandVotes / totalVotes) : 0;
 
   return { bpm, confidence };
 }
@@ -322,6 +345,12 @@ function resolveOctave(bpm: number, onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, b
  *
  * Returns downbeatStrength / upbeatStrength (or 1.0 if insufficient data).
  */
+/** Wrap phase distance into [0, 0.5] beats safely for both positive and negative deltas. */
+function beatPhaseDistance(delta: number, beatPeriod: number): number {
+  const frac = (((delta / beatPeriod) % 1) + 1) % 1;
+  return Math.min(frac, 1 - frac);
+}
+
 function strongWeakRatio(bpm: number, onsets: Onset[]): number {
   if (onsets.length < 6) return 1.0;
 
@@ -336,8 +365,7 @@ function strongWeakRatio(bpm: number, onsets: Onset[]): number {
     let score = 0;
     for (let j = 0; j < searchCount; j++) {
       const delta = onsets[j].time - onsets[c].time;
-      const beatFrac = (delta / beatPeriod) % 1;
-      const dist = Math.min(beatFrac, 1 - beatFrac) * beatPeriod;
+      const dist = beatPhaseDistance(delta, beatPeriod) * beatPeriod;
       if (dist < tolerance) score += onsets[j].strength;
     }
     if (score > bestPhaseScore) {
@@ -381,13 +409,16 @@ function strongWeakRatio(bpm: number, onsets: Onset[]): number {
 
 /**
  * Score how well onsets align to a beat grid at the given BPM.
- * Higher = better alignment.
+ * Uses a smooth Gaussian phase kernel (no flat plateau) so fine BPM
+ * refinement converges to the unique true tempo without downward bias.
  */
 function gridAlignmentScore(bpm: number, onsets: Onset[]): number {
   if (onsets.length < 4) return 0;
 
   const beatPeriod = 60 / bpm;
-  const tolerance = beatPeriod * 0.12;
+  const sigma = beatPeriod * 0.035;     // ~17.5 ms at 120 BPM — sharp unique peak
+  const cutoff = beatPeriod * 0.14;     // ignore onsets far off-grid
+  const invTwoSigmaSq = 0.5 / (sigma * sigma);
   const searchCount = Math.min(onsets.length, 80);
 
   // Try multiple grid phases (first N onsets as candidates)
@@ -399,14 +430,11 @@ function gridAlignmentScore(bpm: number, onsets: Onset[]): number {
     let weightSum = 0;
 
     for (let j = 0; j < searchCount; j++) {
-      const delta = onsets[j].time - phase;
-      const beatFrac = (delta / beatPeriod) % 1;
-      const dist = Math.min(beatFrac, 1 - beatFrac) * beatPeriod;
-
+      const dist = beatPhaseDistance(onsets[j].time - phase, beatPeriod) * beatPeriod;
       const w = onsets[j].strength;
       weightSum += w;
-      if (dist < tolerance) {
-        score += w;
+      if (dist < cutoff) {
+        score += w * Math.exp(-dist * dist * invTwoSigmaSq);
       }
     }
 
@@ -426,7 +454,9 @@ function findGridOffset(onsets: Onset[], bpm: number): number {
   if (onsets.length === 0) return 0;
 
   const beatPeriod = 60 / bpm;
-  const tolerance = beatPeriod * 0.12;
+  const sigma = beatPeriod * 0.035;
+  const cutoff = beatPeriod * 0.14;
+  const invTwoSigmaSq = 0.5 / (sigma * sigma);
   const searchWindow = Math.min(onsets.length, 80);
 
   let bestOffset = onsets[0].time;
@@ -437,11 +467,9 @@ function findGridOffset(onsets: Onset[], bpm: number): number {
     let score = 0;
 
     for (let j = c; j < searchWindow; j++) {
-      const delta = onsets[j].time - candidate;
-      const beatFrac = (delta / beatPeriod) % 1;
-      const dist = Math.min(beatFrac, 1 - beatFrac) * beatPeriod;
-      if (dist < tolerance) {
-        score += onsets[j].strength; // weight by onset strength
+      const dist = beatPhaseDistance(onsets[j].time - candidate, beatPeriod) * beatPeriod;
+      if (dist < cutoff) {
+        score += onsets[j].strength * Math.exp(-dist * dist * invTwoSigmaSq);
       }
     }
 
@@ -454,22 +482,33 @@ function findGridOffset(onsets: Onset[], bpm: number): number {
   return bestOffset;
 }
 
-// ── Autocorrelation refinement ──────────────────────────────
+// ── Two-stage Gaussian phase refinement ─────────────────────
 //
-// The IOI histogram gives ~1 BPM precision. We refine by testing
-// a narrow range around the candidate with fine steps and picking
-// the BPM that maximizes grid alignment score.
+// Stage 1: ±2.5 BPM at 0.1 BPM step
+// Stage 2: ±0.15 BPM at 0.01 BPM step (centi-BPM precision)
 
-function refineBpm(coarseBpm: number, onsets: Onset[]): number {
+function refineBpm(coarseBpm: number, onsets: Onset[], bpmMin = DEFAULT_BPM_MIN, bpmMax = DEFAULT_BPM_MAX): number {
   if (onsets.length < 8) return coarseBpm;
 
-  const searchRadius = 2.5; // ±2.5 BPM around candidate
-  const step = 0.1;         // 0.1 BPM precision
   let bestBpm = coarseBpm;
   let bestScore = -1;
 
-  for (let candidate = coarseBpm - searchRadius; candidate <= coarseBpm + searchRadius; candidate += step) {
-    if (candidate < DEFAULT_BPM_MIN || candidate > DEFAULT_BPM_MAX) continue;
+  // Stage 1: coarse sweep (±2.5 BPM, 0.1 BPM steps)
+  for (let i = -25; i <= 25; i++) {
+    const candidate = coarseBpm + i * 0.1;
+    if (candidate < bpmMin || candidate > bpmMax) continue;
+    const score = gridAlignmentScore(candidate, onsets);
+    if (score > bestScore) {
+      bestScore = score;
+      bestBpm = candidate;
+    }
+  }
+
+  // Stage 2: fine sweep (±0.15 BPM, 0.01 BPM steps)
+  const stage1Best = bestBpm;
+  for (let i = -15; i <= 15; i++) {
+    const candidate = stage1Best + i * 0.01;
+    if (candidate < bpmMin || candidate > bpmMax) continue;
     const score = gridAlignmentScore(candidate, onsets);
     if (score > bestScore) {
       bestScore = score;
@@ -483,18 +522,17 @@ function refineBpm(coarseBpm: number, onsets: Onset[]): number {
 // ── Snap to common electronic BPMs ─────────────────────────
 //
 // Electronic music is almost always produced at integer BPMs.
-// If we're within 0.5 BPM of a round number, snap to it —
-// but only if the grid alignment doesn't get worse.
+// If we're within 0.25 BPM of an integer and the Gaussian phase
+// score stays within 97% of the unrounded peak, snap cleanly.
 
 function snapToCommonBpm(bpm: number, onsets: Onset[]): number {
   const rounded = Math.round(bpm);
-  if (Math.abs(bpm - rounded) > 0.5) return bpm;
+  if (Math.abs(bpm - rounded) > 0.25) return bpm;
 
   const scoreOriginal = gridAlignmentScore(bpm, onsets);
   const scoreRounded = gridAlignmentScore(rounded, onsets);
 
-  // Snap if rounded score is at least 95% as good
-  if (scoreRounded >= scoreOriginal * 0.95) {
+  if (scoreRounded >= scoreOriginal * 0.97) {
     return rounded;
   }
 
@@ -577,19 +615,24 @@ export function detectBpm(lowBandBuffer: AudioBuffer, opts?: BpmDetectOptions): 
   // Step 3: BPM estimation (multi-hop IOI histogram)
   const est = estimateBpm(onsets, bpmMin, bpmMax);
   let bpm = est.bpm;
-  const confidence = est.confidence;
 
   // Step 4: Octave resolution (85 vs 170, etc.)
   bpm = resolveOctave(bpm, onsets, bpmMin, bpmMax);
 
-  // Step 5: Fine refinement (±2.5 BPM sweep at 0.1 BPM steps)
-  bpm = refineBpm(bpm, onsets);
+  // Step 5: Two-stage Gaussian phase refinement (±2.5 @ 0.1, then ±0.15 @ 0.01)
+  bpm = refineBpm(bpm, onsets, bpmMin, bpmMax);
 
   // Step 6: Snap to integer BPM if close enough
   bpm = snapToCommonBpm(bpm, onsets);
 
   // Round to 1 decimal place
   bpm = Math.round(bpm * 10) / 10;
+
+  // Compute calibrated confidence from final Gaussian grid alignment + histogram concentration
+  const finalAlignment = onsets.length >= 4 ? gridAlignmentScore(bpm, onsets) : 0;
+  const confidence = onsets.length >= 4
+    ? Math.min(1, Math.max(0, 0.65 * finalAlignment + 0.35 * est.confidence))
+    : 0;
 
   // Step 7: Grid offset
   const firstBeatOffset = findGridOffset(onsets, bpm);

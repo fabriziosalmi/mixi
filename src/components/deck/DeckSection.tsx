@@ -69,6 +69,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
   /** BPM inline editing state */
   const [editingBpm, setEditingBpm] = useState(false);
   const [gridEditMode, setGridEditMode] = useState(false);
+  const [rgbWaveform, setRgbWaveform] = useState(false);
   const [bpmInput, setBpmInput] = useState('');
   const bpmInputRef = useRef<HTMLInputElement>(null);
   /** CDJ main cue point (buffer seconds) + hold-to-preview state */
@@ -499,7 +500,7 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
           {/* Waveform + Beatgrid Editor (+20% height for booth windshield legibility) */}
           <div className="mixi-waveform-area shrink-0 flex flex-col">
             <div className="relative">
-              <WaveformDisplay deckId={deckId} height={84} externalZoomRef={waveZoomRef} />
+              <WaveformDisplay deckId={deckId} height={84} rgbMode={rgbWaveform} externalZoomRef={waveZoomRef} />
               {/* Overlay + panel mount when GRID edit is active */}
               <BeatgridEditor deckId={deckId} color={color} editMode={gridEditMode} waveformWidth={0} zoomRef={waveZoomRef} />
             </div>
@@ -516,6 +517,23 @@ export const DeckSection: FC<DeckSectionProps> = ({ deckId, color }) => {
                 }}
               >
                 GRID
+              </button>
+              {/* 3-Band RGB spectral waveform toggle */}
+              <button
+                type="button"
+                onClick={() => setRgbWaveform(r => !r)}
+                aria-pressed={rgbWaveform}
+                title={rgbWaveform ? 'Waveform: 3-Band RGB (Low/Mid/High) — Click for Monochrome' : 'Waveform: Monochrome Dual-Luminance — Click for 3-Band RGB'}
+                className="text-[8.5px] font-mono font-bold tracking-wider px-1.5 py-0.5 rounded active:scale-95 transition-all"
+                style={{
+                  color: rgbWaveform ? '#ffffff' : 'var(--txt-secondary)',
+                  background: rgbWaveform
+                    ? 'linear-gradient(90deg, rgba(255,45,85,0.28), rgba(245,158,11,0.28), rgba(56,189,248,0.28))'
+                    : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${rgbWaveform ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)'}`,
+                }}
+              >
+                3B
               </button>
               <WaveformOverview deckId={deckId} height={24} zoomRef={waveZoomRef} />
             </div>

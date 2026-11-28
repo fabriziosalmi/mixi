@@ -230,13 +230,16 @@ class PhaseLockLoop {
         const grooveTarget = grooveMs / beatPeriodMs;
         const target = grooveTarget + s.cancelNudge;
 
+        const exactMasterBpm = master.originalBpm > 0 ? master.originalBpm * master.playbackRate : master.bpm;
+        const exactSlaveBpm = d.originalBpm > 0 ? d.originalBpm * d.playbackRate : d.bpm;
+
         engine.postWorkletMessage(deck, {
           type: 'sync',
-          masterBpm: master.bpm,
+          masterBpm: exactMasterBpm,
           masterOriginalBpm: master.originalBpm,
           masterFirstBeatOffset: master.firstBeatOffset,
           masterTime: engine.getCurrentTime(masterDeck),
-          slaveBpm: d.bpm,
+          slaveBpm: exactSlaveBpm,
           slaveOriginalBpm: d.originalBpm,
           slaveFirstBeatOffset: d.firstBeatOffset,
           slaveTime: engine.getCurrentTime(deck),
@@ -316,13 +319,16 @@ class PhaseLockLoop {
         const grooveTarget = grooveMs / beatPeriodMs;
         const target = grooveTarget + s.cancelNudge;
 
+        const exactMasterBpm = master.originalBpm > 0 ? master.originalBpm * master.playbackRate : master.bpm;
+        const exactSlaveBpm = d.originalBpm > 0 ? d.originalBpm * d.playbackRate : d.bpm;
+
         engine.postWorkletMessage(deck, {
           type: 'sync',
-          masterBpm: master.bpm,
+          masterBpm: exactMasterBpm,
           masterOriginalBpm: master.originalBpm,
           masterFirstBeatOffset: master.firstBeatOffset,
           masterTime: engine.getCurrentTime(masterDeck),
-          slaveBpm: d.bpm,
+          slaveBpm: exactSlaveBpm,
           slaveOriginalBpm: d.originalBpm,
           slaveFirstBeatOffset: d.firstBeatOffset,
           slaveTime: engine.getCurrentTime(deck),
@@ -441,19 +447,21 @@ class PhaseLockLoop {
     // Need at least 20 samples (~10s) for reliable regression
     if (d.samples.length < 20) return;
 
-    // Linear regression: slope = ms drift per sample interval
-    // Each sample interval = 500ms. Once the ring buffer is full,
-    // `writeIdx` points to the oldest sample.
+    // Linear regression: slope = ms drift per sample interval (500ms).
+    // Once the ring buffer is full, `writeIdx` points to the oldest sample.
     const startIdx = d.samples.length === DRIFT_BUFFER_SIZE ? d.writeIdx : 0;
     const slope = linearRegressionSlope(d.samples, startIdx);
     const slopePerSecond = slope * (1000 / (DRIFT_SAMPLE_INTERVAL * TICK_INTERVAL_MS));
 
     if (Math.abs(slopePerSecond) > DRIFT_SLOPE_THRESHOLD) {
-      // Apply 10% of correction per iteration (smooth convergence)
-      const rateCorrectionDelta = -slopePerSecond / (beatPeriod * 1000) * 0.1;
+      // phaseDelta = masterFrac - slaveFrac.
+      // Positive slopePerSecond (ms/s) means master is pulling ahead -> slave is TOO SLOW ->
+      // slave needs a POSITIVE fractional rate correction (ms/s divided by 1000 ms/s = dimensionless s/s).
+      // Apply 10% per tick for smooth overdamped convergence without oscillation.
+      const rateCorrectionDelta = (slopePerSecond / 1000) * 0.1;
       d.rateCorrection += rateCorrectionDelta;
-      // Clamp total drift correction to ±0.05% (safety)
-      d.rateCorrection = Math.max(-0.0005, Math.min(0.0005, d.rateCorrection));
+      // Clamp total drift correction to ±0.2% (safety ceiling)
+      d.rateCorrection = Math.max(-0.002, Math.min(0.002, d.rateCorrection));
     }
   }
 

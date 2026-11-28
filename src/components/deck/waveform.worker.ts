@@ -460,6 +460,10 @@ self.onmessage = (e: MessageEvent) => {
       Object.assign(state, data.state);
       break;
     }
+    case 'colors': {
+      colors = { ...colors, ...data.colors };
+      break;
+    }
     case 'tick': {
       currentTime = data.currentTime;
       otherTime = data.otherTime;

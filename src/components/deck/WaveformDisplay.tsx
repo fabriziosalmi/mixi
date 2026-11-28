@@ -49,6 +49,8 @@ interface WaveformDisplayProps {
   deckId: DeckId;
   width?: number;
   height?: number;
+  /** Toggle 3-Band RGB spectral mode (Low=Red, Mid=Amber, High=Cyan). */
+  rgbMode?: boolean;
   /** Shared ref for zoom level, read by WaveformOverview */
   externalZoomRef?: React.MutableRefObject<number>;
 }
@@ -57,6 +59,7 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   deckId,
   width: propWidth,
   height = 80,
+  rgbMode = false,
   externalZoomRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,6 +100,20 @@ export const WaveformDisplay: FC<WaveformDisplayProps> = ({
   const heightRef = useRef(height);
   widthRef.current = width;
   heightRef.current = height;
+
+  // Sync 3-Band RGB vs Monochrome palette to the worker live without recreating it
+  useEffect(() => {
+    const worker = workerRef.current;
+    if (!worker) return;
+    const isCyan = deckId === 'A';
+    const COLOR_LOW = rgbMode ? '#ff2d55' : (isCyan ? '#004455' : '#552200');
+    const COLOR_MID = rgbMode ? '#f59e0b' : (isCyan ? '#0099aa' : '#cc6600');
+    const COLOR_HIGH = rgbMode ? '#38bdf8' : (isCyan ? '#00ddff' : '#ff9933');
+    worker.postMessage({
+      type: 'colors',
+      colors: { COLOR_LOW, COLOR_MID, COLOR_HIGH },
+    });
+  }, [deckId, rgbMode]);
 
   // Sync canvas size to the web worker when layout changes
   useEffect(() => {
