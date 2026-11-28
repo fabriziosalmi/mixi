@@ -59,6 +59,7 @@ export class MixiSyncBridge {
 
   // BroadcastChannel fallback (browser-only)
   private broadcastChannel: BroadcastChannel | null = null;
+  private _unsubPacket: (() => void) | null = null;
 
   private constructor() {
     this.api = getSyncAPI();
@@ -99,8 +100,10 @@ export class MixiSyncBridge {
       if (!result.ok) {
         log.warn('Sync', 'UDP start failed, trying BroadcastChannel');
       } else {
-        // Listen for incoming packets
-        this.api.onPacket((data) => this.onPacket(data));
+        // Listen for incoming packets (AUD-18: store unsubscribe handle to prevent leak on restart)
+        this._unsubPacket?.();
+        const unsub = (this.api.onPacket as (cb: (data: ArrayBuffer) => void) => (() => void) | void)((data) => this.onPacket(data));
+        this._unsubPacket = typeof unsub === 'function' ? unsub : null;
         this._active = true;
         this.startTimers();
         log.success('Sync', `Started as ${this._isMaster ? 'MASTER' : 'SUBSCRIBER'} (UDP :4303)`);
@@ -134,6 +137,8 @@ export class MixiSyncBridge {
 
     this.stopTimers();
     this.phaseLock.stop();
+    this._unsubPacket?.();
+    this._unsubPacket = null;
     this.api?.stop();
     this.broadcastChannel?.close();
     this.broadcastChannel = null;
@@ -206,17 +211,20 @@ export class MixiSyncBridge {
     // Determine active deck
     const deckA = state.decks.A;
     const deckB = state.decks.B;
-    const activeDeck = deckA.isPlaying ? deckA : deckB;
+    const activeDeckId = deckA.isPlaying ? 'A' : 'B';
+    const activeDeck = activeDeckId === 'A' ? deckA : deckB;
     const bpm = activeDeck.bpm || 0;
+    const nativeBpm = activeDeck.originalBpm > 0 ? activeDeck.originalBpm : bpm;
 
-    // Compute beat phase
+    // AUD-08: Compute beat phase from actual track playback time (not AudioContext uptime)
     let beatPhase = 0;
     let beatCount = 0;
-    if (ctx && bpm > 0 && activeDeck.firstBeatOffset !== undefined) {
-      const beatPeriod = 60 / bpm;
-      const elapsed = ctx.currentTime - activeDeck.firstBeatOffset;
-      beatPhase = ((elapsed / beatPeriod) % 1 + 1) % 1;
-      beatCount = Math.floor(elapsed / beatPeriod);
+    if (ctx && nativeBpm > 0 && activeDeck.firstBeatOffset !== undefined) {
+      const trackTime = engine.getCurrentTime(activeDeckId);
+      const nativeBeatPeriod = 60 / nativeBpm;
+      const elapsed = trackTime - activeDeck.firstBeatOffset;
+      beatPhase = ((elapsed / nativeBeatPeriod) % 1 + 1) % 1;
+      beatCount = Math.max(0, Math.floor(elapsed / nativeBeatPeriod));
     }
 
     // Build flags

@@ -37,10 +37,18 @@ import type { MixiStore } from '../../store/mixiStore';
 const COOLDOWN_TICKS = 128 * 4; // ~128 beats at 20Hz = 2560 ticks (conservative)
 let lastSweepEndTick = -COOLDOWN_TICKS;
 
-/** Track whether we're in the recovery phase (ramping back up). */
+/** Track whether we're actively sweeping down or recovering back up (AUD-10). */
+let isSweeping = false;
 let isRecovering = false;
 let recoveryStartBeat = 0;
 const RECOVERY_BEATS = 2; // Ramp back over 2 beats (no click).
+
+export function resetIsolatorSweepState(): void {
+  isSweeping = false;
+  isRecovering = false;
+  recoveryStartBeat = 0;
+  lastSweepEndTick = -COOLDOWN_TICKS;
+}
 
 export const IsolatorSweepIntent: BaseIntent = {
   name: 'spectral.isolator_sweep',
@@ -52,11 +60,13 @@ export const IsolatorSweepIntent: BaseIntent = {
     if (isRecovering) {
       if (!bb.masterState.isPlaying) {
         isRecovering = false;
+        isSweeping = false;
         return 0;
       }
       const beatsSinceRecovery = bb.masterCurrentBeat - recoveryStartBeat;
       if (beatsSinceRecovery >= RECOVERY_BEATS) {
         isRecovering = false;
+        isSweeping = false;
         lastSweepEndTick = bb.tick;
         return 0; // Done — EQ is back to flat.
       }
@@ -64,8 +74,14 @@ export const IsolatorSweepIntent: BaseIntent = {
     }
 
     // Only when master is solo.
-    if (bb.bothPlaying) return 0;
-    if (!bb.masterState.isPlaying) return 0;
+    if (bb.bothPlaying || !bb.masterState.isPlaying) {
+      isSweeping = false;
+      return 0;
+    }
+
+    // If we already started sweeping, keep ownership past |eq| > 3 until phrase boundary!
+    if (isSweeping) return 0.35;
+
     // Cooldown: don't sweep too often.
     if (bb.tick - lastSweepEndTick < COOLDOWN_TICKS) return 0;
     // EQ must be roughly flat to start the sweep.
@@ -81,7 +97,7 @@ export const IsolatorSweepIntent: BaseIntent = {
     if (isRecovering) {
       const beatsSinceRecovery = bb.masterCurrentBeat - recoveryStartBeat;
       const progress = Math.min(1, beatsSinceRecovery / RECOVERY_BEATS);
-      // Cosine ease-in: smooth ramp from -20 dB to 0 dB.
+      // Smooth ramp from -20 dB to 0 dB.
       const dbValue = -20 * (1 - progress);
       store.setDeckEq(bb.masterDeck, 'low', dbValue);
       store.setDeckEq(bb.masterDeck, 'mid', dbValue);
@@ -93,10 +109,13 @@ export const IsolatorSweepIntent: BaseIntent = {
 
     if (btp < 0.5) {
       // Phrase boundary reached — start recovery (ramp back up).
+      isSweeping = false;
       isRecovering = true;
       recoveryStartBeat = bb.masterCurrentBeat;
       return;
     }
+
+    isSweeping = true;
 
     // Progressive sweep: 8 beats → -20 dB on all bands.
     // Cosine curve for smooth onset.

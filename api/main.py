@@ -168,7 +168,9 @@ async def mixer_websocket(ws: WebSocket):
                 # Response to a command we relayed.
                 msg_id = msg.get("id")
                 if msg_id and msg_id in _pending_responses:
-                    _pending_responses[msg_id].set_result(msg)
+                    fut = _pending_responses[msg_id]
+                    if not fut.done():
+                        fut.set_result(msg)
 
     except WebSocketDisconnect:
         logger.info("[dim]Browser disconnesso dal WebSocket[/dim]")
@@ -539,6 +541,8 @@ async def stream_endpoint(
     try:
         # 1. Resolve direct CDN URL without downloading
         direct_url, title, content_type = await asyncio.to_thread(resolve_audio_url, url)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[error]Resolve error:[/error] {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -550,22 +554,29 @@ async def stream_endpoint(
         logger.error("[error]Refusing to proxy non-public resolved URL[/error]")
         raise HTTPException(status_code=400, detail="Resolved stream URL is not allowed")
 
-    # 2. Proxy the stream chunk by chunk
+    # 2. Open upstream connection BEFORE committing HTTP 200 (AUD-12: never return 0-byte 200 on CDN error/redirect)
     client = await get_http_client()
+    upstream_req = client.build_request("GET", direct_url)
+    try:
+        upstream_resp = await client.send(upstream_req, stream=True, follow_redirects=False)
+    except Exception as e:
+        logger.error("[error]Upstream CDN connection failed:[/error] %s", e)
+        raise HTTPException(status_code=502, detail="Upstream audio CDN unreachable")
+
+    if upstream_resp.status_code != 200:
+        status_code = upstream_resp.status_code
+        await upstream_resp.aclose()
+        logger.error(f"[error]Rifiutato dal CDN originario ({status_code})[/error]")
+        raise HTTPException(status_code=502, detail=f"Upstream audio CDN returned HTTP {status_code}")
 
     async def proxy_stream():
         try:
-            # follow_redirects=False: a redirect could bounce us to an internal
-            # host after the IP check above (SSRF). Direct CDN URLs don't redirect.
-            async with client.stream("GET", direct_url, follow_redirects=False) as response:
-                if response.status_code != 200:
-                    logger.error(f"[error]Rifiutato dal CDN originario ({response.status_code})[/error]")
-                    return
-                # Stream the bytes transparently
-                async for chunk in response.aiter_bytes(chunk_size=65_536):
-                    yield chunk
+            async for chunk in upstream_resp.aiter_bytes(chunk_size=65_536):
+                yield chunk
         except Exception as e:
             logger.error("[error]Interruzione inaspettata dello stream:[/error] %s", e)
+        finally:
+            await upstream_resp.aclose()
 
     headers: dict[str, str] = {}
     if title:

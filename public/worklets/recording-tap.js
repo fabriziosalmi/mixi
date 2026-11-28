@@ -38,15 +38,15 @@ class RecordingTapProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs, outputs) {
-    // Always pass audio through (this is a tap, not a sink)
+    // AUD-01: Silent sink! master.output is ALREADY connected to ctx.destination
+    // via HeadphoneBus. Copying input->output here doubled master (+6 dB clipping)
+    // and leaked stereo master during headphone split-cue. Zeroing output keeps
+    // the AudioWorkletNode pulled by the audio graph with 0 dB bleed.
     const input = inputs[0];
     const output = outputs[0];
-
-    if (input && output) {
+    if (output) {
       for (let ch = 0; ch < output.length; ch++) {
-        if (input[ch]) {
-          output[ch].set(input[ch]);
-        }
+        output[ch].fill(0);
       }
     }
 

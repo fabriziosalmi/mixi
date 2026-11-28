@@ -45,6 +45,12 @@ import { MixiEngine } from '../audio/MixiEngine';
 import { log } from '../utils/logger';
 import { clearGhostFields, markGhost } from './ghostFields';
 import { resetPhaseDriftState } from './intents/PhaseDriftCorrectionIntent';
+import { resetLoopRollState } from './intents/LoopRollBuildupIntent';
+import { resetBuildUpTensionState } from './intents/BuildUpTensionIntent';
+import { resetEqAmnesiaState } from './intents/EqAmnesiaIntent';
+import { resetIsolatorSweepState } from './intents/IsolatorSweepIntent';
+import { resetPreDropSilenceState } from './intents/PreDropSilenceIntent';
+import { resetTeaserStabState } from './intents/TeaserStabIntent';
 import { getSetRecorder, type RecordedAction } from './SetRecorder';
 
 // ── Tick config ──────────────────────────────────────────────
@@ -146,8 +152,14 @@ export class AutoMixEngine {
     }
     this._lastFired = [];
     clearGhostFields();
-    // Reset stateful intent modules to avoid stale state on restart.
+    // Reset all stateful intent modules & cancel pending timers (AUD-10, AUD-15).
     resetPhaseDriftState();
+    resetLoopRollState();
+    resetBuildUpTensionState();
+    resetEqAmnesiaState();
+    resetIsolatorSweepState();
+    resetPreDropSilenceState();
+    resetTeaserStabState();
     // Stop recording and save to localStorage.
     const recorder = getSetRecorder();
     if (recorder.recording) {

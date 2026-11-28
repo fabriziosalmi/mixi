@@ -53,7 +53,7 @@ const WASHOUT_BEATS = 16;
 export const FilterWashoutIntent: BaseIntent = {
   name: 'dynamics.filter_washout',
   domain: 'dynamics',
-  exclusive: false, // Can stack with spectral intents.
+  exclusive: true, // AUD-14: prevent lower-priority colorFx intents from overwriting on same tick.
 
   evaluate(bb: Blackboard): number {
     // Only wash out if we're mid-blend (both playing).

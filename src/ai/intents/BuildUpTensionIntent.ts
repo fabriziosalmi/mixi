@@ -38,24 +38,40 @@ const BUILDUP_END_BEATS = 4;
 const SWEEP_MIN = 0.15;
 const SWEEP_MAX = 0.85;
 
+/** Ownership flag so our own HPF sweep doesn't trip masterHasFilter (AUD-10). */
+let isBuildupActive = false;
+
+export function resetBuildUpTensionState(): void {
+  isBuildupActive = false;
+}
+
 export const BuildUpTensionIntent: BaseIntent = {
   name: 'dynamics.buildup_tension',
   domain: 'dynamics',
-  exclusive: false,
+  exclusive: true,
 
   evaluate(bb: Blackboard): number {
-    if (!bb.masterState.isPlaying) return 0;
-    if (!bb.incomingIsReady) return 0;
+    if (!bb.masterState.isPlaying || !bb.incomingIsReady) {
+      isBuildupActive = false;
+      return 0;
+    }
 
-    // Need a known incoming drop to target.
     const btd = bb.beatsToIncomingDrop;
-    if (btd === null) return 0;
+    if (btd === null) {
+      isBuildupActive = false;
+      return 0;
+    }
+
+    // If we own an active sweep and passed the end beat, score once more to release filters to 0.
+    if (isBuildupActive && btd < BUILDUP_END_BEATS) {
+      return 0.7;
+    }
 
     // Only active in the buildup window.
     if (btd > BUILDUP_START_BEATS || btd < BUILDUP_END_BEATS) return 0;
 
-    // Don't fight a manual filter the DJ already applied.
-    if (bb.masterHasFilter) return 0;
+    // Don't fight a manual filter the DJ already applied before we took ownership.
+    if (!isBuildupActive && bb.masterHasFilter) return 0;
 
     return 0.65;
   },
@@ -64,8 +80,17 @@ export const BuildUpTensionIntent: BaseIntent = {
     const btd = bb.beatsToIncomingDrop;
     if (btd === null) return;
 
-    // Linear ramp: 1.0 at BUILDUP_START, 0.0 at BUILDUP_END.
-    const progress = 1 - (btd - BUILDUP_END_BEATS) / (BUILDUP_START_BEATS - BUILDUP_END_BEATS);
+    // Release filters cleanly when the drop hits.
+    if (btd < BUILDUP_END_BEATS) {
+      store.setDeckColorFx(bb.masterDeck, 0);
+      store.setDeckColorFx(bb.incomingDeck, 0);
+      isBuildupActive = false;
+      return;
+    }
+
+    isBuildupActive = true;
+    // Linear ramp: 0.0 at BUILDUP_START, 1.0 at BUILDUP_END.
+    const progress = Math.max(0, Math.min(1, 1 - (btd - BUILDUP_END_BEATS) / (BUILDUP_START_BEATS - BUILDUP_END_BEATS)));
     const sweep = SWEEP_MIN + progress * (SWEEP_MAX - SWEEP_MIN);
 
     store.setDeckColorFx(bb.masterDeck, sweep);

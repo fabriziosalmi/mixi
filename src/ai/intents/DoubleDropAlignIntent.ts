@@ -66,9 +66,14 @@ export const DoubleDropAlignIntent: BaseIntent = {
       ? masterBeatsToItsDrop : bb.beatsToOutroMaster;
     const misalignment = Math.abs(masterTarget - bb.beatsToIncomingDrop);
 
+    const baseRate =
+      bb.masterBpm > 0 && bb.incomingState.originalBpm > 0
+        ? bb.masterBpm / bb.incomingState.originalBpm
+        : 1.0;
+
     if (misalignment < ALIGNED_THRESHOLD) {
-      // Aligned! If rate is still nudged, score to restore it.
-      const deviation = Math.abs(bb.incomingState.playbackRate - 1.0);
+      // Aligned! If rate is still nudged away from synced baseRate, score to restore it.
+      const deviation = Math.abs(bb.incomingState.playbackRate - baseRate);
       return deviation > 0.001 ? 0.2 : 0;
     }
 
@@ -78,17 +83,22 @@ export const DoubleDropAlignIntent: BaseIntent = {
   execute(bb: Blackboard, store: MixiStore): void {
     if (bb.masterDropBeat === null || bb.beatsToIncomingDrop === null) return;
 
+    const baseRate =
+      bb.masterBpm > 0 && bb.incomingState.originalBpm > 0
+        ? bb.masterBpm / bb.incomingState.originalBpm
+        : 1.0;
+
     const masterBeatsToItsDrop = bb.masterDropBeat - bb.masterCurrentBeat;
     const masterTarget = masterBeatsToItsDrop > 0
       ? masterBeatsToItsDrop : bb.beatsToOutroMaster;
     const misalignment = Math.abs(masterTarget - bb.beatsToIncomingDrop);
 
-    // ── Aligned: restore rate to 1.0 gradually ──────────────
+    // ── Aligned: restore rate to synced baseRate gradually ──
     if (misalignment < ALIGNED_THRESHOLD) {
       const currentRate = bb.incomingState.playbackRate;
-      if (Math.abs(currentRate - 1.0) > 0.001) {
-        // Ease back to 1.0 (50% per tick to avoid sudden jump).
-        const restored = currentRate + (1.0 - currentRate) * 0.5;
+      if (Math.abs(currentRate - baseRate) > 0.001) {
+        // Ease back to baseRate (50% per tick to avoid sudden jump).
+        const restored = currentRate + (baseRate - currentRate) * 0.5;
         store.setDeckPlaybackRate(bb.incomingDeck, restored);
       }
       return;
@@ -99,8 +109,10 @@ export const DoubleDropAlignIntent: BaseIntent = {
     const nudge = Math.max(-MAX_NUDGE, Math.min(MAX_NUDGE, diff * 0.001));
     const newRate = bb.incomingState.playbackRate + nudge;
 
-    // Clamp to ±2% max deviation from 1.0 (barely audible).
-    const clampedRate = Math.max(1.0 - MAX_DEVIATION, Math.min(1.0 + MAX_DEVIATION, newRate));
+    // Clamp to ±2% max deviation around baseRate (preserves BPM sync — AUD-05).
+    const minRate = baseRate * (1 - MAX_DEVIATION);
+    const maxRate = baseRate * (1 + MAX_DEVIATION);
+    const clampedRate = Math.max(minRate, Math.min(maxRate, newRate));
     store.setDeckPlaybackRate(bb.incomingDeck, clampedRate);
 
     // Log periodically (~2s).

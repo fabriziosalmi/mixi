@@ -38,7 +38,7 @@ const WOBBLE_DEPTH = 0.2;
 export const FilterWobbleIntent: BaseIntent = {
   name: 'dynamics.filter_wobble',
   domain: 'dynamics',
-  exclusive: false,
+  exclusive: true, // AUD-14: mutually exclusive with other colorFx dynamics intents.
 
   evaluate(bb: Blackboard): number {
     if (!bb.bothPlaying) return 0;

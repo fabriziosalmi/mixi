@@ -98,17 +98,23 @@ export class TurboKickEngine {
     const hasRealMaster = this._syncToMaster && masterBpm > 0;
 
     if (hasRealMaster) {
-      // Quantized start — snap to next bar boundary of the master track
+      // AUD-08: Quantized start — snap to next bar boundary of the master deck's beatgrid
       this._engaged = true;
       this._playing = true;
       this._currentStep = -1;
-      const beatDur = 60 / masterBpm;
-      const barDur = beatDur * 4;
+      const state = useMixiStore.getState();
+      const otherId: DeckId = this.deckId === 'A' ? 'B' : 'A';
+      const masterDeck = state.decks[otherId].isPlaying ? state.decks[otherId] : state.decks[this.deckId];
+      const masterDeckId: DeckId = state.decks[otherId].isPlaying ? otherId : this.deckId;
       const now = this.ctx.currentTime;
-      // Time until next bar boundary (max wait = 1 bar)
-      const remainder = now % barDur;
-      const wait = remainder < 0.01 ? 0 : barDur - remainder;
-      this.nextStepTime = now + wait;
+      const engine = MixiEngine.getInstance();
+      const nativeBpm = masterDeck.originalBpm > 0 ? masterDeck.originalBpm : masterBpm;
+      const trackTime = engine.isInitialized ? engine.getCurrentTime(masterDeckId) : 0;
+      const nativeBeat = (trackTime - masterDeck.firstBeatOffset) * (nativeBpm / 60);
+      const beatInBar = ((nativeBeat % 4) + 4) % 4;
+      const beatsUntilBar = beatInBar < 0.02 ? 0 : 4 - beatInBar;
+      const wallBeatDur = 60 / masterBpm;
+      this.nextStepTime = now + beatsUntilBar * wallBeatDur;
       this.startScheduler();
     } else {
       // No master or free mode — start immediately
@@ -240,7 +246,12 @@ export class TurboKickEngine {
     if (bpm <= 0) return;
 
     const stepDur = 60 / bpm / 4;
-    const deadline = this.ctx.currentTime + LOOK_AHEAD_S;
+    const now = this.ctx.currentTime;
+    // AUD-09: Prevent kick burst storm after tab backgrounding or timer stall
+    if (this.nextStepTime < now - stepDur * 2) {
+      this.nextStepTime = now;
+    }
+    const deadline = now + LOOK_AHEAD_S;
 
     while (this.nextStepTime < deadline) {
       this._currentStep = (this._currentStep + 1) % STEP_COUNT;

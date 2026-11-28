@@ -220,16 +220,17 @@ export class MidiManager {
       case 'DECK_GAIN':
         if (action.deck) store.setDeckGain(action.deck, (norm * 24) - 12); // -12 to 12
         break;
-      case 'DECK_EQ_HIGH': {
-        if (action.deck) store.setDeckEq(action.deck, 'high', eqRange.min + norm * (eqRange.max - eqRange.min));
-        break;
-      }
-      case 'DECK_EQ_MID': {
-        if (action.deck) store.setDeckEq(action.deck, 'mid', eqRange.min + norm * (eqRange.max - eqRange.min));
-        break;
-      }
+      case 'DECK_EQ_HIGH':
+      case 'DECK_EQ_MID':
       case 'DECK_EQ_LOW': {
-        if (action.deck) store.setDeckEq(action.deck, 'low', eqRange.min + norm * (eqRange.max - eqRange.min));
+        if (action.deck) {
+          // AUD-17: Split-linear mapping around CC 64 so hardware 12 o'clock detent = 0 dB
+          const db = value <= 64
+            ? eqRange.min * (1 - value / 64)
+            : eqRange.max * ((value - 64) / 63);
+          const band = action.type === 'DECK_EQ_HIGH' ? 'high' : action.type === 'DECK_EQ_MID' ? 'mid' : 'low';
+          store.setDeckEq(action.deck, band, db);
+        }
         break;
       }
       case 'DECK_FILTER': {
@@ -320,6 +321,10 @@ export class MidiManager {
 
     const now = performance.now();
     const tickInterval = this.getTickIntervalMs();
+    // AUD-09: Prevent MIDI clock flood after tab backgrounding or timer stall
+    if (this._clockNextTickTime < now - MidiManager.CLOCK_LOOK_AHEAD * 2) {
+      this._clockNextTickTime = now;
+    }
     const deadline = now + MidiManager.CLOCK_LOOK_AHEAD;
 
     // Schedule all ticks that fall within the look-ahead window
@@ -385,8 +390,13 @@ export class MidiManager {
       // Average interval over last 24 ticks (1 beat)
       const ticks = this._externalClockTicks;
       const span = ticks[ticks.length - 1] - ticks[ticks.length - 24];
+      // AUD-17: Guard against 0ms buffered USB burst (division by zero → Infinity BPM)
+      if (span <= 0) return;
       const avgTickMs = span / 23;
-      this._externalBpm = 60000 / (avgTickMs * 24);
+      const rawBpm = 60000 / (avgTickMs * 24);
+      if (Number.isFinite(rawBpm)) {
+        this._externalBpm = Math.max(30, Math.min(300, rawBpm));
+      }
     }
   }
 

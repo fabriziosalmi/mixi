@@ -31,13 +31,28 @@ import type { BaseIntent } from './BaseIntent';
 import type { Blackboard } from '../Blackboard';
 import type { MixiStore } from '../../store/mixiStore';
 
+/** Wall-clock roll tracker so looping masterCurrentBeat never traps the deck (AUD-04). */
+let rollActive = false;
+let rollStartMs = 0;
+let rollTotalBeats = 0;
+
+export function resetLoopRollState(): void {
+  rollActive = false;
+  rollStartMs = 0;
+  rollTotalBeats = 0;
+}
+
 export const LoopRollBuildupIntent: BaseIntent = {
   name: 'rhythm.loop_roll_buildup',
   domain: 'rhythm',
   exclusive: true,
 
   evaluate(bb: Blackboard): number {
-    if (!bb.masterState.isPlaying) return 0;
+    if (!bb.masterState.isPlaying) {
+      rollActive = false;
+      return 0;
+    }
+    if (rollActive) return 0.75;
     if (bb.masterBeatsToPhrase > 16) return 0;
     // Only during an active blend (incoming is ready).
     if (!bb.incomingIsReady) return 0;
@@ -46,23 +61,39 @@ export const LoopRollBuildupIntent: BaseIntent = {
   },
 
   execute(bb: Blackboard, store: MixiStore): void {
-    const btp = bb.masterBeatsToPhrase;
+    const now = bb.timestamp;
+    if (!rollActive) {
+      if (bb.masterBeatsToPhrase <= 0.5) {
+        if (bb.masterHasLoop && bb.beatsToEndMaster > 8) {
+          store.exitLoop(bb.masterDeck);
+        }
+        return;
+      }
+      rollActive = true;
+      rollStartMs = now;
+      rollTotalBeats = bb.masterBeatsToPhrase;
+    }
 
-    if (btp <= 0.5) {
+    const beatMs = Math.max(200, bb.masterBeatPeriod * 1000);
+    const elapsedBeats = Math.max(0, (now - rollStartMs) / beatMs);
+    const remainingBeats = rollTotalBeats - elapsedBeats;
+
+    if (remainingBeats <= 0.5) {
       // Drop! Exit the loop — BUT not if we're near the end of
       // the track (< 8 beats). SafetyLoopIntent needs to keep
       // its emergency loop active. Let SafetyLoop manage it.
       if (bb.masterHasLoop && bb.beatsToEndMaster > 8) {
         store.exitLoop(bb.masterDeck);
       }
+      rollActive = false;
       return;
     }
 
-    // Select loop size based on countdown.
+    // Select loop size based on wall-clock countdown.
     let beats: number;
-    if (btp <= 2) beats = 0.5;
-    else if (btp <= 4) beats = 1;
-    else if (btp <= 8) beats = 2;
+    if (remainingBeats <= 2) beats = 0.5;
+    else if (remainingBeats <= 4) beats = 1;
+    else if (remainingBeats <= 8) beats = 2;
     else beats = 4;
 
     // Only change if the loop size differs from current.

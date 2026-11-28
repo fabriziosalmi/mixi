@@ -80,7 +80,9 @@ export class JS303Synth {
   private delayHpf: BiquadFilterNode;
 
   // ── Output ────────────────────────────────────────────────
+  private preDelayNode: GainNode;
   private outGain: GainNode;
+  private destroyed = false;
 
   // ── Variable Pulse Wave ───────────────────────────────────
   private _lastPulseOctave = -1; // track octave for PeriodicWave updates
@@ -209,17 +211,22 @@ export class JS303Synth {
     this.filterLfo.connect(this.filterLfoGain);
     this.filterLfoGain.connect(this.filterFallback.frequency);
 
+    // Pre-delay merge bus (AUD-06: prevents unfiltered wet→outGain→delay feedback loop)
+    this.preDelayNode = this.ctx.createGain();
+    this.preDelayNode.gain.value = 1;
+
     // VCA → dry path
     this.vca.connect(this.dryGain);
-    this.dryGain.connect(this.outGain);
+    this.dryGain.connect(this.preDelayNode);
 
     // VCA → distortion path
     this.vca.connect(this.distWS);
     this.distWS.connect(this.distGain);
-    this.distGain.connect(this.outGain);
+    this.distGain.connect(this.preDelayNode);
 
-    // Delay send (from output) with HP in feedback
-    this.outGain.connect(this.delayNode);
+    // Dry+dist → output and delay send (wet returns ONLY to outGain)
+    this.preDelayNode.connect(this.outGain);
+    this.preDelayNode.connect(this.delayNode);
     this.delayNode.connect(this.delayHpf);
     this.delayHpf.connect(this.delayFb);
     this.delayFb.connect(this.delayNode);
@@ -242,6 +249,8 @@ export class JS303Synth {
     try {
       const workletUrl = new URL('/worklets/diode-ladder-processor.js', import.meta.url);
       await this.ctx.audioWorklet.addModule(workletUrl.href);
+      // AUD-06: Abort if synth was destroyed while addModule() was in flight
+      if (this.destroyed) return;
 
       this.filterNode = new AudioWorkletNode(this.ctx, 'diode-ladder-processor', {
         numberOfInputs: 1,
@@ -283,6 +292,7 @@ export class JS303Synth {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.mainOsc.stop();
     this.subOsc.stop();
     this.driftOsc.stop();
@@ -293,6 +303,7 @@ export class JS303Synth {
       this.driveInputGain, this.driveWS,
       this.filterFallback, this.filterLfo, this.filterLfoGain,
       this.vca, this.distWS, this.distGain, this.dryGain,
+      this.preDelayNode,
       this.delayNode, this.delayHpf, this.delayFb, this.delayWet,
       this.outGain,
     ];

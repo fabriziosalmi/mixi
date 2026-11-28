@@ -39,6 +39,15 @@ let restoreTimeout: ReturnType<typeof setTimeout> | null = null;
 let lastFireTick = 0;
 const COOLDOWN_TICKS = 64;
 
+/** Cancel any pending restore timer when AI stops (AUD-15). */
+export function resetPreDropSilenceState(): void {
+  if (restoreTimeout !== null) {
+    clearTimeout(restoreTimeout);
+    restoreTimeout = null;
+  }
+  lastFireTick = 0;
+}
+
 export const PreDropSilenceIntent: BaseIntent = {
   name: 'dynamics.pre_drop_silence',
   domain: 'dynamics',
@@ -78,12 +87,11 @@ export const PreDropSilenceIntent: BaseIntent = {
     const incomingDeck = bb.incomingDeck;
 
     restoreTimeout = setTimeout(() => {
-      // Read the CURRENT store state (not stale closure).
+      restoreTimeout = null;
       const currentStore = (store as any).__rawStore
         ? (store as any).__rawStore : store;
       currentStore.setDeckVolume(masterDeck, savedMasterVol);
       currentStore.setDeckVolume(incomingDeck, savedIncomingVol);
-      restoreTimeout = null;
     }, restoreMs);
   },
 };
