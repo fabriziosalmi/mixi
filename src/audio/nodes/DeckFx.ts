@@ -155,7 +155,7 @@ export class DeckFx {
     this.phaFilters = Array.from({ length: 4 }, () => {
       const f = ctx.createBiquadFilter();
       f.type = 'allpass';
-      f.frequency.value = 1000;
+      f.frequency.value = 1800; // center > max LFO depth (1500 Hz) so freq stays >= 300 Hz
       f.Q.value = 5;
       return f;
     });
@@ -425,7 +425,8 @@ export class DeckFx {
     this._wetTargets.pha = active ? amount * 0.7 : 0;
     smoothParam(this.phaWet.gain, this._wetTargets.pha, ctx);
     smoothParam(this.phaLfo.frequency, 0.2 + amount * 2, ctx); // 0.2–2.2 Hz
-    smoothParam(this.phaLfoGain.gain, 400 + amount * 1200, ctx);
+    // Cap depth <= 1500 Hz around 1800 Hz center (always >= 300 Hz, never clamps negative)
+    smoothParam(this.phaLfoGain.gain, 400 + amount * 1100, ctx);
   }
 
   // ── FLG ────────────────────────────────────────────────────
@@ -433,17 +434,16 @@ export class DeckFx {
   private flgWasActive = false;
 
   private setFlanger(amount: number, active: boolean, ctx: AudioContext): void {
-    // #40: Reset delay base to neutral when re-activated.
+    // #40: Reset delay base to neutral when re-activated (8ms base >= max 4.5ms LFO depth + 3.5ms floor).
     if (active && !this.flgWasActive) {
-      // Reset delay to its base value so the sweep starts from center.
       this.flgDelay.delayTime.cancelScheduledValues(ctx.currentTime);
-      this.flgDelay.delayTime.setValueAtTime(0.003, ctx.currentTime);
+      this.flgDelay.delayTime.setValueAtTime(0.008, ctx.currentTime);
     }
     this.flgWasActive = active;
     this._wetTargets.flg = active ? amount * 0.6 : 0;
     smoothParam(this.flgWet.gain, this._wetTargets.flg, ctx);
     smoothParam(this.flgLfo.frequency, 0.1 + amount * 1.5, ctx);
-    smoothParam(this.flgLfoGain.gain, 0.001 + amount * 0.004, ctx);
+    smoothParam(this.flgLfoGain.gain, 0.001 + amount * 0.0035, ctx);
     // G2: cap feedback at 0.6 to prevent resonant peaks above 0dB
     smoothParam(this.flgFeedback.gain, 0.3 + amount * 0.3, ctx);
   }

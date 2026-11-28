@@ -87,6 +87,7 @@ impl Limiter {
                 *s *= self.threshold / self.envelope;
             }
         }
+        self.envelope = super::flush_denorm(self.envelope);
     }
 
     /// Update threshold (allows runtime changes).
@@ -152,19 +153,21 @@ impl Compressor {
             };
             self.envelope = coeff * self.envelope + (1.0 - coeff) * abs_s;
 
-            // Gain computation
-            if self.envelope > self.threshold {
+            // Gain computation — apply makeup_gain unconditionally so crossing
+            // threshold never causes a discontinuous +9 dB step jump.
+            let gain_reduction = if self.envelope > self.threshold {
                 let over = self.envelope / self.threshold;
-                let gain_reduction = over.powf(1.0 / self.ratio - 1.0);
-                *s *= gain_reduction * self.makeup_gain;
-            }
+                over.powf(1.0 / self.ratio - 1.0)
+            } else {
+                1.0
+            };
+            *s *= gain_reduction * self.makeup_gain;
         }
+        self.envelope = super::flush_denorm(self.envelope);
     }
 
     /// Parallel ("New York") compression: blend the dry signal with the
-    /// compressed signal by `wet` (0 = bypass, 1 = fully compressed). Lets the
-    /// Punch knob dial in continuously instead of jumping to a fixed +9dB the
-    /// instant it crosses on (which otherwise slams the master limiter).
+    /// compressed signal by `wet` (0 = bypass, 1 = fully compressed).
     #[inline]
     pub fn process_block_mix(&mut self, samples: &mut [f32], wet: f32) {
         let wet = wet.clamp(0.0, 1.0);
@@ -175,14 +178,16 @@ impl Compressor {
             let coeff = if abs_s > self.envelope { self.attack_coeff } else { self.release_coeff };
             self.envelope = coeff * self.envelope + (1.0 - coeff) * abs_s;
 
-            let mut compressed = input;
-            if self.envelope > self.threshold {
+            let gain_reduction = if self.envelope > self.threshold {
                 let over = self.envelope / self.threshold;
-                let gain_reduction = over.powf(1.0 / self.ratio - 1.0);
-                compressed = input * gain_reduction * self.makeup_gain;
-            }
+                over.powf(1.0 / self.ratio - 1.0)
+            } else {
+                1.0
+            };
+            let compressed = input * gain_reduction * self.makeup_gain;
             *s = input * dry + compressed * wet;
         }
+        self.envelope = super::flush_denorm(self.envelope);
     }
 
     pub fn reset(&mut self) {

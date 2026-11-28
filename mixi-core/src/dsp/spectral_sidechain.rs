@@ -21,8 +21,10 @@ pub struct SpectralSidechainCompressor {
     envelope: f32,
     /// Low-pass filtered audio state for the sidechain detector (~150 Hz).
     det_lp_state: f32,
-    /// Low-pass filtered audio state for the slave crossover (~150 Hz).
+    /// Low-pass filtered audio state for the slave crossover (~150 Hz), Left channel.
     slave_lp_state: f32,
+    /// Low-pass filtered audio state for the slave crossover (~150 Hz), Right channel.
+    slave_lp_state_r: f32,
     /// One-pole audio LP coefficient (~150 Hz).
     audio_lp_alpha: f32,
     /// Low-pass filtered energy of the sub-bass sidechain signal (kick detector).
@@ -66,6 +68,7 @@ impl SpectralSidechainCompressor {
             envelope: 0.0,
             det_lp_state: 0.0,
             slave_lp_state: 0.0,
+            slave_lp_state_r: 0.0,
             audio_lp_alpha,
             lp_energy: 0.0,
             lp_coeff,
@@ -122,6 +125,48 @@ impl SpectralSidechainCompressor {
         }
         self.det_lp_state = super::flush_denorm(self.det_lp_state);
         self.slave_lp_state = super::flush_denorm(self.slave_lp_state);
+        self.lp_energy = super::flush_denorm(self.lp_energy);
+        self.envelope = super::flush_denorm(self.envelope);
+    }
+
+    /// Process a stereo block with a single shared sidechain detector and
+    /// independent L/R sub-bass crossover states (no L/R state bleed or 2x rate).
+    pub fn process_block_stereo(&mut self, sidechain: &[f32], slave_l: &mut [f32], slave_r: &mut [f32]) {
+        let len = sidechain.len().min(slave_l.len()).min(slave_r.len());
+        let alpha = self.audio_lp_alpha;
+        for i in 0..len {
+            // 1. Sub-bass band extraction on mono sidechain trigger (once per sample)
+            self.det_lp_state += alpha * (sidechain[i] - self.det_lp_state);
+            let energy = self.det_lp_state * self.det_lp_state;
+
+            // 2. Low-pass filter energy (~20 Hz, smoothed RMS proxy)
+            self.lp_energy = self.lp_energy * self.lp_coeff + energy * (1.0 - self.lp_coeff);
+
+            // 3. Kick detection & envelope follow
+            if self.lp_energy > self.threshold * self.threshold {
+                self.envelope += (1.0 - self.envelope) * self.attack_coeff;
+            } else {
+                self.envelope *= self.release_coeff;
+            }
+
+            // 4. Shared gain reduction on sub-bass band ONLY (max -12 dB -> 0.25)
+            let gain = 1.0 - self.envelope * self.depth * 0.75;
+            let low_gain = 1.0 - self.mix + gain * self.mix;
+
+            // 5. Independent L/R sub-bass crossovers (<150 Hz)
+            let xl = slave_l[i];
+            self.slave_lp_state += alpha * (xl - self.slave_lp_state);
+            let low_l = self.slave_lp_state;
+            slave_l[i] = low_l * low_gain + (xl - low_l);
+
+            let xr = slave_r[i];
+            self.slave_lp_state_r += alpha * (xr - self.slave_lp_state_r);
+            let low_r = self.slave_lp_state_r;
+            slave_r[i] = low_r * low_gain + (xr - low_r);
+        }
+        self.det_lp_state = super::flush_denorm(self.det_lp_state);
+        self.slave_lp_state = super::flush_denorm(self.slave_lp_state);
+        self.slave_lp_state_r = super::flush_denorm(self.slave_lp_state_r);
         self.lp_energy = super::flush_denorm(self.lp_energy);
         self.envelope = super::flush_denorm(self.envelope);
     }
